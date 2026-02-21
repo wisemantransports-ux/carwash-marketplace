@@ -1,3 +1,46 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "user-avatar-1",
+      "description": "User avatar",
+      "imageUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxwZXJzb24lMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzE1OTUwNDd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person portrait"
+    },
+    {
+      "id": "user-avatar-2",
+      "description": "User avatar",
+      "imageUrl": "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzE1OTUwNDd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person portrait"
+    },
+    {
+      "id": "car-wash-1",
+      "description": "Exterior of a car wash station",
+      "imageUrl": "https://images.unsplash.com/photo-1607860108855-64acf2078ed9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxjYXIlMjB3YXNofGVufDB8fHx8MTc3MTY2NzI3Nnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "car wash"
+    },
+    {
+      "id": "car-wash-2",
+      "description": "Mobile car wash van",
+      "imageUrl": "https://images.unsplash.com/photo-1728039190626-ceea378d0419?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHx3b3JrJTIwdmFufGVufDB8fHx8MTc3MTY4MTA2N3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "work van"
+    },
+    {
+      "id": "car-wash-3",
+      "description": "Interior of a car wash station",
+      "imageUrl": "https://images.unsplash.com/photo-1646542784238-ab639afd9ef7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxjYXIlMjB3YXNoJTIwaW50ZXJpb3J8ZW58MHx8fHwxNzcxNjgxMDY4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "car wash interior"
+    },
+    {
+      "id": "employee-1",
+      "description": "Employee portrait",
+      "imageUrl": "https://images.unsplash.com/photo-1672748341520-6a839e6c05bb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHx3b3JrZXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzE2ODEwNjd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "worker portrait"
+    },
+    {
+      "id": "employee-2",
+      "description": "Employee portrait",
+      "imageUrl": "https://images.unsplash.com/photo-1579256414191-78193791bd86?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHx3b3JrZXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzE2ODEwNjd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "worker portrait"
+    }
+  ]
 }
