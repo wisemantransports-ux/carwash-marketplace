@@ -35,7 +35,7 @@ export default function Home() {
                 />
             </svg>
             <h1 className="text-5xl font-bold text-primary font-headline">
-            HydroFlow Pro
+            Carwash Marketplace
             </h1>
         </div>
         <p className="text-xl text-muted-foreground mt-2">The ultimate car wash marketplace.</p>

@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'HydroFlow Pro',
+  title: 'Carwash Marketplace',
   description: 'The ultimate car wash marketplace.',
 };
 

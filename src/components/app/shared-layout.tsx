@@ -24,7 +24,7 @@ type SharedLayoutProps = {
     role: UserRole;
 };
 
-function HydroFlowLogo() {
+function CarwashMarketplaceLogo() {
     return (
         <Link href="/" className="flex items-center gap-2">
             <svg
@@ -48,7 +48,7 @@ function HydroFlowLogo() {
                 fill="currentColor"
                 />
             </svg>
-            <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">HydroFlow Pro</span>
+            <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">Carwash Marketplace</span>
         </Link>
     );
 }
@@ -109,7 +109,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
         <SidebarProvider>
             <Sidebar>
                 <SidebarHeader>
-                    <HydroFlowLogo />
+                    <CarwashMarketplaceLogo />
                 </SidebarHeader>
                 <SidebarContent className="p-2">
                     <SidebarMenu>

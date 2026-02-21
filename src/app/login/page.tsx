@@ -61,7 +61,7 @@ export default function LoginPage() {
         <div className="flex items-center justify-center min-h-screen bg-background">
             <Card className="w-full max-w-sm">
                 <CardHeader className="text-center">
-                    <CardTitle className="text-2xl">Login to HydroFlow Pro</CardTitle>
+                    <CardTitle className="text-2xl">Login to Carwash Marketplace</CardTitle>
                     <CardDescription>Enter your credentials to access your account.</CardDescription>
                 </CardHeader>
                 <CardContent>

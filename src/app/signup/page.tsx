@@ -51,7 +51,7 @@ export default function SignupPage() {
             <Card className="w-full max-w-sm">
                 <CardHeader className="text-center">
                     <CardTitle className="text-2xl">Create an Account</CardTitle>
-                    <CardDescription>Join HydroFlow Pro today.</CardDescription>
+                    <CardDescription>Join Carwash Marketplace today.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Form {...form}>

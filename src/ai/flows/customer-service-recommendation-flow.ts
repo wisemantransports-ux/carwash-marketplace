@@ -67,7 +67,7 @@ const prompt = ai.definePrompt({
   name: 'customerServiceRecommendationPrompt',
   input: {schema: CustomerServiceRecommendationInputSchema},
   output: {schema: CustomerServiceRecommendationOutputSchema},
-  prompt: `You are an intelligent car wash service recommender for HydroFlow Pro, a car wash marketplace.
+  prompt: `You are an intelligent car wash service recommender for Carwash Marketplace, a car wash marketplace.
 Your task is to suggest the most suitable car wash service type and optimal booking times based on the user's car condition, preferences, preferred date/time, and location.
 
 Available Car Wash Services:

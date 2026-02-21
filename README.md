@@ -1,4 +1,4 @@
-# HydroFlow Pro - The Ultimate Car Wash Marketplace
+# Carwash Marketplace - The Ultimate Car Wash Marketplace
 
 This is a Next.js application built with React, ShadCN UI, Tailwind CSS, and Genkit.
 
@@ -17,7 +17,7 @@ To push your code to GitHub, follow these steps in your terminal:
     ```
 4.  **Commit the changes**:
     ```bash
-    git commit -m "Initial commit of HydroFlow Pro"
+    git commit -m "Initial commit of Carwash Marketplace"
     ```
 5.  **Rename the default branch** to `main`:
     ```bash
