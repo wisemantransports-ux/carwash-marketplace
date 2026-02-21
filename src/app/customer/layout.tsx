@@ -1,5 +1,6 @@
+'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { Car, Clock, Home, Search } from "lucide-react";
+import { Car, Clock, Search } from "lucide-react";
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   const navItems = [

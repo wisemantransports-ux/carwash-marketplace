@@ -1,3 +1,4 @@
+'use client';
 import SharedLayout from "@/components/app/shared-layout";
 import { LayoutDashboard, Car, Users, DollarSign } from "lucide-react";
 
