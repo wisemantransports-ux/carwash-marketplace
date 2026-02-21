@@ -48,3 +48,6 @@ npm run genkit:dev
 - **AI Recommender**: Intelligent service suggestions based on car condition and preferences.
 - **Mobile Tracking**: Real-time simulation of mobile car wash service progress.
 - **Earnings Oversight**: Mocked financial views using Botswana Pula (P).
+
+---
+*Last Prototype Update: ${new Date().toISOString()}*
