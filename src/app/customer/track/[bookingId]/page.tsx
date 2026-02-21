@@ -1,18 +1,21 @@
+
 'use client';
 import { mockGetBookingById, mockGetEmployeesForBusiness } from '@/lib/mock-api';
 import type { Booking, Employee } from '@/lib/types';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Phone, CheckCircle } from 'lucide-react';
+import { Phone, CheckCircle, MessageSquare, MapPin, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const timelineSteps = [
-    { id: 'en-route', label: 'On The Way' },
-    { id: 'arrived', label: 'Arrived' },
-    { id: 'service-started', label: 'Service Started' },
-    { id: 'service-finished', label: 'Service Finished' },
+    { id: 'en-route', label: 'On The Way', icon: MapPin },
+    { id: 'arrived', label: 'Arrived', icon: CheckCircle },
+    { id: 'service-started', label: 'In Progress', icon: Clock },
+    { id: 'service-finished', label: 'Complete', icon: CheckCircle },
 ];
 
 export default function MobileServiceTrackingPage({ params }: { params: { bookingId: string } }) {
@@ -39,60 +42,120 @@ export default function MobileServiceTrackingPage({ params }: { params: { bookin
 
     if (loading) {
         return (
-            <div>
-                <Skeleton className="h-9 w-64 mb-6" />
-                <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
-                <Card className="mt-6"><CardContent className="p-6"><Skeleton className="h-24 w-full" /></CardContent></Card>
+            <div className="max-w-3xl mx-auto space-y-6">
+                <Skeleton className="h-10 w-64" />
+                <Card><CardContent className="p-6"><Skeleton className="h-32 w-full" /></CardContent></Card>
+                <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
             </div>
         );
     }
     
     if (!booking || !employee) {
-        return <p>Booking or employee details not found.</p>;
+        return (
+            <div className="text-center py-20">
+                <h2 className="text-2xl font-bold">Booking Not Found</h2>
+                <p className="text-muted-foreground">We couldn't find tracking information for this service.</p>
+            </div>
+        );
     }
     
     return (
-        <div>
-            <h1 className="text-3xl font-bold mb-6">Track Your Mobile Service</h1>
-            <Card className="mb-6">
-                <CardHeader>
-                    <CardTitle>Your Technician</CardTitle>
-                </CardHeader>
-                <CardContent className="flex items-center gap-4">
-                    <Avatar className="h-16 w-16">
-                        <AvatarImage src={employee.imageUrl} alt={employee.name} />
-                        <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                        <p className="text-xl font-semibold">{employee.name}</p>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                            <Phone className="h-4 w-4" />
-                            <span>{employee.phone}</span>
+        <div className="max-w-3xl mx-auto space-y-8">
+            <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold">Service Tracker</h1>
+                <Badge variant="outline" className="font-mono">#{booking.id.slice(-4)}</Badge>
+            </div>
+
+            <Card className="overflow-hidden border-primary/20 shadow-lg">
+                <div className="bg-primary px-6 py-4 text-primary-foreground">
+                    <div className="flex items-center gap-4">
+                        <Avatar className="h-16 w-16 border-2 border-primary-foreground/20">
+                            <AvatarImage src={employee.imageUrl} alt={employee.name} />
+                            <AvatarFallback className="text-primary">{employee.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                            <p className="text-lg font-bold">{employee.name}</p>
+                            <p className="text-sm opacity-90">Professional Detailer</p>
                         </div>
+                        <div className="ml-auto flex gap-2">
+                            <Button size="icon" variant="secondary" className="rounded-full">
+                                <Phone className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="secondary" className="rounded-full">
+                                <MessageSquare className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+                <CardContent className="p-6">
+                    <div className="space-y-8 relative">
+                        {timelineSteps.map((step, index) => {
+                            const isCompleted = index < currentStepIndex;
+                            const isCurrent = index === currentStepIndex;
+                            const isFuture = index > currentStepIndex;
+                            const StepIcon = step.icon;
+
+                            return (
+                                <div key={step.id} className="flex gap-4 group">
+                                    <div className="relative flex flex-col items-center">
+                                        <div className={cn(
+                                            "h-10 w-10 rounded-full flex items-center justify-center z-10 border-4 transition-all duration-500",
+                                            isCompleted ? "bg-primary border-primary text-primary-foreground" : 
+                                            isCurrent ? "bg-background border-primary text-primary animate-pulse" : 
+                                            "bg-background border-muted text-muted-foreground"
+                                        )}>
+                                            <StepIcon className="h-5 w-5" />
+                                        </div>
+                                        {index < timelineSteps.length - 1 && (
+                                            <div className={cn(
+                                                "w-1 absolute top-10 bottom-0 -mb-8 transition-colors duration-500",
+                                                isCompleted ? "bg-primary" : "bg-muted"
+                                            )} />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 pt-2">
+                                        <p className={cn(
+                                            "font-bold transition-colors",
+                                            isFuture ? "text-muted-foreground" : "text-foreground"
+                                        )}>
+                                            {step.label}
+                                        </p>
+                                        {isCurrent && (
+                                            <p className="text-sm text-primary font-medium animate-in fade-in slide-in-from-left-2">
+                                                Active Status Update
+                                            </p>
+                                        )}
+                                        {isCompleted && (
+                                            <p className="text-xs text-muted-foreground">Completed</p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Service Status</CardTitle>
+                    <CardTitle className="text-lg">Service Details</CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <div className="flex justify-between">
-                        {timelineSteps.map((step, index) => (
-                            <div key={step.id} className="flex flex-col items-center relative flex-1">
-                                <div className={cn(
-                                    "h-8 w-8 rounded-full flex items-center justify-center z-10",
-                                    index <= currentStepIndex ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground border-2"
-                                )}>
-                                    {index <= currentStepIndex ? <CheckCircle className="h-5 w-5" /> : <span className="text-sm font-bold">{index + 1}</span>}
-                                </div>
-                                <p className={cn("mt-2 text-sm text-center", index <= currentStepIndex ? 'font-semibold text-primary' : 'text-muted-foreground')}>{step.label}</p>
-                                {index < timelineSteps.length - 1 && (
-                                     <div className={cn("absolute top-4 left-1/2 w-full h-0.5", index < currentStepIndex ? 'bg-primary' : 'bg-muted-foreground/30')} />
-                                )}
-                            </div>
-                        ))}
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground uppercase font-semibold">Service Type</p>
+                        <p className="text-sm font-medium">Eco Mobile Wash</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground uppercase font-semibold">Vehicle</p>
+                        <p className="text-sm font-medium">B 789 XYZ (Ford Ranger)</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground uppercase font-semibold">Location</p>
+                        <p className="text-sm font-medium">Customer Premises</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground uppercase font-semibold">Scheduled Time</p>
+                        <p className="text-sm font-medium">{new Date(booking.bookingTime).toLocaleString()}</p>
                     </div>
                 </CardContent>
             </Card>
