@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, Banknote, Percent } from "lucide-react";
+import { Banknote, Percent } from "lucide-react";
 
 export default function EarningsPage() {
     // Mocked data
@@ -23,10 +23,10 @@ export default function EarningsPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Revenue (All Time)</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <Banknote className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${summary.totalRevenue.toFixed(2)}</div>
+                        <div className="text-2xl font-bold">P{summary.totalRevenue.toFixed(2)}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -35,7 +35,7 @@ export default function EarningsPage() {
                         <Banknote className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${summary.pendingPayout.toFixed(2)}</div>
+                        <div className="text-2xl font-bold">P{summary.pendingPayout.toFixed(2)}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -44,7 +44,7 @@ export default function EarningsPage() {
                         <Percent className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${summary.platformFees.toFixed(2)}</div>
+                        <div className="text-2xl font-bold">P{summary.platformFees.toFixed(2)}</div>
                     </CardContent>
                 </Card>
             </div>
@@ -72,7 +72,7 @@ export default function EarningsPage() {
                                     <TableCell>
                                         <Badge variant={payout.status === 'Paid' ? 'secondary' : 'default'}>{payout.status}</Badge>
                                     </TableCell>
-                                    <TableCell className="text-right font-medium">${payout.amount.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right font-medium">P{payout.amount.toFixed(2)}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

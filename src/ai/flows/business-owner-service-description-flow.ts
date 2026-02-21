@@ -13,7 +13,7 @@ import {z} from 'genkit';
 const BusinessOwnerServiceDescriptionGeneratorInputSchema = z.object({
   serviceName: z.string().describe('The name of the car wash service.'),
   features: z.array(z.string()).describe('A list of key features for the service.').optional(),
-  price: z.string().describe('The price or pricing range for the service (e.g., "$25", "Starts at $30").'),
+  price: z.string().describe('The price or pricing range for the service (e.g., "P25", "Starts at P30").'),
   targetAudience: z.string().describe('The target audience for this service (e.g., "daily commuters", "luxury car owners").').optional(),
 });
 export type BusinessOwnerServiceDescriptionGeneratorInput = z.infer<typeof BusinessOwnerServiceDescriptionGeneratorInputSchema>;

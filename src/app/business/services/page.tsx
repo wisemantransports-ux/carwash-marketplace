@@ -65,7 +65,7 @@ export default function ServicesManagementPage() {
                                         <TableCell className="font-medium">{service.name}</TableCell>
                                         <TableCell className="text-muted-foreground max-w-xs truncate">{service.description}</TableCell>
                                         <TableCell>{service.duration}</TableCell>
-                                        <TableCell>${service.price.toFixed(2)}</TableCell>
+                                        <TableCell>P{service.price.toFixed(2)}</TableCell>
                                         <TableCell>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>

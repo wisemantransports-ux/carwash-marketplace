@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { mockGetBusinessById, mockGetServicesForBusiness } from '@/lib/mock-api';
 import type { Business, Service } from '@/lib/types';
-import { Clock, DollarSign, Loader2 } from 'lucide-react';
+import { Clock, Banknote, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -64,7 +64,7 @@ export default function BookingPage({ params }: { params: { businessId: string }
                                 <CardDescription>{service.description}</CardDescription>
                                 <div className="flex items-center gap-4 text-sm text-muted-foreground pt-2">
                                     <span className="flex items-center gap-1"><Clock className="h-4 w-4" />{service.duration} min</span>
-                                    <span className="flex items-center gap-1"><DollarSign className="h-4 w-4" />{service.price.toFixed(2)}</span>
+                                    <span className="flex items-center gap-1"><Banknote className="h-4 w-4" />P{service.price.toFixed(2)}</span>
                                 </div>
                             </CardHeader>
                             <CardContent className="p-6 pt-0 sm:pt-6">
