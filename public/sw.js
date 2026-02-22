@@ -1,15 +1,14 @@
-// Simple service worker for PWA functionality
-const CACHE_NAME = 'carwash-cm-v1';
-const ASSETS = [
+const CACHE_NAME = 'cwm-cache-v1';
+const ASSETS_TO_CACHE = [
   '/',
-  '/icon.svg',
-  '/manifest.json'
+  '/manifest.json',
+  '/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+      return cache.addAll(ASSETS_TO_CACHE);
     })
   );
 });
