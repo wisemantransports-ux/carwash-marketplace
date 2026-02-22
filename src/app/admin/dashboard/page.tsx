@@ -28,11 +28,16 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     const fetch = async () => {
-        const { data: bizData } = await mockGetBusinesses();
-        const { data: payData } = await mockGetPendingPayments();
-        setBusinesses(bizData);
-        setPendingPayments(payData);
-        setLoading(false);
+        try {
+            const { data: bizData } = await mockGetBusinesses();
+            const { data: payData } = await mockGetPendingPayments();
+            setBusinesses(bizData || []);
+            setPendingPayments(payData || []);
+        } catch (error) {
+            console.error("Failed to fetch admin data", error);
+        } finally {
+            setLoading(false);
+        }
     }
     fetch();
   }, []);
