@@ -1,33 +1,57 @@
+
 'use client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Activity, CheckCircle, Banknote, Users, TrendingUp, AlertCircle, ArrowUpRight } from "lucide-react";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Bar, BarChart, CartesianGrid, XAxis, ResponsiveContainer, Line, LineChart, Tooltip } from "recharts";
+import { Activity, Banknote, Users, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, Tooltip } from "recharts";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { mockGetBusinesses, mockUpdateBusinessStatus } from "@/lib/mock-api";
+import { Business } from "@/lib/types";
+import { toast } from "@/hooks/use-toast";
 
-const data = [
-  { name: 'Mon', revenue: 4000, bookings: 24 },
-  { name: 'Tue', revenue: 3000, bookings: 18 },
-  { name: 'Wed', revenue: 2000, bookings: 12 },
-  { name: 'Thu', revenue: 2780, bookings: 20 },
-  { name: 'Fri', revenue: 1890, bookings: 15 },
-  { name: 'Sat', revenue: 2390, bookings: 25 },
-  { name: 'Sun', revenue: 3490, bookings: 30 },
+const chartData = [
+  { name: 'Mon', revenue: 4000 },
+  { name: 'Tue', revenue: 3000 },
+  { name: 'Wed', revenue: 2000 },
+  { name: 'Thu', revenue: 2780 },
+  { name: 'Fri', revenue: 1890 },
+  { name: 'Sat', revenue: 2390 },
+  { name: 'Sun', revenue: 3490 },
 ];
 
 export default function AdminDashboardPage() {
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetch = async () => {
+        const { data } = await mockGetBusinesses();
+        setBusinesses(data);
+        setLoading(false);
+    }
+    fetch();
+  }, []);
+
+  const handleStatusChange = async (id: string, status: 'verified' | 'suspended') => {
+    await mockUpdateBusinessStatus(id, status);
+    setBusinesses(businesses.map(b => b.id === id ? { ...b, status } : b));
+    toast({ title: `Business ${status === 'verified' ? 'Verified' : 'Suspended'}`, description: "Platform status updated successfully." });
+  }
+
   const stats = [
-    { label: "Total Revenue", value: "P45,230", trend: "+20.1%", icon: Banknote, color: "text-green-600" },
-    { label: "Active Bookings", value: "1,250", trend: "+12.5%", icon: Activity, color: "text-blue-600" },
-    { label: "Partner Businesses", value: "85", trend: "+4 new", icon: Users, color: "text-purple-600" },
-    { label: "Pending Verification", value: "4", trend: "Needs Action", icon: AlertCircle, color: "text-orange-600" },
+    { label: "Total Platform Revenue", value: "P45,230", trend: "+20.1%", icon: Banknote, color: "text-green-600" },
+    { label: "Partner Businesses", value: businesses.length.toString(), trend: "Global", icon: Users, color: "text-purple-600" },
+    { label: "Pending Verification", value: businesses.filter(b => b.status === 'pending').length.toString(), trend: "Needs Action", icon: AlertCircle, color: "text-orange-600" },
+    { label: "System Health", value: "Optimal", trend: "All services up", icon: Activity, color: "text-blue-600" },
   ];
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-4xl font-bold tracking-tight">Platform Overview</h1>
-        <p className="text-muted-foreground">Global marketplace metrics and partner performance.</p>
+        <h1 className="text-4xl font-bold tracking-tight text-primary">Platform Administration</h1>
+        <p className="text-muted-foreground">Global marketplace oversight and partner management.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -39,12 +63,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                <span className={stat.trend.startsWith('+') ? 'text-green-500 font-medium' : 'text-orange-500'}>
-                  {stat.trend}
-                </span>
-                from last period
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">{stat.trend}</p>
             </CardContent>
           </Card>
         ))}
@@ -54,11 +73,11 @@ export default function AdminDashboardPage() {
         <Card className="lg:col-span-4">
           <CardHeader>
             <CardTitle>Revenue Analytics</CardTitle>
-            <CardDescription>Daily platform revenue across all cities.</CardDescription>
+            <CardDescription>Daily platform fee accumulation.</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data}>
+              <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
                 <XAxis 
                   dataKey="name" 
@@ -93,31 +112,46 @@ export default function AdminDashboardPage() {
 
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>Recent Partners</CardTitle>
-            <CardDescription>Latest businesses to join the platform.</CardDescription>
+            <CardTitle>Business Listings</CardTitle>
+            <CardDescription>Management of active and pending partners.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
-              {[
-                { name: "Francistown Gloss", city: "Francistown", status: "Verified", time: "2h ago" },
-                { name: "Maun Mobile Wash", city: "Maun", status: "Pending", time: "5h ago" },
-                { name: "Kanye Cleaners", city: "Kanye", status: "Verified", time: "1d ago" },
-                { name: "Palapye Express", city: "Palapye", status: "Verified", time: "2d ago" },
-              ].map((partner, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">{partner.name}</p>
-                    <p className="text-xs text-muted-foreground">{partner.city}</p>
-                  </div>
-                  <div className="text-right space-y-1">
-                    <Badge variant={partner.status === 'Verified' ? 'secondary' : 'outline'}>
-                      {partner.status}
-                    </Badge>
-                    <p className="text-[10px] text-muted-foreground">{partner.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Partner</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {businesses.map(biz => (
+                        <TableRow key={biz.id}>
+                            <TableCell>
+                                <div className="font-medium text-xs">{biz.name}</div>
+                                <div className="text-[10px] text-muted-foreground">{biz.city}</div>
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant={biz.status === 'verified' ? 'secondary' : biz.status === 'suspended' ? 'destructive' : 'outline'} className="text-[10px] px-1.5 py-0">
+                                    {biz.status}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                                {biz.status === 'pending' && (
+                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-green-600" onClick={() => handleStatusChange(biz.id, 'verified')}>
+                                        <CheckCircle className="h-4 w-4" />
+                                    </Button>
+                                )}
+                                {biz.status === 'verified' && (
+                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={() => handleStatusChange(biz.id, 'suspended')}>
+                                        <XCircle className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>

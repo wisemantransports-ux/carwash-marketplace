@@ -1,3 +1,4 @@
+
 // src/lib/types.ts
 export type UserRole = 'customer' | 'business-owner' | 'admin';
 
@@ -27,6 +28,8 @@ export type Service = {
   duration: number; // in minutes
 };
 
+export type BusinessStatus = 'pending' | 'verified' | 'suspended';
+
 export type Business = {
   id:string;
   ownerId: string;
@@ -37,7 +40,7 @@ export type Business = {
   rating: number;
   reviewCount: number;
   imageUrl: string;
-  verified: boolean;
+  status: BusinessStatus;
 };
 
 export type Employee = {
@@ -78,12 +81,3 @@ export type Rating = {
   feedback: string;
   createdAt: Date;
 };
-
-export type Dispute = {
-  id: string;
-  bookingId: string;
-  raisedBy: string; // customerId or businessId
-  reason: string;
-  status: 'open' | 'resolved' | 'closed';
-  createdAt: Date;
-}

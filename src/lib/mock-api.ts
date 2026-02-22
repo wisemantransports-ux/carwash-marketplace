@@ -1,6 +1,6 @@
 
 // src/lib/mock-api.ts
-import { User, UserRole, Car, Business, Service, Employee, Booking, Rating, Dispute, BookingStatus, MobileBookingStatus } from './types';
+import { User, UserRole, Car, Business, Service, Employee, Booking } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -16,10 +16,10 @@ const users: User[] = [
 ];
 
 const businesses: Business[] = [
-    { id: 'biz-1', ownerId: 'user-2', name: 'Sparkle Clean Station', address: '123 Main St', city: 'Gaborone', type: 'station', rating: 4.8, reviewCount: 150, imageUrl: findImage('car-wash-1'), verified: true },
-    { id: 'biz-2', ownerId: 'user-2', name: 'Pula Mobile Wash', address: 'Mobile Service', city: 'Gaborone', type: 'mobile', rating: 4.9, reviewCount: 210, imageUrl: findImage('car-wash-2'), verified: true },
-    { id: 'biz-3', ownerId: 'user-404', name: 'Aqua Touch Gabs', address: '456 Oak Ave', city: 'Gaborone', type: 'station', rating: 4.5, reviewCount: 95, imageUrl: findImage('car-wash-3'), verified: true },
-    { id: 'biz-4', ownerId: 'user-404', name: 'Pro Shine Mobile', address: 'Mobile Service', city: 'Francistown', type: 'mobile', rating: 4.7, reviewCount: 120, imageUrl: findImage('car-wash-2'), verified: false },
+    { id: 'biz-1', ownerId: 'user-2', name: 'Sparkle Clean Station', address: '123 Main St', city: 'Gaborone', type: 'station', rating: 4.8, reviewCount: 150, imageUrl: findImage('car-wash-1'), status: 'verified' },
+    { id: 'biz-2', ownerId: 'user-2', name: 'Pula Mobile Wash', address: 'Mobile Service', city: 'Gaborone', type: 'mobile', rating: 4.9, reviewCount: 210, imageUrl: findImage('car-wash-2'), status: 'verified' },
+    { id: 'biz-3', ownerId: 'user-404', name: 'Aqua Touch Gabs', address: '456 Oak Ave', city: 'Gaborone', type: 'station', rating: 4.5, reviewCount: 95, imageUrl: findImage('car-wash-3'), status: 'verified' },
+    { id: 'biz-4', ownerId: 'user-404', name: 'Pro Shine Mobile', address: 'Mobile Service', city: 'Francistown', type: 'mobile', rating: 4.7, reviewCount: 120, imageUrl: findImage('car-wash-2'), status: 'pending' },
 ];
 
 const services: Service[] = [
@@ -48,32 +48,29 @@ let bookings: Booking[] = [
 
 // --- MOCK API FUNCTIONS ---
 
-export const mockLogin = async (email: string, role: UserRole): Promise<{ user: User | null; error: string | null }> => {
-  await delay(500);
-  const user = users.find(u => u.email === email && u.role === role);
-  if (user) return { user, error: null };
-  return { user: null, error: 'Invalid credentials or role.' };
-}
-
+/**
+ * TODO: Replace with Supabase Auth integration.
+ * Currently returns a mock user based on role for prototype navigation.
+ */
 export const mockGetCurrentUser = async (role: UserRole): Promise<User | null> => {
     await delay(100);
     return users.find(u => u.role === role) || null;
 }
 
 export const mockGetBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
-    await delay(500);
-    return { data: businesses.filter(b => b.verified), error: null };
+    await delay(400);
+    return { data: businesses, error: null };
+}
+
+export const mockGetVerifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
+    await delay(400);
+    return { data: businesses.filter(b => b.status === 'verified'), error: null };
 }
 
 export const mockGetBusinessById = async (id: string): Promise<{ data: Business | null; error: string | null }> => {
     await delay(300);
     const business = businesses.find(b => b.id === id);
     return { data: business || null, error: business ? null : 'Not found' };
-}
-
-export const mockGetUnverifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
-    await delay(500);
-    return { data: businesses.filter(b => !b.verified), error: null };
 }
 
 export const mockGetServicesForBusiness = async (businessId: string): Promise<{ data: Service[]; error: null }> => {
@@ -132,4 +129,10 @@ export const mockGetCarsForUser = async (userId: string): Promise<{ data: Car[];
 export const mockGetEmployeesForBusiness = async (businessId: string): Promise<{ data: Employee[]; error: null }> => {
     await delay(300);
     return { data: employees.filter(e => e.businessId === businessId), error: null };
+}
+
+export const mockUpdateBusinessStatus = async (id: string, status: 'verified' | 'suspended'): Promise<void> => {
+    await delay(300);
+    const biz = businesses.find(b => b.id === id);
+    if (biz) biz.status = status;
 }

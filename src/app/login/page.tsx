@@ -1,117 +1,82 @@
+
 'use client';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { UserRole } from "@/lib/types";
-
-const loginSchema = z.object({
-    email: z.string().email(),
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    role: z.enum(["customer", "business-owner", "admin"]),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
+import { User, Shield, Briefcase, ChevronRight } from "lucide-react";
 
 export default function LoginPage() {
     const router = useRouter();
-    const [loading, setLoading] = useState(false);
 
-    const form = useForm<LoginFormValues>({
-        resolver: zodResolver(loginSchema),
-        defaultValues: { email: "", password: "", role: "customer" },
-    });
+    /**
+     * NO-AUTH NOTE:
+     * This login page is purely a simulation for prototype navigation.
+     * No actual sessions or passwords are used.
+     */
 
-    const onSubmit = async (values: LoginFormValues) => {
-        setLoading(true);
-        // In a real app, you'd call your auth provider.
-        // We'll simulate a successful login and redirect based on role.
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        toast({
-            title: "Login Successful",
-            description: `Welcome! Redirecting to your dashboard...`,
-        });
-
-        switch (values.role as UserRole) {
-            case "customer":
-                router.push("/customer/home");
-                break;
-            case "business-owner":
-                router.push("/business/dashboard");
-                break;
-            case "admin":
-                router.push("/admin/dashboard");
-                break;
-        }
-
-        setLoading(false);
-    };
+    const roles = [
+        { 
+            id: 'customer', 
+            name: 'Customer', 
+            desc: 'Find and book car wash services.', 
+            icon: User, 
+            href: '/customer/home',
+            color: 'bg-blue-100 text-blue-600'
+        },
+        { 
+            id: 'business-owner', 
+            name: 'Business Owner', 
+            desc: 'Manage your car wash operations.', 
+            icon: Briefcase, 
+            href: '/business/dashboard',
+            color: 'bg-purple-100 text-purple-600'
+        },
+        { 
+            id: 'admin', 
+            name: 'Platform Admin', 
+            desc: 'Global marketplace administration.', 
+            icon: Shield, 
+            href: '/admin/dashboard',
+            color: 'bg-orange-100 text-orange-600'
+        },
+    ];
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-background">
-            <Card className="w-full max-w-sm">
-                <CardHeader className="text-center">
-                    <CardTitle className="text-2xl">Login to Carwash Marketplace</CardTitle>
-                    <CardDescription>Enter your credentials to access your account.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                            <FormField control={form.control} name="email" render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Email</FormLabel>
-                                    <FormControl><Input placeholder="you@example.com" {...field} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )} />
-                            <FormField control={form.control} name="password" render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Password</FormLabel>
-                                    <FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )} />
-                            <FormField control={form.control} name="role" render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Role</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select your role" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="customer">Customer</SelectItem>
-                                            <SelectItem value="business-owner">Business Owner</SelectItem>
-                                            <SelectItem value="admin">Admin</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )} />
+        <div className="flex items-center justify-center min-h-screen bg-muted/30 px-4">
+            <div className="w-full max-w-lg space-y-8">
+                <div className="text-center space-y-2">
+                    <h1 className="text-3xl font-extrabold tracking-tight text-primary">Carwash Marketplace</h1>
+                    <p className="text-muted-foreground italic">Prototype Environment - Select a Role to Continue</p>
+                </div>
 
-                            <Button type="submit" className="w-full" disabled={loading}>
-                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Login
-                            </Button>
-                        </form>
-                    </Form>
-                    <div className="mt-4 text-center text-sm">
-                        Don&apos;t have an account?{" "}
-                        <Link href="/signup" className="underline text-primary">Sign up</Link>
-                    </div>
-                </CardContent>
-            </Card>
+                <div className="grid gap-4">
+                    {roles.map((role) => (
+                        <Card 
+                            key={role.id} 
+                            className="cursor-pointer hover:border-primary hover:shadow-md transition-all group"
+                            onClick={() => router.push(role.href)}
+                        >
+                            <CardContent className="p-6 flex items-center gap-6">
+                                <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${role.color}`}>
+                                    <role.icon className="h-6 w-6" />
+                                </div>
+                                <div className="flex-1">
+                                    <CardTitle className="text-xl">{role.name}</CardTitle>
+                                    <CardDescription>{role.desc}</CardDescription>
+                                </div>
+                                <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+
+                <div className="bg-primary/5 p-4 rounded-lg border border-primary/20">
+                    <p className="text-xs text-center text-muted-foreground leading-relaxed">
+                        <strong>Developer Note:</strong> Real authentication is intentionally excluded from this prototype. 
+                        In a production build, this step would be handled by <strong>Supabase Auth</strong>.
+                    </p>
+                </div>
+            </div>
         </div>
     );
 }
