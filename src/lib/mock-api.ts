@@ -1,3 +1,4 @@
+
 // src/lib/mock-api.ts
 import { User, UserRole, Car, Business, Service, Employee, Booking, PaymentSubmission, SubscriptionPlan, SubscriptionStatus } from './types';
 import { PlaceHolderImages } from './placeholder-images';
