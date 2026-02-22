@@ -1,16 +1,17 @@
 
 'use client';
-import { mockAssignEmployeeToBooking, mockGetBookingsForBusiness, mockGetCurrentUser, mockGetEmployeesForBusiness } from "@/lib/mock-api";
+import { mockAssignEmployeeToBooking, mockGetBookingsForBusiness, mockGetCurrentUser, mockGetEmployeesForBusiness, mockGetBusinessById } from "@/lib/mock-api";
 import type { Booking, Business, Employee } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { User, Calendar, Clock, Car, Users, Loader2, TrendingUp, DollarSign, CheckCircle } from "lucide-react";
+import { User, Calendar, Clock, Car, Users, Loader2, TrendingUp, CheckCircle, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
 
 function AssignEmployeeDropdown({ booking, employees, onAssign }: { booking: Booking, employees: Employee[], onAssign: (bookingId: string, employeeId: string) => void }) {
     const [loading, setLoading] = useState(false);
@@ -47,6 +48,7 @@ function AssignEmployeeDropdown({ booking, employees, onAssign }: { booking: Boo
 export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [business, setBusiness] = useState<Business | null>(null);
     const [loading, setLoading] = useState(true);
 
     const stats = [
@@ -62,8 +64,11 @@ export default function BusinessDashboardPage() {
             const user = await mockGetCurrentUser('business-owner');
             if (user) {
                 const businessId = "biz-2"; // Pula Mobile Wash
+                const { data: bizData } = await mockGetBusinessById(businessId);
                 const { data: bookingData } = await mockGetBookingsForBusiness(businessId);
                 const { data: employeeData } = await mockGetEmployeesForBusiness(businessId);
+                
+                setBusiness(bizData);
                 setBookings(bookingData.filter(b => b.status !== 'completed' && b.status !== 'cancelled'));
                 setEmployees(employeeData);
             }
@@ -78,10 +83,19 @@ export default function BusinessDashboardPage() {
         setBookings(bookingData.filter(b => b.status !== 'completed' && b.status !== 'cancelled'));
     };
 
+    const isInactive = business?.subscriptionStatus !== 'active';
+
     return (
         <div className="space-y-8">
             <div className="flex flex-col gap-2">
-                <h1 className="text-4xl font-bold tracking-tight">Business Dashboard</h1>
+                <div className="flex items-center gap-2">
+                    <h1 className="text-4xl font-bold tracking-tight">Business Dashboard</h1>
+                    {business && (
+                        <Badge variant={isInactive ? 'destructive' : 'secondary'} className="ml-2">
+                            {business.subscriptionStatus.toUpperCase().replace('_', ' ')}
+                        </Badge>
+                    )}
+                </div>
                 <p className="text-muted-foreground">Monitor your service operations and team assignments.</p>
             </div>
 
@@ -108,6 +122,19 @@ export default function BusinessDashboardPage() {
                 {loading ? (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
+                    </div>
+                ) : isInactive ? (
+                    <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20 flex flex-col items-center gap-4">
+                        <ShieldAlert className="h-12 w-12 text-muted-foreground" />
+                        <div>
+                            <h3 className="text-lg font-medium text-muted-foreground">Subscription Required</h3>
+                            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+                                You must have an active subscription to receive and manage customer bookings.
+                            </p>
+                        </div>
+                        <Button asChild>
+                            <Link href="/business/subscription">View Pricing Plans</Link>
+                        </Button>
                     </div>
                 ) : bookings.length > 0 ? (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

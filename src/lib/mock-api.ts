@@ -1,6 +1,6 @@
 
 // src/lib/mock-api.ts
-import { User, UserRole, Car, Business, Service, Employee, Booking } from './types';
+import { User, UserRole, Car, Business, Service, Employee, Booking, PaymentSubmission, SubscriptionPlan, SubscriptionStatus } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -16,11 +16,13 @@ const users: User[] = [
 ];
 
 const businesses: Business[] = [
-    { id: 'biz-1', ownerId: 'user-2', name: 'Sparkle Clean Station', address: '123 Main St', city: 'Gaborone', type: 'station', rating: 4.8, reviewCount: 150, imageUrl: findImage('car-wash-1'), status: 'verified' },
-    { id: 'biz-2', ownerId: 'user-2', name: 'Pula Mobile Wash', address: 'Mobile Service', city: 'Gaborone', type: 'mobile', rating: 4.9, reviewCount: 210, imageUrl: findImage('car-wash-2'), status: 'verified' },
-    { id: 'biz-3', ownerId: 'user-404', name: 'Aqua Touch Gabs', address: '456 Oak Ave', city: 'Gaborone', type: 'station', rating: 4.5, reviewCount: 95, imageUrl: findImage('car-wash-3'), status: 'verified' },
-    { id: 'biz-4', ownerId: 'user-404', name: 'Pro Shine Mobile', address: 'Mobile Service', city: 'Francistown', type: 'mobile', rating: 4.7, reviewCount: 120, imageUrl: findImage('car-wash-2'), status: 'pending' },
+    { id: 'biz-1', ownerId: 'user-2', name: 'Sparkle Clean Station', address: '123 Main St', city: 'Gaborone', type: 'station', rating: 4.8, reviewCount: 150, imageUrl: findImage('car-wash-1'), status: 'verified', subscriptionPlan: 'Pro', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) },
+    { id: 'biz-2', ownerId: 'user-2', name: 'Pula Mobile Wash', address: 'Mobile Service', city: 'Gaborone', type: 'mobile', rating: 4.9, reviewCount: 210, imageUrl: findImage('car-wash-2'), status: 'verified', subscriptionPlan: 'Starter', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) },
+    { id: 'biz-3', ownerId: 'user-404', name: 'Aqua Touch Gabs', address: '456 Oak Ave', city: 'Gaborone', type: 'station', rating: 4.5, reviewCount: 95, imageUrl: findImage('car-wash-3'), status: 'verified', subscriptionPlan: 'None', subscriptionStatus: 'inactive' },
+    { id: 'biz-4', ownerId: 'user-404', name: 'Pro Shine Mobile', address: 'Mobile Service', city: 'Francistown', type: 'mobile', rating: 4.7, reviewCount: 120, imageUrl: findImage('car-wash-2'), status: 'pending', subscriptionPlan: 'None', subscriptionStatus: 'inactive' },
 ];
+
+let paymentSubmissions: PaymentSubmission[] = [];
 
 const services: Service[] = [
     { id: 'svc-1', businessId: 'biz-1', name: 'Express Exterior', description: 'Quick and efficient exterior wash using high-pressure jets.', price: 25, duration: 15 },
@@ -48,10 +50,6 @@ let bookings: Booking[] = [
 
 // --- MOCK API FUNCTIONS ---
 
-/**
- * TODO: Replace with Supabase Auth integration.
- * Currently returns a mock user based on role for prototype navigation.
- */
 export const mockGetCurrentUser = async (role: UserRole): Promise<User | null> => {
     await delay(100);
     return users.find(u => u.role === role) || null;
@@ -64,7 +62,8 @@ export const mockGetBusinesses = async (): Promise<{ data: Business[]; error: nu
 
 export const mockGetVerifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
     await delay(400);
-    return { data: businesses.filter(b => b.status === 'verified'), error: null };
+    // Customers only see verified AND active businesses
+    return { data: businesses.filter(b => b.status === 'verified' && b.subscriptionStatus === 'active'), error: null };
 }
 
 export const mockGetBusinessById = async (id: string): Promise<{ data: Business | null; error: string | null }> => {
@@ -96,29 +95,56 @@ export const mockGetBookingById = async (id: string): Promise<{ data: Booking | 
   return { data: booking || null, error: null };
 }
 
-export const mockCreateBooking = async (newBookingData: Omit<Booking, 'id' | 'payment'>): Promise<{ data: Booking; error: null }> => {
-    await delay(700);
-    const newBooking: Booking = {
-        ...newBookingData,
-        id: `book-${Date.now()}`,
-        payment: {
-            escrowStatus: 'funded',
-            commission: newBookingData.price * 0.10,
-        },
+export const mockSubmitPayment = async (submission: Omit<PaymentSubmission, 'id' | 'status' | 'submittedAt'>): Promise<void> => {
+    await delay(600);
+    const newSubmission: PaymentSubmission = {
+        ...submission,
+        id: `pay-${Date.now()}`,
+        status: 'pending',
+        submittedAt: new Date(),
     };
-    bookings.push(newBooking);
-    return { data: newBooking, error: null };
+    paymentSubmissions.push(newSubmission);
+    
+    // Update business status
+    const biz = businesses.find(b => b.id === submission.businessId);
+    if (biz) {
+        biz.subscriptionStatus = 'payment_submitted';
+        biz.subscriptionPlan = submission.planSelected;
+    }
 }
 
-export const mockAssignEmployeeToBooking = async (bookingId: string, employeeId: string): Promise<{ data: Booking; error: null }> => {
+export const mockGetPendingPayments = async (): Promise<{ data: PaymentSubmission[]; error: null }> => {
     await delay(400);
-    const bookingIndex = bookings.findIndex(b => b.id === bookingId);
-    if (bookingIndex !== -1) {
-        bookings[bookingIndex].assignedEmployeeId = employeeId;
-        bookings[bookingIndex].mobileBookingStatus = 'en-route';
-        bookings[bookingIndex].status = 'confirmed';
+    return { data: paymentSubmissions.filter(p => p.status === 'pending'), error: null };
+}
+
+export const mockVerifyPayment = async (paymentId: string, action: 'approve' | 'reject'): Promise<void> => {
+    await delay(500);
+    const submission = paymentSubmissions.find(p => p.id === paymentId);
+    if (submission) {
+        submission.status = action === 'approve' ? 'approved' : 'rejected';
+        submission.reviewedAt = new Date();
+        
+        const biz = businesses.find(b => b.id === submission.businessId);
+        if (biz) {
+            if (action === 'approve') {
+                biz.subscriptionStatus = 'active';
+                biz.subscriptionStartDate = new Date();
+                biz.subscriptionEndDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            } else {
+                biz.subscriptionStatus = 'inactive';
+            }
+        }
     }
-    return { data: bookings[bookingIndex], error: null };
+}
+
+export const mockUpdateBusinessSubscription = async (id: string, plan: SubscriptionPlan, status: SubscriptionStatus): Promise<void> => {
+    await delay(300);
+    const biz = businesses.find(b => b.id === id);
+    if (biz) {
+        biz.subscriptionPlan = plan;
+        biz.subscriptionStatus = status;
+    }
 }
 
 export const mockGetCarsForUser = async (userId: string): Promise<{ data: Car[]; error: null }> => {
