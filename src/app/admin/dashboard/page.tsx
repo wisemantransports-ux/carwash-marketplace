@@ -1,6 +1,7 @@
+
 'use client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Activity, Banknote, Users, AlertCircle, CheckCircle, XCircle, CreditCard, ShieldCheck } from "lucide-react";
+import { Banknote, Users, AlertCircle, CheckCircle, XCircle, CreditCard, ShieldCheck } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, Tooltip } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
