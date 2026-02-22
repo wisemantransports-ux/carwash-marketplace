@@ -1,4 +1,3 @@
-
 // src/lib/mock-api.ts
 import { User, UserRole, Car, Business, Service, Employee, Booking, PaymentSubmission, SubscriptionPlan, SubscriptionStatus } from './types';
 import { PlaceHolderImages } from './placeholder-images';
@@ -60,6 +59,11 @@ export const mockGetBusinesses = async (): Promise<{ data: Business[]; error: nu
     return { data: businesses, error: null };
 }
 
+export const mockGetUnverifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
+    await delay(400);
+    return { data: businesses.filter(b => b.status === 'pending'), error: null };
+}
+
 export const mockGetVerifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
     await delay(400);
     // Customers only see verified AND active businesses
@@ -93,6 +97,15 @@ export const mockGetBookingById = async (id: string): Promise<{ data: Booking | 
   await delay(200);
   const booking = bookings.find(b => b.id === id);
   return { data: booking || null, error: null };
+}
+
+export const mockAssignEmployeeToBooking = async (bookingId: string, employeeId: string): Promise<void> => {
+    await delay(300);
+    const booking = bookings.find(b => b.id === bookingId);
+    if (booking) {
+        booking.assignedEmployeeId = employeeId;
+        booking.status = 'confirmed';
+    }
 }
 
 export const mockSubmitPayment = async (submission: Omit<PaymentSubmission, 'id' | 'status' | 'submittedAt'>): Promise<void> => {
