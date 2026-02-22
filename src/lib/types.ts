@@ -30,8 +30,11 @@ export type Service = {
 
 export type BusinessStatus = 'pending' | 'verified' | 'suspended';
 
+export type SubscriptionPlan = 'Starter' | 'Pro' | 'Enterprise' | 'None';
+export type SubscriptionStatus = 'inactive' | 'awaiting_payment' | 'payment_submitted' | 'active' | 'expired' | 'suspended';
+
 export type Business = {
-  id:string;
+  id: string;
   ownerId: string;
   name: string;
   address: string;
@@ -41,6 +44,11 @@ export type Business = {
   reviewCount: number;
   imageUrl: string;
   status: BusinessStatus;
+  // Subscription fields
+  subscriptionPlan: SubscriptionPlan;
+  subscriptionStatus: SubscriptionStatus;
+  subscriptionStartDate?: Date;
+  subscriptionEndDate?: Date;
 };
 
 export type Employee = {
@@ -70,6 +78,19 @@ export type Booking = {
     escrowStatus: EscrowStatus;
     commission: number;
   };
+};
+
+export type PaymentSubmission = {
+  id: string;
+  businessId: string;
+  planSelected: SubscriptionPlan;
+  amount: number;
+  mobileNetwork: 'Orange' | 'Mascom';
+  referenceText: string;
+  proofImageUrl: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: Date;
+  reviewedAt?: Date;
 };
 
 export type Rating = {
