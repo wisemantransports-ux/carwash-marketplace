@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -183,7 +182,7 @@ export default function Home() {
               <div className="space-y-6">
                 {[
                   { step: "1", text: "Register your business and select a plan." },
-                  { step: "2", text: "Add verified employees with ID photos." },
+                  { step: "2", text: "Add verified employees (ID + photo)." },
                   { step: "3", text: "Accept bookings for station or mobile jobs." },
                   { step: "4", text: "Grow your revenue with automated scheduling." },
                 ].map((item, i) => (
