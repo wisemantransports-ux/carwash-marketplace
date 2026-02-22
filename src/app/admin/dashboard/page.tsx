@@ -1,9 +1,9 @@
-
 'use client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Activity, CheckCircle, Banknote, Users, TrendingUp, AlertCircle, ArrowUpRight } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, ResponsiveContainer, Line, LineChart, Tooltip } from "recharts";
+import { Badge } from "@/components/ui/badge";
 
 const data = [
   { name: 'Mon', revenue: 4000, bookings: 24 },
