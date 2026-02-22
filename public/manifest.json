@@ -1,0 +1,17 @@
+{
+  "name": "Carwash Marketplace",
+  "short_name": "Carwash CM",
+  "description": "The ultimate verified car wash marketplace in Botswana.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F0F2F4",
+  "theme_color": "#2080DF",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
