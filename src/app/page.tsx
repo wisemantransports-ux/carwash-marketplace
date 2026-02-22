@@ -1,9 +1,9 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { Car, User, ShoppingCart, Shield, CheckCircle2, MapPin, Sparkles, Clock, Droplets, TrendingUp } from "lucide-react";
+import { Car, User, Shield, CheckCircle2, MapPin, Sparkles, Clock, TrendingUp, Info, ShieldCheck, UserCheck, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -41,9 +41,9 @@ export default function Home() {
             <span className="text-xl font-bold text-primary tracking-tight">Carwash Marketplace</span>
           </div>
           <div className="hidden md:flex items-center gap-6">
-            <Link href="#features" className="text-sm font-medium hover:text-primary transition-colors">How it Works</Link>
+            <Link href="#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">How it Works</Link>
+            <Link href="#safety" className="text-sm font-medium hover:text-primary transition-colors">Safety & Trust</Link>
             <Link href="#pricing" className="text-sm font-medium hover:text-primary transition-colors">Pricing</Link>
-            <Link href="#roles" className="text-sm font-medium hover:text-primary transition-colors">Partners</Link>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => router.push('/login')}>Sign In</Button>
@@ -53,36 +53,34 @@ export default function Home() {
       </header>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
+      <section className="pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-gradient-to-b from-primary/5 to-transparent">
         <div className="container mx-auto px-4">
           <div className="flex flex-col lg:flex-row items-center gap-12">
             <div className="flex-1 text-center lg:text-left space-y-8">
-              <Badge variant="secondary" className="px-4 py-1 text-primary">Now Serving Gaborone & Francistown</Badge>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border shadow-sm text-sm font-medium text-primary mb-2">
+                <ShieldCheck className="h-4 w-4" />
+                <span>Verified Partners Only</span>
+              </div>
               <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1]">
-                Your Car, <span className="text-primary italic">Perfectly</span> Clean. Anywhere.
+                Grow Your Car Wash Business with <span className="text-primary italic">Verified</span> Bookings.
               </h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto lg:mx-0">
-                The first all-in-one car wash marketplace in Botswana. Book a professional mobile detailer to your doorstep or find the best stations nearby. Starting from just <span className="font-bold text-foreground">P25</span>.
+                A secure platform where registered car wash businesses connect with nearby customers — at the station or on-site.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-lg hover:shadow-primary/20 transition-all" onClick={() => router.push('/signup')}>
-                  Book a Wash Now
-                </Button>
-                <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-full" onClick={() => router.push('/signup?role=business-owner')}>
-                  Register Your Business
-                </Button>
+              
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 text-sm font-medium text-muted-foreground">
+                <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-green-600" /> Registered Businesses Only</span>
+                <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-green-600" /> Verified Employees with ID</span>
+                <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-green-600" /> No Random Workers</span>
               </div>
-              <div className="flex items-center justify-center lg:justify-start gap-8 pt-4">
-                <div className="flex -space-x-3">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="h-10 w-10 rounded-full border-2 border-background bg-muted overflow-hidden relative">
-                      <Image src={`https://picsum.photos/seed/${i + 10}/40/40`} alt="user" fill />
-                    </div>
-                  ))}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  <span className="font-bold text-foreground">500+</span> happy car owners in BW
-                </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
+                <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-lg hover:shadow-primary/20 transition-all" onClick={() => router.push('/signup?role=business-owner')}>
+                  Register Your Car Wash
+                </Button>
+                <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-full" onClick={() => router.push('/customer/home')}>
+                  Find a Verified Car Wash
+                </Button>
               </div>
             </div>
             <div className="flex-1 relative w-full aspect-square md:aspect-video lg:aspect-square">
@@ -101,167 +99,232 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-24 bg-muted/30">
+      {/* Problem -> Solution Section */}
+      <section className="py-24 border-y bg-muted/30">
         <div className="container mx-auto px-4">
-          <div className="text-center space-y-4 mb-16">
-            <h2 className="text-3xl md:text-5xl font-bold">Why Carwash Marketplace?</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">We're modernizing how Botswana cleans cars, one booking at a time.</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { 
-                icon: MapPin, 
-                title: "Location Flexible", 
-                description: "Book a mobile wash to your home in Phakalane, or visit a top-rated station in Broadhurst." 
-              },
-              { 
-                icon: Clock, 
-                title: "Save Time", 
-                description: "Stop waiting in queues. Book a slot and our partners will be ready when you arrive, or come to you." 
-              },
-              { 
-                icon: Shield, 
-                title: "Secure Pula Payments", 
-                description: "Your money is held in escrow and only released to the business after you're satisfied with the shine." 
-              }
-            ].map((feature, i) => (
-              <Card key={i} className="border-none shadow-none bg-transparent group">
-                <CardHeader className="text-center">
-                  <div className="mx-auto h-16 w-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <feature.icon className="h-8 w-8" />
-                  </div>
-                  <CardTitle className="text-2xl">{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="text-center text-muted-foreground">
-                  {feature.description}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Local Pricing Section */}
-      <section id="pricing" className="py-24">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col lg:flex-row items-center gap-16">
-            <div className="flex-1 space-y-6">
-              <h2 className="text-3xl md:text-5xl font-bold">Transparent Pricing for Every Budget</h2>
-              <p className="text-lg text-muted-foreground">Whether it's a quick rinse after a dusty drive or a full premium detail, we have a service for you.</p>
-              <ul className="space-y-4">
-                {[
-                  { label: "Express Exterior", price: "P25", desc: "Perfect for a quick dust off" },
-                  { label: "Standard Wash & Dry", price: "P45", desc: "The Gabs daily commuter favorite" },
-                  { label: "Premium Mobile Detail", price: "P150+", desc: "Full interior & exterior restoration" }
-                ].map((item, i) => (
-                  <li key={i} className="flex items-center justify-between p-4 rounded-xl border bg-card hover:border-primary transition-colors">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="text-primary h-5 w-5" />
-                      <div>
-                        <p className="font-bold">{item.label}</p>
-                        <p className="text-sm text-muted-foreground">{item.desc}</p>
-                      </div>
-                    </div>
-                    <span className="text-xl font-bold text-primary">{item.price}</span>
-                  </li>
-                ))}
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            <div className="space-y-6">
+              <h2 className="text-3xl font-bold">The Challenge of Trust</h2>
+              <div className="space-y-4">
+                <div className="p-4 bg-white rounded-xl border border-destructive/20 shadow-sm">
+                  <p className="font-bold text-destructive mb-1">For Car Owners</p>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• No time to visit a car wash station</li>
+                    <li>• Safety concerns with random mobile washers</li>
+                    <li>• Zero accountability if something goes wrong</li>
+                  </ul>
+                </div>
+                <div className="p-4 bg-white rounded-xl border border-orange-200 shadow-sm">
+                  <p className="font-bold text-orange-600 mb-1">For Car Wash Businesses</p>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Idle staff during slow morning hours</li>
+                    <li>• No visibility to customers in nearby blocks</li>
+                    <li>• Manual, messy booking systems</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-6">
+              <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center text-white shadow-lg mb-4">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <h2 className="text-3xl font-bold">The Carwash Marketplace Solution</h2>
+              <p className="text-lg text-muted-foreground">
+                We connect existing, registered car wash businesses with customers who need convenient, secure car wash services — without compromising on trust.
+              </p>
+              <ul className="space-y-3">
+                <li className="flex gap-3">
+                  <CheckCircle2 className="h-6 w-6 text-primary shrink-0" />
+                  <p>Businesses send their <span className="font-bold">own verified employees</span> to customers.</p>
+                </li>
+                <li className="flex gap-3">
+                  <CheckCircle2 className="h-6 w-6 text-primary shrink-0" />
+                  <p>Real-time booking management for station and mobile services.</p>
+                </li>
+                <li className="flex gap-3">
+                  <CheckCircle2 className="h-6 w-6 text-primary shrink-0" />
+                  <p>Transparent platform built on <span className="font-bold">manual admin verification</span>.</p>
+                </li>
               </ul>
             </div>
-            <div className="flex-1 w-full grid grid-cols-2 gap-4">
-              <div className="space-y-4">
-                <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border shadow-lg">
-                  <Image src="https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&q=80&w=600" alt="Detailer" fill className="object-cover" />
-                </div>
-                <Card className="bg-primary text-primary-foreground">
-                  <CardContent className="p-6">
-                    <p className="text-3xl font-bold">100%</p>
-                    <p className="text-sm opacity-90">Verified Partners</p>
-                  </CardContent>
-                </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* How it Works Section */}
+      <section id="how-it-works" className="py-24">
+        <div className="container mx-auto px-4 text-center space-y-16">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-bold">How it Works</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto italic">Simple for owners, powerful for businesses.</p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-12">
+            <div className="space-y-8 text-left">
+              <h3 className="text-2xl font-bold border-l-4 border-primary pl-4">For Car Owners</h3>
+              <div className="space-y-6">
+                {[
+                  { step: "1", text: "Search nearby verified car wash businesses." },
+                  { step: "2", text: "Choose between station wash or mobile doorstep service." },
+                  { step: "3", text: "Track the assigned employee identity and photo." },
+                  { step: "4", text: "Pay directly to the business after service." },
+                ].map((item, i) => (
+                  <div key={i} className="flex gap-4 items-center">
+                    <span className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">{item.step}</span>
+                    <p className="text-muted-foreground">{item.text}</p>
+                  </div>
+                ))}
               </div>
-              <div className="space-y-4 pt-8">
-                <Card className="bg-accent text-accent-foreground">
-                  <CardContent className="p-6">
-                    <Sparkles className="h-8 w-8 mb-2" />
-                    <p className="font-bold">Eco-Friendly</p>
-                    <p className="text-xs">Water-saving techniques</p>
-                  </CardContent>
-                </Card>
-                <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border shadow-lg">
-                  <Image src="https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=600" alt="Clean Car" fill className="object-cover" />
-                </div>
+            </div>
+            
+            <div className="space-y-8 text-left">
+              <h3 className="text-2xl font-bold border-l-4 border-accent pl-4">For Car Wash Businesses</h3>
+              <div className="space-y-6">
+                {[
+                  { step: "1", text: "Register your business and select a plan." },
+                  { step: "2", text: "Add verified employees with ID photos." },
+                  { step: "3", text: "Accept bookings for station or mobile jobs." },
+                  { step: "4", text: "Grow your revenue with automated scheduling." },
+                ].map((item, i) => (
+                  <div key={i} className="flex gap-4 items-center">
+                    <span className="h-8 w-8 rounded-full bg-accent/10 text-accent-foreground flex items-center justify-center font-bold text-sm shrink-0">{item.step}</span>
+                    <p className="text-muted-foreground">{item.text}</p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Roles Section */}
-      <section id="roles" className="py-24 bg-muted/30">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-5xl font-bold mb-16">Built for Everyone</h2>
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            <Card className="text-left border-primary/20 hover:border-primary transition-all">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-2">
-                  <Car className="h-6 w-6" />
-                </div>
-                <CardTitle className="text-2xl">For Car Owners</CardTitle>
-                <CardDescription>Get your car cleaned without the hassle.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary" /> Book in seconds via mobile</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary" /> Track your detailer in real-time</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary" /> Pay safely via the platform</li>
-                </ul>
-                <Button className="w-full" onClick={() => router.push('/customer/home')}>Join as Customer</Button>
-              </CardContent>
-            </Card>
+      {/* Safety & Trust Section */}
+      <section id="safety" className="py-24 bg-primary text-primary-foreground overflow-hidden">
+        <div className="container mx-auto px-4 relative">
+          <Shield className="absolute -top-10 -right-10 h-64 w-64 opacity-5 rotate-12" />
+          <div className="max-w-3xl space-y-8">
+            <h2 className="text-4xl font-bold">Built for Safety, Accountability, and Trust</h2>
+            <p className="text-xl opacity-90 leading-relaxed">
+              We are not a gig app. We are a marketplace for professional, registered car wash businesses.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <UserCheck className="h-8 w-8" />
+                <h4 className="text-xl font-bold">Employee Verification</h4>
+                <p className="text-sm opacity-80">
+                  Business owners must upload employee photos and ID references. Customers always know exactly who is coming to their home.
+                </p>
+              </div>
+              <div className="space-y-4">
+                <TrendingUp className="h-8 w-8" />
+                <h4 className="text-xl font-bold">Traceable Operations</h4>
+                <p className="text-sm opacity-80">
+                  Every booking is linked to a registered business. We provide a digital paper trail for every job performed.
+                </p>
+              </div>
+            </div>
+            <div className="p-6 bg-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
+               <p className="text-sm font-medium">No freelancers. No anonymous workers. No risk.</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            <Card className="text-left border-accent/20 hover:border-accent transition-all">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-accent/10 text-accent flex items-center justify-center mb-2">
-                  <TrendingUp className="h-6 w-6" />
-                </div>
-                <CardTitle className="text-2xl">For Businesses</CardTitle>
-                <CardDescription>Grow your car wash or mobile detailing business.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent" /> Manage bookings & staff easily</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent" /> Reach customers across the city</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent" /> Professional earnings dashboard</li>
-                </ul>
-                <Button variant="outline" className="w-full border-accent hover:bg-accent/10" onClick={() => router.push('/business/dashboard')}>Join as Partner</Button>
-              </CardContent>
-            </Card>
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24">
+        <div className="container mx-auto px-4 text-center space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-bold">Simple Monthly Pricing for Businesses</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Choose the plan that fits your operation size. Customers pay nothing to the platform.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+             {[
+               { name: "Starter", price: "P150", desc: "For small car wash units" },
+               { name: "Pro", price: "P300", desc: "For established stations" },
+               { name: "Enterprise", price: "P600", desc: "For multi-location hubs" },
+             ].map((plan, i) => (
+               <Card key={i} className="flex flex-col border-2 hover:border-primary transition-all">
+                  <CardHeader>
+                    <CardTitle>{plan.name}</CardTitle>
+                    <CardDescription>{plan.desc}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-grow">
+                    <p className="text-4xl font-bold text-primary">{plan.price}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+                  </CardContent>
+                  <CardFooter>
+                    <Button variant="outline" className="w-full" onClick={() => router.push('/signup?role=business-owner')}>Select Plan</Button>
+                  </CardFooter>
+               </Card>
+             ))}
+          </div>
+          <Button size="lg" className="rounded-full px-12 h-14" onClick={() => router.push('/business/subscription')}>View All Features</Button>
+        </div>
+      </section>
+
+      {/* Trust Filter Section */}
+      <section className="py-16 bg-muted/50">
+        <div className="container mx-auto px-4 text-center max-w-4xl space-y-8">
+          <div className="flex justify-center">
+            <AlertTriangle className="h-12 w-12 text-orange-500" />
+          </div>
+          <h2 className="text-3xl font-bold">Who This Platform is NOT For</h2>
+          <div className="grid sm:grid-cols-2 gap-4 text-left">
+            <div className="p-4 bg-destructive/5 rounded-lg border border-destructive/10">
+              <p className="text-sm font-bold text-destructive">❌ NOT FOR</p>
+              <ul className="text-xs space-y-1 mt-2">
+                <li>• Individual freelancers</li>
+                <li>• Unregistered mobile washers</li>
+                <li>• Anonymous workers</li>
+              </ul>
+            </div>
+            <div className="p-4 bg-green-50 rounded-lg border border-green-100">
+              <p className="text-sm font-bold text-green-700">✔ ONLY FOR</p>
+              <ul className="text-xs space-y-1 mt-2">
+                <li>• Registered car wash businesses</li>
+                <li>• Established mobile detailing services</li>
+                <li>• Verified station partners</li>
+              </ul>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t">
+      <footer className="py-16 border-t bg-card">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-lg text-primary">Carwash Marketplace</span>
-              <span className="text-xs text-muted-foreground">© 2024 Botswana.</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-12 mb-12">
+            <div className="col-span-2 space-y-4">
+              <span className="text-2xl font-bold text-primary">Carwash Marketplace</span>
+              <p className="text-sm text-muted-foreground max-w-sm">
+                The first all-in-one car wash marketplace in Botswana. Modernizing trust through verified business partnerships.
+              </p>
             </div>
-            <div className="flex gap-8 text-sm text-muted-foreground">
-              <Link href="#" className="hover:text-primary transition-colors">Privacy</Link>
-              <Link href="#" className="hover:text-primary transition-colors">Terms</Link>
-              <Link href="#" className="hover:text-primary transition-colors">Contact</Link>
+            <div className="space-y-4">
+              <h5 className="font-bold">Platform</h5>
+              <ul className="text-sm text-muted-foreground space-y-2">
+                <li><Link href="#pricing">Pricing</Link></li>
+                <li><Link href="#safety">Safety & Trust</Link></li>
+                <li><Link href="/login">Admin Login</Link></li>
+              </ul>
             </div>
-            <div className="flex items-center gap-4">
-              <Button size="icon" variant="ghost" className="rounded-full"><Shield className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" className="rounded-full" onClick={() => router.push('/admin/dashboard')}><User className="h-4 w-4" /></Button>
+            <div className="space-y-4">
+              <h5 className="font-bold">Policies</h5>
+              <ul className="text-sm text-muted-foreground space-y-2">
+                <li><Link href="#">Admin Approval Policy</Link></li>
+                <li><Link href="#">Privacy Policy</Link></li>
+                <li><Link href="#">Terms of Service</Link></li>
+              </ul>
             </div>
           </div>
-          <p className="mt-8 text-center text-xs text-muted-foreground">
-            A digital marketplace solution designed for modern mobile and stationary car wash services in Botswana.
-          </p>
+          <div className="pt-8 border-t flex flex-col md:flex-row justify-between items-center gap-6">
+            <p className="text-xs text-muted-foreground">© 2024 Botswana. All Rights Reserved.</p>
+            <div className="bg-muted px-4 py-2 rounded-lg border text-[10px] text-muted-foreground text-center">
+              <strong>Disclaimer:</strong> Carwash Marketplace does not process customer payments. 
+              Payments are handled directly between customers and businesses.
+            </div>
+          </div>
         </div>
       </footer>
     </div>
