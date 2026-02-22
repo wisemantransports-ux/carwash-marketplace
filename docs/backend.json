@@ -1,0 +1,161 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Core profile data for all platform users.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full name of the user." },
+        "email": { "type": "string", "format": "email", "description": "Contact email." },
+        "role": { "type": "string", "enum": ["customer", "business-owner", "admin"], "description": "Platform access role." },
+        "avatarUrl": { "type": "string", "description": "URL to the user's profile picture." }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "Business": {
+      "title": "Business",
+      "description": "Details for a registered car wash business.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "description": "Reference to the UserProfile ID of the owner." },
+        "name": { "type": "string", "description": "Legal name of the business." },
+        "address": { "type": "string", "description": "Physical address." },
+        "city": { "type": "string", "description": "City of operation." },
+        "type": { "type": "string", "enum": ["station", "mobile"], "description": "Service delivery model." },
+        "rating": { "type": "number", "description": "Average user rating." },
+        "reviewCount": { "type": "number", "description": "Total number of reviews." },
+        "imageUrl": { "type": "string", "description": "Branding image URL." },
+        "status": { "type": "string", "enum": ["pending", "verified", "suspended"], "description": "Admin verification status." },
+        "subscriptionPlan": { "type": "string", "enum": ["Starter", "Pro", "Enterprise", "None"], "description": "Current pricing tier." },
+        "subscriptionStatus": { "type": "string", "enum": ["inactive", "awaiting_payment", "payment_submitted", "active", "expired", "suspended"], "description": "Account billing status." },
+        "subscriptionStartDate": { "type": "string", "format": "date-time" },
+        "subscriptionEndDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "type", "status", "subscriptionStatus"]
+    },
+    "Service": {
+      "title": "Service Package",
+      "description": "A specific wash package offered by a business.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "duration": { "type": "number", "description": "Duration in minutes." }
+      }
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "A verified staff member of a business.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "imageUrl": { "type": "string", "description": "Photo for customer identification." }
+      }
+    },
+    "Car": {
+      "title": "Car",
+      "description": "A vehicle registered to a customer.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "make": { "type": "string" },
+        "model": { "type": "string" },
+        "year": { "type": "number" },
+        "licensePlate": { "type": "string" }
+      }
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "A scheduled car wash appointment.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "businessId": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "carId": { "type": "string" },
+        "bookingTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "in-progress", "completed", "cancelled"] },
+        "mobileBookingStatus": { "type": "string", "enum": ["en-route", "arrived", "service-started", "service-finished"] },
+        "assignedEmployeeId": { "type": "string" },
+        "price": { "type": "number" },
+        "payment": {
+          "type": "object",
+          "properties": {
+            "escrowStatus": { "type": "string", "enum": ["funded", "released", "refunded"] },
+            "commission": { "type": "number" }
+          }
+        }
+      }
+    },
+    "PaymentSubmission": {
+      "title": "Payment Submission",
+      "description": "Proof of manual mobile money payment for subscriptions.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string" },
+        "planSelected": { "type": "string" },
+        "amount": { "type": "number" },
+        "mobileNetwork": { "type": "string", "enum": ["Orange", "Mascom"] },
+        "referenceText": { "type": "string" },
+        "proofImageUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "reviewedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Rating": {
+      "title": "Rating",
+      "description": "Customer feedback on a booking.",
+      "type": "object",
+      "properties": {
+        "bookingId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "businessId": { "type": "string" },
+        "rating": { "type": "number" },
+        "feedback": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["google.com", "password"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "#/backend/entities/UserProfile",
+      "description": "User profile documents."
+    },
+    "/businesses/{businessId}": {
+      "schema": "#/backend/entities/Business",
+      "description": "Registered car wash businesses."
+    },
+    "/businesses/{businessId}/services/{serviceId}": {
+      "schema": "#/backend/entities/Service",
+      "description": "Service catalog for a business."
+    },
+    "/businesses/{businessId}/employees/{employeeId}": {
+      "schema": "#/backend/entities/Employee",
+      "description": "Staff registry for mobile/station tasks."
+    },
+    "/users/{userId}/cars/{carId}": {
+      "schema": "#/backend/entities/Car",
+      "description": "Customer's registered vehicles."
+    },
+    "/bookings/{bookingId}": {
+      "schema": "#/backend/entities/Booking",
+      "description": "Platform-wide booking records."
+    },
+    "/paymentSubmissions/{submissionId}": {
+      "schema": "#/backend/entities/PaymentSubmission",
+      "description": "Admin review queue for subscription payments."
+    },
+    "/ratings/{ratingId}": {
+      "schema": "#/backend/entities/Rating",
+      "description": "Customer feedback records."
+    }
+  }
+}
