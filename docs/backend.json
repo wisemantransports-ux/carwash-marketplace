@@ -53,7 +53,8 @@
         "businessId": { "type": "string" },
         "name": { "type": "string" },
         "phone": { "type": "string" },
-        "imageUrl": { "type": "string", "description": "Photo for customer identification." }
+        "imageUrl": { "type": "string", "description": "Photo for customer identification." },
+        "idReference": { "type": "string", "description": "National ID for internal verification." }
       }
     },
     "Car": {
