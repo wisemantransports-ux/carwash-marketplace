@@ -119,7 +119,6 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      {/* Navigation */}
       <header className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -138,7 +137,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero Section */}
       <section className="pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-gradient-to-b from-primary/5 to-transparent">
         <div className="container mx-auto px-4">
           <div className="flex flex-col lg:flex-row items-center gap-12">
@@ -185,7 +183,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Trust Filter Section */}
       <section className="py-24 border-y bg-muted/30 text-center">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto space-y-8">
@@ -213,7 +210,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Safety & Trust Section */}
       <section id="safety" className="py-24 bg-primary text-primary-foreground">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl space-y-8">
@@ -241,7 +237,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing Section */}
       <section id="pricing" className="py-24 bg-background">
         <div className="container mx-auto px-4 text-center space-y-12">
           <div className="space-y-4">
@@ -290,7 +285,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="py-16 border-t bg-card">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
