@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -57,8 +56,8 @@ export default function SignupPage() {
 
       if (authData.user) {
         toast({
-          title: "Account Created Successfully",
-          description: "Please check your email to verify your account or sign in.",
+          title: "Signup Successful!",
+          description: "Please check your email to confirm your account.",
         });
         router.push('/login');
       }
@@ -141,7 +140,7 @@ export default function SignupPage() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="customer">Customer (Car Owner)</SelectItem>
-                        <SelectItem value="business-owner">Business Owner (Car Wash Operator)</SelectItem>
+                        <SelectItem value="business-owner">Business Owner (Operator)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

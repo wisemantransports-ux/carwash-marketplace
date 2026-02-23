@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -49,7 +48,7 @@ export default function LoginPage() {
         throw new Error('Access denied. User role not found. Please contact support.');
       }
 
-      // 3. Route based on frozen schema roles
+      // 3. Route based on role
       switch (data.role) {
         case 'admin':
           router.replace('/admin/dashboard');
@@ -70,6 +69,7 @@ export default function LoginPage() {
         title: "Access Denied",
         description: error.message,
       });
+      await supabase.auth.signOut();
       setCheckingSession(false);
       setLoading(false);
     }
@@ -104,6 +104,7 @@ export default function LoginPage() {
       });
 
       if (authError) throw authError;
+
       if (authData.user) {
         await handleRoleRedirect(authData.user.id);
       }
