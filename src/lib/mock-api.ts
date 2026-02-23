@@ -67,8 +67,9 @@ export const mockGetUnverifiedBusinesses = async (): Promise<{ data: Business[];
 
 export const mockGetVerifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
     await delay(400);
-    // Customers only see verified AND active businesses
-    return { data: businesses.filter(b => b.status === 'verified' && b.subscriptionStatus === 'active'), error: null };
+    // CRITICAL TRUST FILTER: Only verified AND active subscription businesses are visible to car owners
+    const filtered = businesses.filter(b => b.status === 'verified' && b.subscriptionStatus === 'active');
+    return { data: filtered, error: null };
 }
 
 export const mockGetBusinessById = async (id: string): Promise<{ data: Business | null; error: string | null }> => {

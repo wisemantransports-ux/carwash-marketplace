@@ -79,7 +79,7 @@ export default function CustomerHomePage() {
     <div className="space-y-8">
       <div className="space-y-4">
           <h1 className="text-4xl font-extrabold tracking-tight text-primary">Discover Top Washes</h1>
-          <p className="text-muted-foreground text-lg">Find verified mobile detailers and stations in your area.</p>
+          <p className="text-muted-foreground text-lg">Browse only verified mobile detailers and stations with active trust seals.</p>
           
           <div className="flex gap-4 max-w-2xl">
               <div className="relative flex-1">
@@ -109,7 +109,7 @@ export default function CustomerHomePage() {
             ))
         ) : (
             <div className="col-span-full py-20 text-center border-2 border-dashed rounded-xl">
-                <p className="text-muted-foreground">No businesses found matching your criteria.</p>
+                <p className="text-muted-foreground">No verified businesses matching your criteria are active right now.</p>
             </div>
         )}
       </div>

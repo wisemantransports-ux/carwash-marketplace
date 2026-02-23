@@ -1,9 +1,10 @@
+
 'use client';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { Car, User, Shield, CheckCircle2, MapPin, Sparkles, Clock, TrendingUp, Info, ShieldCheck, UserCheck, AlertTriangle, Star, Search, Filter } from "lucide-react";
+import { CheckCircle2, MapPin, Star, ShieldCheck, UserCheck, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,6 @@ import { useEffect, useState } from "react";
 import { mockGetVerifiedBusinesses } from "@/lib/mock-api";
 import { Business } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 
 function BusinessCard({ business }: { business: Business }) {
   return (
@@ -144,6 +144,7 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto space-y-8">
             <h2 className="text-4xl font-bold">Discover Top Washes</h2>
+            <p className="text-muted-foreground">Only verified businesses with active subscriptions are listed here for your safety.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
               {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
