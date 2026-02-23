@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -23,25 +23,22 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+const ADMIN_UID = '091660fd-642b-4e24-b3ae-3893a6a78a2a';
+
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
-  useEffect(() => {
-    async function checkExistingSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await handleRoleRedirect(session.user.id);
-      } else {
-        setCheckingSession(false);
-      }
+  const handleRoleRedirect = useCallback(async (userId: string) => {
+    // 1. Direct bypass for pre-created admin UID
+    if (userId === ADMIN_UID) {
+      router.replace('/admin/dashboard');
+      return;
     }
-    checkExistingSession();
-  }, []);
 
-  async function handleRoleRedirect(userId: string) {
     try {
+      // 2. Fetch role from public.users table
       const { data, error } = await supabase
         .from('users')
         .select('role')
@@ -49,13 +46,15 @@ export default function LoginPage() {
         .single();
 
       if (error || !data?.role) {
-        throw new Error('User role not found. Please contact support.');
+        throw new Error('Access denied. User role not found. Please contact support.');
       }
 
+      // 3. Route based on frozen schema roles
       switch (data.role) {
         case 'admin':
           router.replace('/admin/dashboard');
           break;
+        case 'business':
         case 'business-owner':
           router.replace('/business/dashboard');
           break;
@@ -63,7 +62,7 @@ export default function LoginPage() {
           router.replace('/customer/home');
           break;
         default:
-          throw new Error('Invalid account role.');
+          throw new Error('Invalid account role detected.');
       }
     } catch (error: any) {
       toast({
@@ -72,8 +71,21 @@ export default function LoginPage() {
         description: error.message,
       });
       setCheckingSession(false);
+      setLoading(false);
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    async function checkExistingSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await handleRoleRedirect(session.user.id);
+      } else {
+        setCheckingSession(false);
+      }
+    }
+    checkExistingSession();
+  }, [handleRoleRedirect]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -109,7 +121,7 @@ export default function LoginPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground animate-pulse">Checking your credentials...</p>
+        <p className="text-sm text-muted-foreground animate-pulse">Establishing secure connection...</p>
       </div>
     );
   }
@@ -180,12 +192,6 @@ export default function LoginPage() {
             </div>
           </CardFooter>
         </Card>
-
-        <div className="bg-primary/5 p-4 rounded-lg border border-primary/20">
-          <p className="text-xs text-center text-muted-foreground leading-relaxed">
-            <strong>Security Notice:</strong> All accounts are subject to verification to ensure platform safety and reliability.
-          </p>
-        </div>
       </div>
     </div>
   );

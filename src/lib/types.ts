@@ -1,6 +1,6 @@
 
 // src/lib/types.ts
-export type UserRole = 'customer' | 'business-owner' | 'admin';
+export type UserRole = 'customer' | 'business-owner' | 'admin' | 'business';
 
 export type User = {
   id: string;

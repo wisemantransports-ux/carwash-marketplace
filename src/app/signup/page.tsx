@@ -17,7 +17,7 @@ import { toast } from "@/hooks/use-toast";
 import Link from 'next/link';
 
 const signupSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
+  fullName: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   role: z.enum(["customer", "business-owner"]),
@@ -32,7 +32,7 @@ export default function SignupPage() {
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      name: '',
+      fullName: '',
       email: '',
       password: '',
       role: 'customer',
@@ -42,48 +42,26 @@ export default function SignupPage() {
   const onSubmit = async (values: SignupFormValues) => {
     setLoading(true);
     try {
-      // 1. Sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {
           data: {
-            full_name: values.name,
+            role: values.role,
+            full_name: values.fullName,
           },
         },
       });
 
       if (authError) throw authError;
 
-      const user = authData.user;
-      if (!user) throw new Error("Signup failed - no user returned");
-
-      // 2. Create record in public users table
-      // Note: This usually is handled by a DB trigger, but we implement it here 
-      // as a fallback or if the trigger isn't ready.
-      const { error: dbError } = await supabase
-        .from('users')
-        .insert([
-          { 
-            id: user.id, 
-            email: values.email, 
-            name: values.name, 
-            role: values.role 
-          },
-        ]);
-
-      if (dbError) {
-        console.error("Database entry failed:", dbError);
-        // We don't throw here because auth succeeded, but we should notify
+      if (authData.user) {
+        toast({
+          title: "Account Created Successfully",
+          description: "Please check your email to verify your account or sign in.",
+        });
+        router.push('/login');
       }
-
-      toast({
-        title: "Account Created Successfully",
-        description: "Please check your email to verify your account or sign in.",
-      });
-
-      router.push('/login');
-
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -112,7 +90,7 @@ export default function SignupPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="name"
+                name="fullName"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Full Name (as per ID)</FormLabel>
