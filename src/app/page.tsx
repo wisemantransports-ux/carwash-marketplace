@@ -1,10 +1,9 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, MapPin, Star, ShieldCheck, UserCheck, TrendingUp } from "lucide-react";
+import { CheckCircle2, MapPin, Star, ShieldCheck, UserCheck, TrendingUp, XCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +69,53 @@ export default function Home() {
     };
     load();
   }, []);
+
+  const pricingPlans = [
+    {
+      name: "Starter",
+      price: "P150",
+      desc: "For small or single-station car wash businesses",
+      features: [
+        "1 registered car wash location",
+        "Up to 3 verified employees",
+        "Station-based bookings only",
+        "Business profile in search",
+        "Admin verification badge"
+      ],
+      notIncluded: [
+        "Mobile/on-site service",
+        "Priority listing"
+      ]
+    },
+    {
+      name: "Pro",
+      price: "P300",
+      desc: "For established stations offering mobile service",
+      features: [
+        "Up to 10 verified employees",
+        "Mobile / on-site services",
+        "Employee ID + photo verification",
+        "Service area radius selection",
+        "Higher search ranking"
+      ],
+      notIncluded: [
+        "Unlimited employees",
+        "Multiple locations"
+      ]
+    },
+    {
+      name: "Enterprise",
+      price: "P600",
+      desc: "For large operators & multi-location businesses",
+      features: [
+        "Unlimited employees",
+        "Multiple locations",
+        "Priority search results",
+        "Advanced business analytics",
+        "Dedicated admin support"
+      ]
+    }
+  ];
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -144,7 +190,7 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto space-y-8">
             <h2 className="text-4xl font-bold">Discover Top Washes</h2>
-            <p className="text-muted-foreground">Only verified businesses with active subscriptions are listed here for your safety.</p>
+            <p className="text-muted-foreground">Only verified businesses with active trust seals are listed here for your safety.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
               {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
@@ -201,26 +247,42 @@ export default function Home() {
           <div className="space-y-4">
             <h2 className="text-4xl font-bold">Simple Monthly Pricing for Businesses</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Choose the plan that fits your operation size. Customers pay nothing to the platform.
+              Choose the plan that fits your operation size. 
+            </p>
+            <p className="text-sm text-primary font-medium italic">
+              Customers do not pay the platform. Only verified car wash businesses subscribe to use the system.
             </p>
           </div>
           
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-             {[
-               { name: "Starter", price: "P150", desc: "For small car wash units" },
-               { name: "Pro", price: "P300", desc: "For established stations" },
-               { name: "Enterprise", price: "P600", desc: "For multi-location hubs" },
-             ].map((plan, i) => (
-               <Card key={i} className="flex flex-col border-2 hover:border-primary transition-all">
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+             {pricingPlans.map((plan, i) => (
+               <Card key={i} className="flex flex-col border-2 hover:border-primary transition-all text-left">
                   <CardHeader>
-                    <CardTitle>{plan.name}</CardTitle>
+                    <CardTitle className="flex items-center justify-between">
+                      {plan.name}
+                      {plan.name === 'Pro' && <Badge>Popular</Badge>}
+                    </CardTitle>
                     <CardDescription>{plan.desc}</CardDescription>
                   </CardHeader>
-                  <CardContent className="flex-grow">
+                  <CardContent className="flex-grow space-y-6">
                     <p className="text-4xl font-bold text-primary">{plan.price}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+                    <ul className="space-y-3">
+                      {plan.features.map((feat, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-sm">
+                          <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                      {plan.notIncluded?.map((feat, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground opacity-60">
+                          <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </CardContent>
                   <CardFooter>
-                    <Button variant="outline" className="w-full" onClick={() => router.push('/signup?role=business-owner')}>Select Plan</Button>
+                    <Button variant={plan.name === 'Pro' ? 'default' : 'outline'} className="w-full" onClick={() => router.push('/signup?role=business-owner')}>Select {plan.name} Plan</Button>
                   </CardFooter>
                </Card>
              ))}
@@ -232,10 +294,11 @@ export default function Home() {
       <footer className="py-16 border-t bg-card">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <p className="text-xs text-muted-foreground">© 2024 Botswana. All Rights Reserved.</p>
+            <p className="text-xs text-muted-foreground">© 2024 Carwash Marketplace Botswana. All Rights Reserved.</p>
             <div className="flex gap-4">
                 <Link href="/login" className="text-xs text-muted-foreground hover:underline">Admin Login</Link>
                 <Link href="#" className="text-xs text-muted-foreground hover:underline">Privacy Policy</Link>
+                <Link href="#" className="text-xs text-muted-foreground hover:underline">Safety & Trust</Link>
             </div>
           </div>
         </div>

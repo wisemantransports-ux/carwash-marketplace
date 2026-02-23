@@ -1,11 +1,10 @@
-
 'use client';
-import { mockGetBusinessById, mockSubmitPayment, mockUpdateBusinessSubscription } from "@/lib/mock-api";
+import { mockGetBusinessById, mockSubmitPayment } from "@/lib/mock-api";
 import { Business, SubscriptionPlan } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Loader2, Info, ArrowRight, Upload, Smartphone } from "lucide-react";
+import { Check, Loader2, Info, ArrowRight, Upload, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -17,20 +16,40 @@ const PLANS = [
     { 
         name: 'Starter' as SubscriptionPlan, 
         price: 150, 
-        desc: 'Small car wash operations.',
-        features: ['Up to 2 employees', 'Basic analytics', 'Booking management']
+        desc: 'For small or single-station car wash businesses',
+        features: [
+            '1 registered car wash location',
+            'Up to 3 verified employees',
+            'Station-based bookings only',
+            'Business profile listed in search',
+            'Admin verification badge'
+        ],
+        notIncluded: ['Mobile service', 'Priority listing']
     },
     { 
         name: 'Pro' as SubscriptionPlan, 
         price: 300, 
-        desc: 'Medium-sized business hub.',
-        features: ['Up to 10 employees', 'Real-time tracking', 'Priority support', 'Detailed reports']
+        desc: 'For established stations offering mobile service',
+        features: [
+            'Up to 10 verified employees',
+            'Mobile / on-site services',
+            'Employee ID + photo verification',
+            'Service area radius selection',
+            'Higher search ranking'
+        ],
+        notIncluded: ['Unlimited employees', 'Multi-location accounts']
     },
     { 
         name: 'Enterprise' as SubscriptionPlan, 
         price: 600, 
-        desc: 'Large / multiple locations.',
-        features: ['Unlimited employees', 'Platform priority', 'Custom integrations', 'Dedicated manager']
+        desc: 'For multi-location operators',
+        features: [
+            'Unlimited employees',
+            'Multiple locations under one account',
+            'Priority listing in search results',
+            'Dedicated admin review',
+            'Advanced business analytics'
+        ]
     }
 ];
 
@@ -92,6 +111,7 @@ export default function SubscriptionPage() {
             <div className="flex flex-col gap-2">
                 <h1 className="text-4xl font-bold tracking-tight">Subscription Management</h1>
                 <p className="text-muted-foreground">Manage your platform access and monthly billing.</p>
+                <p className="text-xs text-primary font-medium italic">Note: Customers do not pay the platform. Only verified car wash businesses subscribe to use the system.</p>
             </div>
 
             {business?.subscriptionStatus === 'payment_submitted' && (
@@ -109,7 +129,7 @@ export default function SubscriptionPage() {
                     {PLANS.map((plan) => {
                         const isCurrent = business?.subscriptionPlan === plan.name && business?.subscriptionStatus === 'active';
                         return (
-                            <Card key={plan.name} className={`relative flex flex-col ${isCurrent ? 'border-primary ring-1 ring-primary' : ''}`}>
+                            <Card key={plan.name} className={`relative flex flex-col ${isCurrent ? 'border-primary ring-1 ring-primary shadow-lg' : ''}`}>
                                 {isCurrent && (
                                     <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">Current Plan</Badge>
                                 )}
@@ -119,13 +139,19 @@ export default function SubscriptionPage() {
                                         <span className="text-3xl font-bold">P{plan.price}</span>
                                         <span className="text-muted-foreground">/mo</span>
                                     </div>
-                                    <CardDescription className="pt-2">{plan.desc}</CardDescription>
+                                    <CardDescription className="pt-2 text-xs">{plan.desc}</CardDescription>
                                 </CardHeader>
                                 <CardContent className="flex-grow">
-                                    <ul className="space-y-2 text-sm">
+                                    <ul className="space-y-2 text-xs">
                                         {plan.features.map(f => (
                                             <li key={f} className="flex items-center gap-2">
-                                                <Check className="h-4 w-4 text-green-500" />
+                                                <Check className="h-3 w-3 text-green-500 shrink-0" />
+                                                <span>{f}</span>
+                                            </li>
+                                        ))}
+                                        {plan.notIncluded?.map(f => (
+                                            <li key={f} className="flex items-center gap-2 text-muted-foreground opacity-50">
+                                                <X className="h-3 w-3 shrink-0" />
                                                 <span>{f}</span>
                                             </li>
                                         ))}
