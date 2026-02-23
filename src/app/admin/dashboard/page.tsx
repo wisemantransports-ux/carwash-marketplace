@@ -25,8 +25,10 @@ export default function AdminDashboardPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [pendingPayments, setPendingPayments] = useState<PaymentSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const fetch = async () => {
         try {
             const { data: bizData } = await mockGetBusinesses();
@@ -166,37 +168,41 @@ export default function AdminDashboardPage() {
             <CardDescription>Daily platform fee accumulation from monthly business subscriptions.</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
-                <XAxis 
-                  dataKey="name" 
-                  stroke="hsl(var(--muted-foreground))" 
-                  fontSize={12} 
-                  tickLine={false} 
-                  axisLine={false} 
-                />
-                <Tooltip 
-                  cursor={{fill: 'hsl(var(--muted)/0.2)'}}
-                  content={({active, payload}) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-background border rounded-lg p-2 shadow-md">
-                          <p className="text-xs font-bold uppercase">{payload[0].payload.name}</p>
-                          <p className="text-sm text-primary">P{payload[0].value?.toLocaleString()}</p>
-                        </div>
-                      )
-                    }
-                    return null;
-                  }}
-                />
-                <Bar 
-                  dataKey="revenue" 
-                  fill="hsl(var(--primary))" 
-                  radius={[4, 4, 0, 0]} 
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {mounted ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="hsl(var(--muted-foreground))" 
+                    fontSize={12} 
+                    tickLine={false} 
+                    axisLine={false} 
+                  />
+                  <Tooltip 
+                    cursor={{fill: 'hsl(var(--muted)/0.2)'}}
+                    content={({active, payload}) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-background border rounded-lg p-2 shadow-md">
+                            <p className="text-xs font-bold uppercase">{payload[0].payload.name}</p>
+                            <p className="text-sm text-primary">P{payload[0].value?.toLocaleString()}</p>
+                          </div>
+                        )
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar 
+                    dataKey="revenue" 
+                    fill="hsl(var(--primary))" 
+                    radius={[4, 4, 0, 0]} 
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="w-full h-full bg-muted animate-pulse rounded-lg" />
+            )}
           </CardContent>
         </Card>
     </div>

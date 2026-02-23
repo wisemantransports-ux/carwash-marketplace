@@ -1,8 +1,9 @@
+// Basic Service Worker for Carwash Marketplace PWA
 const CACHE_NAME = 'cwm-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
-  '/manifest.json',
-  '/icon.svg'
+  '/icon.svg',
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
