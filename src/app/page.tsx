@@ -1,89 +1,244 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { Car, User, ShoppingCart, Shield } from "lucide-react";
+import { Car, User, Shield, CheckCircle2, MapPin, Sparkles, Clock, TrendingUp, Info, ShieldCheck, UserCheck, AlertTriangle, Star, Search, Filter } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
+import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
+import { mockGetVerifiedBusinesses } from "@/lib/mock-api";
+import { Business } from "@/lib/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+
+function BusinessCard({ business }: { business: Business }) {
+  return (
+    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50">
+      <div className="relative h-48 w-full group overflow-hidden">
+        <Image
+          src={business.imageUrl}
+          alt={business.name}
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-110"
+        />
+        <div className="absolute top-2 right-2">
+            <Badge variant={business.type === 'station' ? 'secondary' : 'default'} className="backdrop-blur-md bg-white/80 text-black">
+                {business.type.charAt(0).toUpperCase() + business.type.slice(1)}
+            </Badge>
+        </div>
+      </div>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xl">{business.name}</CardTitle>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <MapPin className="h-3 w-3" />
+          <span>{business.address}, {business.city}</span>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-grow pb-4">
+        <div className="flex items-center gap-1.5">
+          <div className="flex">
+            {[1, 2, 3, 4, 5].map((s) => (
+                <Star key={s} className={`h-3 w-3 ${s <= Math.floor(business.rating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+            ))}
+          </div>
+          <span className="text-xs font-bold">{business.rating}</span>
+          <span className="text-[10px] text-muted-foreground">({business.reviewCount} reviews)</span>
+        </div>
+      </CardContent>
+      <CardFooter className="pt-0">
+        <Button asChild className="w-full shadow-md">
+          <Link href={`/customer/book/${business.id}`}>View Services</Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
 
 export default function Home() {
   const router = useRouter();
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const { data } = await mockGetVerifiedBusinesses();
+      setBusinesses(data || []);
+      setLoading(false);
+    };
+    load();
+  }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
-      <div className="text-center mb-12">
-        <div className="flex justify-center items-center gap-4 mb-4">
-            <svg
-                width="60"
-                height="60"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="text-primary"
-            >
-                <path
-                d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z"
-                fill="currentColor"
-                />
-                <path
-                d="M12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C15.31 6 18 8.69 18 12C18 15.31 15.31 18 12 18ZM12 8C9.79 8 8 9.79 8 12C8 14.21 9.79 16 12 16C14.21 16 16 14.21 16 12C16 9.79 14.21 8 12 8Z"
-                fill="currentColor"
-                />
-                <path
-                d="M12 14C10.9 14 10 13.1 10 12C10 10.9 10.9 10 12 10C13.1 10 14 10.9 14 12C14 13.1 13.1 14 12 14Z"
-                fill="currentColor"
-                />
-            </svg>
-            <h1 className="text-5xl font-bold text-primary font-headline">
-            Carwash Marketplace
-            </h1>
+    <div className="flex flex-col min-h-screen bg-background">
+      {/* Navigation */}
+      <header className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+             <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">CWM</div>
+            <span className="text-xl font-bold text-primary tracking-tight">Carwash Marketplace</span>
+          </div>
+          <div className="hidden md:flex items-center gap-6">
+            <Link href="#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">How it Works</Link>
+            <Link href="#safety" className="text-sm font-medium hover:text-primary transition-colors">Safety & Trust</Link>
+            <Link href="#pricing" className="text-sm font-medium hover:text-primary transition-colors">Pricing</Link>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/login')}>Sign In</Button>
+            <Button size="sm" onClick={() => router.push('/signup')}>Get Started</Button>
+          </div>
         </div>
-        <p className="text-xl text-muted-foreground mt-2">The ultimate car wash marketplace.</p>
-        <p className="text-lg text-muted-foreground mt-8">Select a role to enter the application or sign in.</p>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl">
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Car /> Customer</CardTitle>
-            <CardDescription>Book and manage your car washes.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button className="w-full" onClick={() => router.push('/customer/home')}>
-              Enter as Customer
+      {/* Hero Section */}
+      <section className="pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-gradient-to-b from-primary/5 to-transparent">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col lg:flex-row items-center gap-12">
+            <div className="flex-1 text-center lg:text-left space-y-8">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border shadow-sm text-sm font-medium text-primary mb-2">
+                <ShieldCheck className="h-4 w-4" />
+                <span>Verified Partners Only</span>
+              </div>
+              <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1]">
+                Grow Your Car Wash Business with <span className="text-primary italic">Verified</span> Bookings.
+              </h1>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto lg:mx-0">
+                A secure platform where registered car wash businesses connect with nearby customers — at the station or on-site.
+              </p>
+              
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 text-sm font-medium text-muted-foreground">
+                <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-green-600" /> Registered Businesses Only</span>
+                <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-green-600" /> Verified Employees with ID</span>
+                <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-green-600" /> No Random Workers</span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
+                <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-lg hover:shadow-primary/20 transition-all" onClick={() => router.push('/signup?role=business-owner')}>
+                  Register Your Car Wash
+                </Button>
+                <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-full" onClick={() => router.push('/customer/home')}>
+                  Find a Verified Car Wash
+                </Button>
+              </div>
+            </div>
+            <div className="flex-1 relative w-full aspect-square md:aspect-video lg:aspect-square">
+              <div className="absolute inset-0 bg-primary/10 rounded-3xl -rotate-2" />
+              <div className="absolute inset-0 overflow-hidden rounded-3xl border shadow-2xl rotate-2 transition-transform hover:rotate-0 duration-500">
+                <Image 
+                  src="https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=1080" 
+                  alt="Car Wash Service" 
+                  fill 
+                  className="object-cover"
+                  priority
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Trust Filter Section */}
+      <section className="py-24 border-y bg-muted/30 text-center">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto space-y-8">
+            <h2 className="text-4xl font-bold">Discover Top Washes</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
+              {loading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                      <Card key={i} className="overflow-hidden"><Skeleton className="h-48 w-full" /><div className="p-4 space-y-2"><Skeleton className="h-6 w-3/4" /><Skeleton className="h-4 w-1/2" /></div></Card>
+                  ))
+              ) : businesses.length > 0 ? (
+                  businesses.slice(0, 3).map(business => (
+                      <BusinessCard key={business.id} business={business} />
+                  ))
+              ) : (
+                  <div className="col-span-full py-12 text-center border-2 border-dashed rounded-xl">
+                      <p className="text-muted-foreground">No verified businesses available at the moment.</p>
+                  </div>
+              )}
+            </div>
+            <Button variant="outline" size="lg" asChild>
+              <Link href="/customer/home">View All Verified Washes</Link>
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      </section>
 
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><ShoppingCart /> Business Owner</CardTitle>
-            <CardDescription>Manage your services and bookings.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button className="w-full" onClick={() => router.push('/business/dashboard')}>
-              Enter as Business Owner
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Safety & Trust Section */}
+      <section id="safety" className="py-24 bg-primary text-primary-foreground">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl space-y-8">
+            <h2 className="text-4xl font-bold">Built for Safety, Accountability, and Trust</h2>
+            <p className="text-xl opacity-90 leading-relaxed">
+              We are not a gig app. We are a marketplace for professional, registered car wash businesses.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <UserCheck className="h-8 w-8" />
+                <h4 className="text-xl font-bold">Employee Verification</h4>
+                <p className="text-sm opacity-80">
+                  Business owners must upload employee photos and ID references. Customers always know exactly who is coming to their home.
+                </p>
+              </div>
+              <div className="space-y-4">
+                <TrendingUp className="h-8 w-8" />
+                <h4 className="text-xl font-bold">Traceable Operations</h4>
+                <p className="text-sm opacity-80">
+                  Every booking is linked to a registered business. We provide a digital paper trail for every job performed.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Shield /> Admin</CardTitle>
-            <CardDescription>Oversee the marketplace platform.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button className="w-full" onClick={() => router.push('/admin/dashboard')}>
-              Enter as Admin
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-      <div className="mt-8 text-center text-sm">
-        <Link href="/login" className="underline text-primary">Or, go to the Login page</Link>
-      </div>
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24 bg-background">
+        <div className="container mx-auto px-4 text-center space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-bold">Simple Monthly Pricing for Businesses</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Choose the plan that fits your operation size. Customers pay nothing to the platform.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+             {[
+               { name: "Starter", price: "P150", desc: "For small car wash units" },
+               { name: "Pro", price: "P300", desc: "For established stations" },
+               { name: "Enterprise", price: "P600", desc: "For multi-location hubs" },
+             ].map((plan, i) => (
+               <Card key={i} className="flex flex-col border-2 hover:border-primary transition-all">
+                  <CardHeader>
+                    <CardTitle>{plan.name}</CardTitle>
+                    <CardDescription>{plan.desc}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-grow">
+                    <p className="text-4xl font-bold text-primary">{plan.price}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+                  </CardContent>
+                  <CardFooter>
+                    <Button variant="outline" className="w-full" onClick={() => router.push('/signup?role=business-owner')}>Select Plan</Button>
+                  </CardFooter>
+               </Card>
+             ))}
+          </div>
+        </div>
+      </section>
 
-      <p className="mt-12 text-sm text-muted-foreground">This is a blueprint for a future mobile app. All screens are designed to be modular.</p>
+      {/* Footer */}
+      <footer className="py-16 border-t bg-card">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+            <p className="text-xs text-muted-foreground">© 2024 Botswana. All Rights Reserved.</p>
+            <div className="flex gap-4">
+                <Link href="/login" className="text-xs text-muted-foreground hover:underline">Admin Login</Link>
+                <Link href="#" className="text-xs text-muted-foreground hover:underline">Privacy Policy</Link>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
