@@ -1,8 +1,8 @@
 'use client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Banknote, Users, CheckCircle, XCircle, CreditCard, ShieldCheck } from "lucide-react";
-import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, Tooltip } from "recharts";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Banknote, Users, CheckCircle, XCircle, CreditCard, ShieldCheck, Loader2 } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, Tooltip } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -56,6 +56,8 @@ export default function AdminDashboardPage() {
     { label: "Pending Payments", value: pendingPayments.length.toString(), trend: "Action Required", icon: CreditCard, color: "text-orange-600" },
     { label: "New Registrations", value: businesses.filter(b => b.status === 'pending').length.toString(), trend: "Verification", icon: Users, color: "text-purple-600" },
   ];
+
+  if (loading && !mounted) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
   return (
     <div className="space-y-8">

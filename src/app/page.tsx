@@ -48,7 +48,7 @@ function BusinessCard({ business }: { business: Business }) {
       </CardContent>
       <CardFooter className="pt-0">
         <Button asChild className="w-full shadow-md">
-          <Link href={`/customer/book/${business.id}`}>View Services</Link>
+          <Link href={`/find-wash/${business.id}`}>View Services</Link>
         </Button>
       </CardFooter>
     </Card>
@@ -123,7 +123,7 @@ export default function Home() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
              <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">CWM</div>
-            <span className="text-xl font-bold text-primary tracking-tight">Carwash Marketplace</span>
+            <span className="text-xl font-bold text-primary tracking-tight text-nowrap">Carwash Marketplace</span>
           </div>
           <div className="hidden md:flex items-center gap-6">
             <Link href="#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">How it Works</Link>
@@ -162,7 +162,7 @@ export default function Home() {
                 <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-lg hover:shadow-primary/20 transition-all" onClick={() => router.push('/signup?role=business-owner')}>
                   Register Your Car Wash
                 </Button>
-                <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-full" onClick={() => router.push('/customer/home')}>
+                <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-full" onClick={() => router.push('/find-wash')}>
                   Find a Verified Car Wash
                 </Button>
               </div>
@@ -204,7 +204,7 @@ export default function Home() {
               )}
             </div>
             <Button variant="outline" size="lg" asChild>
-              <Link href="/customer/home">View All Verified Washes</Link>
+              <Link href="/find-wash">View All Verified Washes</Link>
             </Button>
           </div>
         </div>
