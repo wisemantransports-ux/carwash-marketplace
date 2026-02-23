@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -191,14 +192,20 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
               {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
-                      <Card key={i} className="overflow-hidden"><Skeleton className="h-48 w-full" /><div className="p-4 space-y-2"><Skeleton className="h-6 w-3/4" /><Skeleton className="h-4 w-1/2" /></div></Card>
+                      <Card key={i} className="overflow-hidden bg-card">
+                        <Skeleton className="h-48 w-full" />
+                        <div className="p-4 space-y-2">
+                          <Skeleton className="h-6 w-3/4" />
+                          <Skeleton className="h-4 w-1/2" />
+                        </div>
+                      </Card>
                   ))
               ) : businesses.length > 0 ? (
                   businesses.slice(0, 3).map(business => (
                       <BusinessCard key={business.id} business={business} />
                   ))
               ) : (
-                  <div className="col-span-full py-12 text-center border-2 border-dashed rounded-xl">
+                  <div className="col-span-full py-12 text-center border-2 border-dashed rounded-xl bg-card">
                       <p className="text-muted-foreground">No verified businesses available at the moment.</p>
                   </div>
               )}
@@ -286,15 +293,8 @@ export default function Home() {
       </section>
 
       <footer className="py-16 border-t bg-card">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="container mx-auto px-4 text-center">
             <p className="text-xs text-muted-foreground">© 2024 Carwash Marketplace Botswana. All Rights Reserved.</p>
-            <div className="flex gap-4">
-                <Link href="/login" className="text-xs text-muted-foreground hover:underline">Admin Login</Link>
-                <Link href="#" className="text-xs text-muted-foreground hover:underline">Privacy Policy</Link>
-                <Link href="#" className="text-xs text-muted-foreground hover:underline">Safety & Trust</Link>
-            </div>
-          </div>
         </div>
       </footer>
     </div>

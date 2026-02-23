@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -23,11 +23,57 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-const ADMIN_UID = "091660fd-642b-4e24-b3ae-3893a6a78a2a";
-
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    async function checkExistingSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await handleRoleRedirect(session.user.id);
+      } else {
+        setCheckingSession(false);
+      }
+    }
+    checkExistingSession();
+  }, []);
+
+  async function handleRoleRedirect(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      if (error || !data?.role) {
+        throw new Error('User role not found. Please contact support.');
+      }
+
+      switch (data.role) {
+        case 'admin':
+          router.replace('/admin/dashboard');
+          break;
+        case 'business-owner':
+          router.replace('/business/dashboard');
+          break;
+        case 'customer':
+          router.replace('/customer/home');
+          break;
+        default:
+          throw new Error('Invalid account role.');
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Access Denied",
+        description: error.message,
+      });
+      setCheckingSession(false);
+    }
+  }
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -46,60 +92,27 @@ export default function LoginPage() {
       });
 
       if (authError) throw authError;
-
-      const user = authData.user;
-      if (!user) throw new Error("No user returned");
-
-      // Redirect based on UID or Role
-      if (user.id === ADMIN_UID) {
-        toast({ title: "Welcome, Admin", description: "Redirecting to platform dashboard." });
-        router.push('/admin/dashboard');
-        return;
+      if (authData.user) {
+        await handleRoleRedirect(authData.user.id);
       }
-
-      // Fetch role from users table
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (userError) {
-        console.error("Error fetching user role:", userError);
-        toast({ 
-          variant: "destructive", 
-          title: "Access Denied", 
-          description: "Could not retrieve user role. Please contact support." 
-        });
-        return;
-      }
-
-      const role = userData?.role;
-
-      if (role === 'admin') {
-        router.push('/admin/dashboard');
-      } else if (role === 'business-owner') {
-        router.push('/business/dashboard');
-      } else if (role === 'customer') {
-        router.push('/customer/home');
-      } else {
-        toast({ 
-          variant: "destructive", 
-          title: "Unknown Role", 
-          description: "Your account does not have a valid role assigned." 
-        });
-      }
-
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Login Failed",
         description: error.message || "Please check your credentials.",
       });
-    } finally {
       setLoading(false);
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground animate-pulse">Checking your credentials...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-muted/30 px-4">
@@ -169,8 +182,8 @@ export default function LoginPage() {
         </Card>
 
         <div className="bg-primary/5 p-4 rounded-lg border border-primary/20">
-          <p className="text-xs text-center text-muted-foreground leading-relaxed italic">
-            <strong>Security Notice:</strong> All accounts are subject to manual verification by platform administrators to ensure safety and trust.
+          <p className="text-xs text-center text-muted-foreground leading-relaxed">
+            <strong>Security Notice:</strong> All accounts are subject to verification to ensure platform safety and reliability.
           </p>
         </div>
       </div>
