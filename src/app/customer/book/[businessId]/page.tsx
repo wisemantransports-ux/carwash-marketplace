@@ -1,4 +1,6 @@
 'use client';
+
+import React, { useEffect, useState } from 'react';
 import { AiRecommender } from '@/components/app/ai-recommender';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,9 +9,9 @@ import type { Business, Service } from '@/lib/types';
 import { Clock, Banknote, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 
-export default function BookingPage({ params }: { params: { businessId: string } }) {
+export default function BookingPage({ params }: { params: Promise<{ businessId: string }> }) {
+    const { businessId } = React.use(params);
     const [business, setBusiness] = useState<Business | null>(null);
     const [services, setServices] = useState<Service[]>([]);
     const [loading, setLoading] = useState(true);
@@ -18,19 +20,18 @@ export default function BookingPage({ params }: { params: { businessId: string }
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
-            const { data: businessData } = await mockGetBusinessById(params.businessId);
+            const { data: businessData } = await mockGetBusinessById(businessId);
             setBusiness(businessData);
             if (businessData) {
-                const { data: servicesData } = await mockGetServicesForBusiness(params.businessId);
+                const { data: servicesData } = await mockGetServicesForBusiness(businessId);
                 setServices(servicesData);
             }
             setLoading(false);
         };
         loadData();
-    }, [params.businessId]);
+    }, [businessId]);
 
     const handleBooking = (serviceId: string) => {
-        // Navigate to a confirmation step, passing business and service info
         router.push(`/customer/booking-confirmation/${serviceId}`);
     };
     

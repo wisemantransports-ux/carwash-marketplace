@@ -1,4 +1,6 @@
 'use client';
+
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -6,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Star } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,8 @@ const ratingSchema = z.object({
 
 type RatingFormValues = z.infer<typeof ratingSchema>;
 
-export default function RatingPage({ params }: { params: { bookingId: string } }) {
+export default function RatingPage({ params }: { params: Promise<{ bookingId: string }> }) {
+    const { bookingId } = React.use(params);
     const [rating, setRating] = useState(0);
     const router = useRouter();
 
@@ -28,7 +30,7 @@ export default function RatingPage({ params }: { params: { bookingId: string } }
     });
 
     const onSubmit = (values: RatingFormValues) => {
-        console.log({ bookingId: params.bookingId, ...values });
+        console.log({ bookingId, ...values });
         toast({
             title: "Feedback Submitted",
             description: "Thank you for rating your service!",

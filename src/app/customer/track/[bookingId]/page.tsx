@@ -1,8 +1,8 @@
-
 'use client';
+
+import React, { useEffect, useState } from 'react';
 import { mockGetBookingById, mockGetEmployeesForBusiness } from '@/lib/mock-api';
 import type { Booking, Employee } from '@/lib/types';
-import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Phone, CheckCircle, MessageSquare, MapPin, Clock } from 'lucide-react';
@@ -18,7 +18,8 @@ const timelineSteps = [
     { id: 'service-finished', label: 'Complete', icon: CheckCircle },
 ];
 
-export default function MobileServiceTrackingPage({ params }: { params: { bookingId: string } }) {
+export default function MobileServiceTrackingPage({ params }: { params: Promise<{ bookingId: string }> }) {
+    const { bookingId } = React.use(params);
     const [booking, setBooking] = useState<Booking | null>(null);
     const [employee, setEmployee] = useState<Employee | null>(null);
     const [loading, setLoading] = useState(true);
@@ -26,7 +27,7 @@ export default function MobileServiceTrackingPage({ params }: { params: { bookin
     useEffect(() => {
         const fetchBookingDetails = async () => {
             setLoading(true);
-            const { data: bookingData } = await mockGetBookingById(params.bookingId);
+            const { data: bookingData } = await mockGetBookingById(bookingId);
             setBooking(bookingData);
             if (bookingData?.assignedEmployeeId && bookingData.businessId) {
                 const { data: employees } = await mockGetEmployeesForBusiness(bookingData.businessId);
@@ -36,7 +37,7 @@ export default function MobileServiceTrackingPage({ params }: { params: { bookin
             setLoading(false);
         };
         fetchBookingDetails();
-    }, [params.bookingId]);
+    }, [bookingId]);
 
     const currentStepIndex = booking?.mobileBookingStatus ? timelineSteps.findIndex(step => step.id === booking.mobileBookingStatus) : -1;
 

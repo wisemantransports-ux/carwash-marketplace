@@ -1,15 +1,17 @@
 'use client';
 
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { mockGetBusinessById, mockGetServicesForBusiness } from '@/lib/mock-api';
 import type { Business, Service } from '@/lib/types';
-import { Clock, Banknote, Loader2, ArrowLeft, ShieldCheck, MapPin } from 'lucide-react';
+import { Clock, Banknote, Loader2, ArrowLeft, ShieldCheck, MapPin, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 
-export default function PublicBusinessServicesPage({ params }: { params: { businessId: string } }) {
+export default function PublicBusinessServicesPage({ params }: { params: Promise<{ businessId: string }> }) {
+    const { businessId } = React.use(params);
     const [business, setBusiness] = useState<Business | null>(null);
     const [services, setServices] = useState<Service[]>([]);
     const [loading, setLoading] = useState(true);
@@ -17,16 +19,16 @@ export default function PublicBusinessServicesPage({ params }: { params: { busin
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
-            const { data: businessData } = await mockGetBusinessById(params.businessId);
+            const { data: businessData } = await mockGetBusinessById(businessId);
             setBusiness(businessData);
             if (businessData) {
-                const { data: servicesData } = await mockGetServicesForBusiness(params.businessId);
+                const { data: servicesData } = await mockGetServicesForBusiness(businessId);
                 setServices(servicesData);
             }
             setLoading(false);
         };
         loadData();
-    }, [params.businessId]);
+    }, [businessId]);
 
     if (loading) {
         return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -53,9 +55,14 @@ export default function PublicBusinessServicesPage({ params }: { params: { busin
                     <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-[10px]">CWM</div>
                     <span className="text-sm font-bold text-primary tracking-tight">Carwash Marketplace</span>
                 </div>
-                <Button size="sm" asChild>
-                    <Link href="/login">Sign In</Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button size="sm" variant="ghost" asChild>
+                        <Link href="/login">Sign In</Link>
+                    </Button>
+                    <Button size="sm" asChild>
+                        <Link href="/signup">Sign Up</Link>
+                    </Button>
+                </div>
                 </div>
             </header>
 
@@ -64,7 +71,7 @@ export default function PublicBusinessServicesPage({ params }: { params: { busin
                     <div className="relative h-48 w-full md:w-64 rounded-2xl overflow-hidden border shadow-xl shrink-0">
                         <Image src={business.imageUrl} alt={business.name} fill className="object-cover" />
                         <div className="absolute top-2 right-2">
-                             <Badge variant="secondary" className="bg-white/90 text-black">{business.type.toUpperCase()}</Badge>
+                             <Badge variant="secondary" className="bg-white/90 text-black uppercase">{business.type}</Badge>
                         </div>
                     </div>
                     <div className="space-y-4">
@@ -127,5 +134,3 @@ export default function PublicBusinessServicesPage({ params }: { params: { busin
         </div>
     );
 }
-
-import { Badge } from '@/components/ui/badge';

@@ -3,9 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CheckCircle } from "lucide-react";
 import Link from "next/link";
 
-export default function BookingConfirmationPage({ params }: { params: { bookingId: string } }) {
-    // In a real app, you'd fetch the booking details using the bookingId
-    // to confirm and display the correct information.
+export default async function BookingConfirmationPage({ params }: { params: Promise<{ bookingId: string }> }) {
+    const { bookingId } = await params;
 
     return (
         <div className="flex flex-col items-center justify-center pt-16">
@@ -21,7 +20,7 @@ export default function BookingConfirmationPage({ params }: { params: { bookingI
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground mb-4">
-                        Booking ID: <span className="font-mono">{params.bookingId}</span>
+                        Booking ID: <span className="font-mono">{bookingId}</span>
                     </p>
                     <div className="flex gap-4">
                         <Button className="flex-1" asChild>
