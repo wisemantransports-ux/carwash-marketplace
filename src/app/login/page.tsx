@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/form";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
@@ -29,6 +29,7 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   const handleRoleRedirect = useCallback(async (userId: string) => {
+    // DETERMINISTIC ROLE GATE: Query public.users for the role
     const { data: profile, error } = await supabase
       .from('users')
       .select('id, role')
@@ -50,14 +51,15 @@ export default function LoginPage() {
     if (!profile) {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Profile not found",
+        title: "Profile Not Found",
+        description: "Your user record hasn't been created yet. Please contact support.",
       });
       setCheckingSession(false);
       setLoading(false);
       return;
     }
 
+    // Redirect strictly based on the database role
     switch (profile.role) {
       case 'admin':
         router.replace('/admin/dashboard');
@@ -72,8 +74,8 @@ export default function LoginPage() {
       default:
         toast({
           variant: "destructive",
-          title: "Error",
-          description: "Invalid role assigned to this account",
+          title: "Access Denied",
+          description: "No recognized dashboard for your role.",
         });
         setCheckingSession(false);
         setLoading(false);

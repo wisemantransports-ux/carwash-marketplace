@@ -42,13 +42,14 @@ export default function SignupPage() {
   const onSubmit = async (values: SignupFormValues) => {
     setLoading(true);
     try {
+      // MANDATORY: Use 'name' and hyphenated 'business-owner' role
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {
           data: {
-            role: values.role,           // "customer" or "business"
-            full_name: values.fullName   // Trigger maps this to public.users.name
+            name: values.fullName,
+            role: values.role === 'business' ? 'business-owner' : 'customer',
           },
         },
       });
@@ -58,7 +59,7 @@ export default function SignupPage() {
       if (authData.user) {
         toast({
           title: "Verify your email",
-          description: "We've sent a confirmation link to your inbox.",
+          description: "We've sent a confirmation link to your inbox. Once confirmed, you can log in.",
         });
         router.push('/login');
       }
