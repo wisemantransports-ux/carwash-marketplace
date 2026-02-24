@@ -29,7 +29,7 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   const handleRoleRedirect = useCallback(async (userId: string) => {
-    // DETERMINISTIC ROLE GATE: Query public.users for the role
+    // DETERMINISTIC ROLE GATE: Query public.users for the verified role
     const { data: profile, error } = await supabase
       .from('users')
       .select('id, role')
@@ -41,7 +41,7 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to load profile",
+        description: "Failed to load user profile. Please try again.",
       });
       setCheckingSession(false);
       setLoading(false);
@@ -52,7 +52,7 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Profile Not Found",
-        description: "Your user record hasn't been created yet. Please contact support.",
+        description: "Your user record hasn't been created yet. This may take a few seconds after signup.",
       });
       setCheckingSession(false);
       setLoading(false);
@@ -64,7 +64,6 @@ export default function LoginPage() {
       case 'admin':
         router.replace('/admin/dashboard');
         break;
-      case 'business':
       case 'business-owner':
         router.replace('/business/dashboard');
         break;

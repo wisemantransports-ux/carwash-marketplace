@@ -1,12 +1,12 @@
+
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
-import { mockGetCurrentUser } from "@/lib/mock-api";
-import type { User, UserRole } from "@/lib/types";
-import { Home, LogOut } from "lucide-react";
+import type { UserRole } from "@/lib/types";
+import { Home, LogOut, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -34,10 +34,8 @@ function CarwashMarketplaceLogo() {
     );
 }
 
-function UserMenu({ user }: { user: User | null }) {
+function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: boolean }) {
     const router = useRouter();
-
-    if (!user) return null;
 
     const handleSignOut = async () => {
         try {
@@ -45,22 +43,24 @@ function UserMenu({ user }: { user: User | null }) {
             router.replace('/login');
         } catch (error) {
             console.error('Error signing out:', error);
-            // Fallback to login page even if signout fails
             router.replace('/login');
         }
     };
+
+    if (loading) return <Loader2 className="h-4 w-4 animate-spin m-4" />;
+    if (!userProfile) return null;
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2 h-auto w-full justify-start p-2 hover:bg-sidebar-accent">
                     <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.avatarUrl} alt={user.name} />
-                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                        <AvatarImage src={userProfile.avatar_url} alt={userProfile.name} />
+                        <AvatarFallback>{userProfile.name?.charAt(0) || 'U'}</AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col items-start group-data-[collapsible=icon]:hidden text-left">
-                        <span className="text-sm font-medium">{user.name}</span>
-                        <span className="text-xs text-muted-foreground truncate w-32">{user.email}</span>
+                    <div className="flex flex-col items-start group-data-[collapsible=icon]:hidden text-left overflow-hidden">
+                        <span className="text-sm font-medium truncate w-full">{userProfile.name}</span>
+                        <span className="text-[10px] text-muted-foreground truncate w-full">{userProfile.email}</span>
                     </div>
                 </Button>
             </DropdownMenuTrigger>
@@ -83,15 +83,33 @@ function UserMenu({ user }: { user: User | null }) {
 
 export default function SharedLayout({ children, navItems: rawNavItems, role }: SharedLayoutProps) {
     const pathname = usePathname();
-    const [user, setUser] = useState<User | null>(null);
+    const router = useRouter();
+    const [userProfile, setUserProfile] = useState<any | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchUser = async () => {
-            const currentUser = await mockGetCurrentUser(role);
-            setUser(currentUser);
+        const fetchProfile = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                router.replace('/login');
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+
+            if (error) {
+                console.error("Profile load error:", error);
+            } else {
+                setUserProfile(data);
+            }
+            setLoading(false);
         };
-        fetchUser();
-    }, [role]);
+        fetchProfile();
+    }, [router]);
 
     const navItems: NavItem[] = rawNavItems.map(item => ({
         ...item,
@@ -123,7 +141,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                     </SidebarMenu>
                 </SidebarContent>
                 <div className="mt-auto p-2 border-t border-sidebar-border">
-                    <UserMenu user={user} />
+                    <UserMenu userProfile={userProfile} loading={loading} />
                 </div>
             </Sidebar>
 

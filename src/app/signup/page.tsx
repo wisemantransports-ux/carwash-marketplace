@@ -42,7 +42,7 @@ export default function SignupPage() {
   const onSubmit = async (values: SignupFormValues) => {
     setLoading(true);
     try {
-      // MANDATORY: Use 'name' and hyphenated 'business-owner' role
+      // MANDATORY: Use 'name' and hyphenated 'business-owner' role for trigger compatibility
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
@@ -58,8 +58,8 @@ export default function SignupPage() {
 
       if (authData.user) {
         toast({
-          title: "Verify your email",
-          description: "We've sent a confirmation link to your inbox. Once confirmed, you can log in.",
+          title: "Registration Successful",
+          description: "Please check your email to confirm your account before logging in.",
         });
         router.push('/login');
       }
@@ -67,7 +67,7 @@ export default function SignupPage() {
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: error.message || "An error occurred during signup.",
+        description: error.message || "An error occurred during signup. Please ensure your details are correct.",
       });
     } finally {
       setLoading(false);
