@@ -37,15 +37,20 @@ export default function LoginPage() {
     }
 
     try {
-      // 2. Fetch role from public.users table
+      // 2. Fetch role from public.users table (populated by the handle_new_user trigger)
       const { data, error } = await supabase
         .from('users')
         .select('role')
         .eq('id', userId)
         .single();
 
-      if (error || !data?.role) {
-        throw new Error('Access denied. User role not found. Please contact support.');
+      if (error) {
+        // This often happens if the signup trigger failed and the row doesn't exist
+        throw new Error('Access denied. Profile not found. If you just signed up, please check your email or contact support.');
+      }
+
+      if (!data?.role) {
+        throw new Error('User role not assigned.');
       }
 
       // 3. Route based on role

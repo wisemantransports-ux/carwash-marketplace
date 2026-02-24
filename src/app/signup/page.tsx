@@ -46,8 +46,8 @@ export default function SignupPage() {
         password: values.password,
         options: {
           data: {
-            role: values.role,
-            full_name: values.fullName,
+            role: values.role,           // Matches database enum: "customer" or "business-owner"
+            full_name: values.fullName   // Trigger should map this to public.users.name
           },
         },
       });
@@ -56,12 +56,13 @@ export default function SignupPage() {
 
       if (authData.user) {
         toast({
-          title: "Signup Successful!",
-          description: "Please check your email to confirm your account.",
+          title: "Verify your email",
+          description: "We've sent a confirmation link to your inbox.",
         });
         router.push('/login');
       }
     } catch (error: any) {
+      // If you see "Data error saving new user", check the Supabase "handle_new_user" SQL function
       toast({
         variant: "destructive",
         title: "Registration Failed",
