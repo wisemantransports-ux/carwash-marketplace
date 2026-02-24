@@ -29,7 +29,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   ];
 
   return (
-    <SharedLayout navItems={navItems} role="business-owner">
+    <SharedLayout navItems={navItems} role="business">
       <div className="space-y-6">
         {business && business.subscriptionStatus !== 'active' && business.subscriptionStatus !== 'payment_submitted' && (
           <Alert variant="destructive" className="border-red-200 bg-red-50">

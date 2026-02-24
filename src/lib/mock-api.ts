@@ -11,7 +11,7 @@ const findImage = (id: string) => PlaceHolderImages.find(img => img.id === id)?.
 
 const users: User[] = [
   { id: 'user-1', email: 'customer@test.com', name: 'John Doe', role: 'customer', avatarUrl: findImage('user-avatar-1') },
-  { id: 'user-2', email: 'owner@test.com', name: 'Jane Smith', role: 'business-owner', avatarUrl: findImage('user-avatar-2') },
+  { id: 'user-2', email: 'owner@test.com', name: 'Jane Smith', role: 'business', avatarUrl: findImage('user-avatar-2') },
   { id: 'user-3', email: 'admin@test.com', name: 'Admin User', role: 'admin' },
 ];
 

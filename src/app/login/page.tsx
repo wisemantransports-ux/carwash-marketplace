@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -22,61 +23,60 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-const ADMIN_UID = '091660fd-642b-4e24-b3ae-3893a6a78a2a';
-
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
   const handleRoleRedirect = useCallback(async (userId: string) => {
-    // 1. Direct bypass for pre-created admin UID
-    if (userId === ADMIN_UID) {
-      router.replace('/admin/dashboard');
+    const { data: profile, error } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Profile load error:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load profile",
+      });
+      setCheckingSession(false);
+      setLoading(false);
       return;
     }
 
-    try {
-      // 2. Fetch role from public.users table (populated by the handle_new_user trigger)
-      const { data, error } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        // This often happens if the signup trigger failed and the row doesn't exist
-        throw new Error('Access denied. Profile not found. If you just signed up, please check your email or contact support.');
-      }
-
-      if (!data?.role) {
-        throw new Error('User role not assigned.');
-      }
-
-      // 3. Route based on role
-      switch (data.role) {
-        case 'admin':
-          router.replace('/admin/dashboard');
-          break;
-        case 'business':
-        case 'business-owner':
-          router.replace('/business/dashboard');
-          break;
-        case 'customer':
-          router.replace('/customer/home');
-          break;
-        default:
-          throw new Error('Invalid account role detected.');
-      }
-    } catch (error: any) {
+    if (!profile) {
       toast({
         variant: "destructive",
-        title: "Access Denied",
-        description: error.message,
+        title: "Error",
+        description: "Profile not found",
       });
-      await supabase.auth.signOut();
       setCheckingSession(false);
       setLoading(false);
+      return;
+    }
+
+    switch (profile.role) {
+      case 'admin':
+        router.replace('/admin/dashboard');
+        break;
+      case 'business':
+      case 'business-owner':
+        router.replace('/business/dashboard');
+        break;
+      case 'customer':
+        router.replace('/customer/home');
+        break;
+      default:
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Invalid role assigned to this account",
+        });
+        setCheckingSession(false);
+        setLoading(false);
     }
   }, [router]);
 

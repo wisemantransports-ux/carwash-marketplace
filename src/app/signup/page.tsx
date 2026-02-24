@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -19,7 +20,7 @@ const signupSchema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.enum(["customer", "business-owner"]),
+  role: z.enum(["customer", "business"]),
 });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
@@ -46,8 +47,8 @@ export default function SignupPage() {
         password: values.password,
         options: {
           data: {
-            role: values.role,           // Matches database enum: "customer" or "business-owner"
-            full_name: values.fullName   // Trigger should map this to public.users.name
+            role: values.role,           // "customer" or "business"
+            full_name: values.fullName   // Trigger maps this to public.users.name
           },
         },
       });
@@ -62,7 +63,6 @@ export default function SignupPage() {
         router.push('/login');
       }
     } catch (error: any) {
-      // If you see "Data error saving new user", check the Supabase "handle_new_user" SQL function
       toast({
         variant: "destructive",
         title: "Registration Failed",
@@ -141,7 +141,7 @@ export default function SignupPage() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="customer">Customer (Car Owner)</SelectItem>
-                        <SelectItem value="business-owner">Business Owner (Operator)</SelectItem>
+                        <SelectItem value="business">Business Owner (Operator)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
