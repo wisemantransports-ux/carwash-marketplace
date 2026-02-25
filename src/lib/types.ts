@@ -130,10 +130,22 @@ export type Rating = {
   createdAt: Date;
 };
 
+export type BusinessEarningStatus = 'earned' | 'pending payout' | 'paid out';
+
 export type BusinessEarning = {
   id: string;
   business_id: string;
+  source: 'booking' | 'other';
+  reference_id: string;
   amount: number;
-  status: string;
+  status: BusinessEarningStatus;
   created_at: string;
+  // Relationship data from joins
+  bookings?: {
+    id: string;
+    booking_time: string;
+    status: string;
+    customer?: { name: string };
+    service?: { service_name: string; price: number };
+  };
 };
