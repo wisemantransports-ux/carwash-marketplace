@@ -70,7 +70,7 @@ export type Employee = {
   imageUrl: string;
 };
 
-export type BookingStatus = 'pending' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled';
+export type BookingStatus = 'requested' | 'accepted' | 'completed' | 'rejected' | 'cancelled';
 export type MobileBookingStatus = 'en-route' | 'arrived' | 'service-started' | 'service-finished';
 export type EscrowStatus = 'funded' | 'released' | 'refunded';
 
@@ -89,6 +89,22 @@ export type Booking = {
     escrowStatus: EscrowStatus;
     commission: number;
   };
+};
+
+export type PaymentMethod = 'cash' | 'mobile_money' | 'card';
+export type InvoiceStatus = 'issued' | 'paid' | 'disputed';
+
+export type Invoice = {
+  id: string;
+  bookingId: string;
+  customerId: string;
+  businessId: string;
+  amount: number;
+  status: InvoiceStatus;
+  paymentMethod?: PaymentMethod;
+  paymentReference?: string;
+  issuedAt: Date;
+  paidAt?: Date;
 };
 
 export type PaymentSubmission = {
