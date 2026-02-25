@@ -28,37 +28,51 @@ export default function LoginPage() {
   const redirecting = useRef(false);
 
   const handleRoleRedirect = useCallback(async (userId: string) => {
+    // Single-run guard to prevent concurrent race conditions
     if (!userId || redirecting.current) return;
     redirecting.current = true;
 
     try {
+      // Fetch profile strictly using the confirmed userId
       const { data: profile, error } = await supabase
         .from('users')
         .select('id, role')
         .eq('id', userId)
         .maybeSingle();
 
-      if (error || !profile) {
-        if (error) {
-          console.error("Profile load error:", {
-            message: error.message,
-            code: error.code,
-            details: error.details,
-          });
-        }
+      if (error) {
+        console.error("Profile load error:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         
-        // Reset state so user can try again or see error
+        // Reset state so user can try again
         redirecting.current = false;
         setCheckingSession(false);
         setLoading(false);
         
-        if (!profile && !error) {
-          toast({
-            variant: "destructive",
-            title: "Profile Not Found",
-            description: "We couldn't find your user profile. Please contact support.",
-          });
-        }
+        toast({
+          variant: "destructive",
+          title: "Profile Load Error",
+          description: error.message || "Failed to load your profile. Please try again.",
+        });
+        return;
+      }
+
+      if (!profile) {
+        console.warn("No profile row found for user ID:", userId);
+        
+        redirecting.current = false;
+        setCheckingSession(false);
+        setLoading(false);
+        
+        toast({
+          variant: "destructive",
+          title: "Profile Not Found",
+          description: "We couldn't find your user profile. If you just signed up, please wait a moment and try again.",
+        });
         return;
       }
 
@@ -98,6 +112,7 @@ export default function LoginPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user?.id && isMounted) {
+          // Ensuring user.id is defined before calling handleRoleRedirect
           await handleRoleRedirect(session.user.id);
         } else if (isMounted) {
           setCheckingSession(false);
@@ -131,6 +146,7 @@ export default function LoginPage() {
       if (authError) throw authError;
 
       if (authData.user?.id) {
+        // Proceed with role check only after successful login
         await handleRoleRedirect(authData.user.id);
       } else {
         throw new Error("User ID not found after authentication.");
