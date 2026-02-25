@@ -1,4 +1,3 @@
-
 'use client';
 import { mockGetBusinessById, mockSubmitPayment } from "@/lib/mock-api";
 import { Business, SubscriptionPlan, User as ProfileUser } from "@/lib/types";
@@ -65,7 +64,7 @@ export default function SubscriptionPage() {
 
     // Form states
     const [reference, setReference] = useState('');
-    const [network, setNetwork] = useState<'Orange' | 'Mascom'>('Orange');
+    const [network, setNetwork] = useState<'Orange' | 'Smega'>('Orange');
 
     const fetch = useCallback(async () => {
         setLoading(true);
@@ -111,7 +110,7 @@ export default function SubscriptionPage() {
         
         toast({
             title: "Payment Submitted",
-            description: "An admin will verify your payment shortly.",
+            description: "Payment submitted successfully. Your account will be activated after admin verification.",
         });
         
         await fetch();
@@ -212,40 +211,48 @@ export default function SubscriptionPage() {
                             </Button>
                             <CardTitle>Manual Payment Instructions</CardTitle>
                             <CardDescription>
-                                Please send the subscription amount to our mobile money account.
+                                Please send the subscription amount to our mobile money or crypto account.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="p-4 bg-muted rounded-lg space-y-4">
                                 <div className="flex items-center justify-between border-b pb-2">
-                                    <span className="text-sm font-medium">Recipient Name</span>
-                                    <span className="text-sm font-bold">Carwash Marketplace</span>
+                                    <span className="text-sm font-medium text-muted-foreground">Recipient Name</span>
+                                    <span className="text-sm font-bold">Kudolo Samuel</span>
                                 </div>
-                                <div className="flex items-center justify-between border-b pb-2">
-                                    <span className="text-sm font-medium">Payment Number</span>
-                                    <span className="text-sm font-bold">+267 71 234 567</span>
-                                </div>
-                                <div className="flex items-center justify-between border-b pb-2">
-                                    <span className="text-sm font-medium">Available Networks</span>
-                                    <div className="flex gap-2">
-                                        <Badge variant="secondary">Orange</Badge>
-                                        <Badge variant="secondary">Mascom</Badge>
+                                <div className="space-y-3 border-b pb-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium text-muted-foreground">Orange Money</span>
+                                        <span className="text-sm font-bold">77491261</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium text-muted-foreground">Smega (BTC Wallet)</span>
+                                        <span className="text-sm font-bold">73568188</span>
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">Reference Code</span>
-                                    <code className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
-                                        {business?.id.toUpperCase()}
-                                    </code>
+                                    <span className="text-sm font-medium text-muted-foreground">Reference Code</span>
+                                    {business?.id ? (
+                                        <code className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded font-bold">
+                                            {business.id.toUpperCase()}
+                                        </code>
+                                    ) : (
+                                        <span className="text-[10px] text-muted-foreground italic text-right">
+                                            Your Business ID will be used as payment reference
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             
-                            <div className="text-xs text-muted-foreground space-y-1">
-                                <p>1. Open your mobile money menu</p>
+                            <div className="text-xs text-muted-foreground space-y-2">
+                                <p>1. Open your mobile money or crypto wallet</p>
                                 <p>2. Select "Send Money"</p>
-                                <p>3. Use the number and reference code above</p>
-                                <p>4. Take a screenshot of the confirmation message</p>
-                                <p>5. Upload the screenshot on the right</p>
+                                <p>3. Use the correct payment number above</p>
+                                <p>4. Enter the exact subscription amount</p>
+                                <p>5. Use your Business ID as the reference</p>
+                                <p>6. Complete the payment</p>
+                                <p>7. Take a screenshot of the successful confirmation</p>
+                                <p>8. Upload the screenshot in the provided upload field</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -267,7 +274,7 @@ export default function SubscriptionPage() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="Orange">Orange Money</SelectItem>
-                                            <SelectItem value="Mascom">MyZaka (Mascom)</SelectItem>
+                                            <SelectItem value="Smega">Smega (BTC Wallet)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

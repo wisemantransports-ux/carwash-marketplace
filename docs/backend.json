@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "UserProfile": {
@@ -109,7 +108,7 @@
         "businessId": { "type": "string" },
         "planSelected": { "type": "string" },
         "amount": { "type": "number" },
-        "mobileNetwork": { "type": "string", "enum": ["Orange", "Mascom"] },
+        "mobileNetwork": { "type": "string", "enum": ["Orange", "Smega"] },
         "referenceText": { "type": "string" },
         "proofImageUrl": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },

@@ -109,7 +109,7 @@ export type PaymentSubmission = {
   businessId: string;
   planSelected: SubscriptionPlan;
   amount: number;
-  mobileNetwork: 'Orange' | 'Mascom';
+  mobileNetwork: 'Orange' | 'Smega';
   referenceText: string;
   proofImageUrl: string;
   status: 'pending' | 'approved' | 'rejected';
