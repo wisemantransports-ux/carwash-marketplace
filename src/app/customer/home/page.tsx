@@ -1,30 +1,37 @@
 
 'use client';
 import { useEffect, useState } from 'react';
-import { mockGetVerifiedBusinesses } from '@/lib/mock-api';
-import type { Business } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
+import type { Business, User as ProfileUser } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, Filter } from 'lucide-react';
+import { Star, MapPin, Search, Filter, ShieldCheck, Store } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/hooks/use-toast';
 
-function BusinessCard({ business }: { business: Business }) {
+function BusinessCard({ business }: { business: ProfileUser }) {
   return (
     <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50">
-      <div className="relative h-48 w-full group overflow-hidden">
-        <Image
-          src={business.imageUrl}
-          alt={business.name}
-          fill
-          className="object-cover transition-transform duration-500 group-hover:scale-110"
-        />
+      <div className="relative h-48 w-full group overflow-hidden bg-muted">
+        {business.avatarUrl ? (
+          <Image
+            src={business.avatarUrl}
+            alt={business.name}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-110"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+            <Store className="h-12 w-12" />
+          </div>
+        )}
         <div className="absolute top-2 right-2">
-            <Badge variant={business.type === 'station' ? 'secondary' : 'default'} className="backdrop-blur-md bg-white/80 text-black">
-                {business.type.charAt(0).toUpperCase() + business.type.slice(1)}
+            <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black">
+                {business.plan || 'Verified Partner'}
             </Badge>
         </div>
       </div>
@@ -32,18 +39,23 @@ function BusinessCard({ business }: { business: Business }) {
         <CardTitle className="text-xl">{business.name}</CardTitle>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <MapPin className="h-3 w-3" />
-          <span>{business.address}, {business.city}</span>
+          <span>{business.address || 'Address on file'}, {business.city || 'Botswana'}</span>
         </div>
       </CardHeader>
       <CardContent className="flex-grow pb-4">
+        <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+          {business.description || 'Professional car wash services.'}
+        </p>
         <div className="flex items-center gap-1.5">
           <div className="flex">
             {[1, 2, 3, 4, 5].map((s) => (
-                <Star key={s} className={`h-3 w-3 ${s <= Math.floor(business.rating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                <Star key={s} className="h-3 w-3 text-yellow-400 fill-yellow-400" />
             ))}
           </div>
-          <span className="text-xs font-bold">{business.rating}</span>
-          <span className="text-[10px] text-muted-foreground">({business.reviewCount} reviews)</span>
+          <span className="text-xs font-bold">5.0</span>
+          <Badge variant="outline" className="text-[10px] ml-auto bg-green-50 text-green-700 border-green-200">
+            <ShieldCheck className="h-3 w-3 mr-1" /> Trust Seal
+          </Badge>
         </div>
       </CardContent>
       <CardFooter className="pt-0">
@@ -56,23 +68,41 @@ function BusinessCard({ business }: { business: Business }) {
 }
 
 export default function CustomerHomePage() {
-  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [businesses, setBusinesses] = useState<ProfileUser[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const load = async () => {
+    async function load() {
       setLoading(true);
-      const { data } = await mockGetVerifiedBusinesses();
-      setBusinesses(data);
-      setLoading(false);
-    };
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('role', 'business-owner')
+          .eq('access_active', true);
+        
+        if (error) throw error;
+        // Convert snake_case to camelCase for the component
+        const formatted = (data || []).map(u => ({
+          ...u,
+          avatarUrl: u.avatar_url,
+          accessActive: u.access_active
+        })) as ProfileUser[];
+        
+        setBusinesses(formatted);
+      } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Load Error', description: 'Could not fetch verified washes.' });
+      } finally {
+        setLoading(false);
+      }
+    }
     load();
   }, []);
 
   const filtered = businesses.filter(b => 
     b.name.toLowerCase().includes(search.toLowerCase()) || 
-    b.city.toLowerCase().includes(search.toLowerCase())
+    (b.city && b.city.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
@@ -91,10 +121,6 @@ export default function CustomerHomePage() {
                     onChange={(e) => setSearch(e.target.value)}
                   />
               </div>
-              <Button variant="outline" className="h-12 px-6">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filter
-              </Button>
           </div>
       </div>
 

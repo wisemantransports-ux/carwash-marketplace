@@ -1,74 +1,179 @@
+
 'use client';
-import { mockGetCarsForUser } from "@/lib/mock-api";
-import type { Car } from "@/lib/types";
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import type { Car } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Loader2, Car as CarIcon, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 export default function CarManagementPage() {
     const [cars, setCars] = useState<Car[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isAdding, setIsAdding] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+
+    // Form state
+    const [make, setMake] = useState('');
+    const [model, setModel] = useState('');
+    const [year, setYear] = useState('');
+    const [plate, setPlate] = useState('');
+
+    async function fetchCars() {
+        setLoading(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+            const { data, error } = await supabase.from('cars').select('*').eq('owner_id', session.user.id);
+            if (error) throw error;
+            setCars(data || []);
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Load Error', description: 'Failed to fetch vehicles.' });
+        } finally {
+            setLoading(false);
+        }
+    }
 
     useEffect(() => {
-        const fetchCars = async () => {
-            setLoading(true);
-            const { data } = await mockGetCarsForUser("user-1");
-            setCars(data);
-            setLoading(false);
-        };
         fetchCars();
     }, []);
 
+    const handleAddCar = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSubmitting(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const { error } = await supabase.from('cars').insert({
+                owner_id: session?.user.id,
+                make,
+                model,
+                year: parseInt(year),
+                plate_number: plate
+            });
+            if (error) throw error;
+            toast({ title: 'Car Registered', description: `${make} ${model} added to your profile.` });
+            setIsAdding(false);
+            setMake(''); setModel(''); setYear(''); setPlate('');
+            fetchCars();
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Error', description: e.message });
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    const deleteCar = async (id: string) => {
+        try {
+            const { error } = await supabase.from('cars').delete().eq('id', id);
+            if (error) throw error;
+            setCars(cars.filter(c => c.id !== id));
+            toast({ title: 'Car Removed' });
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not delete car.' });
+        }
+    }
+
     return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <div>
+        <div className="space-y-8">
+            <div className="flex justify-between items-center">
+                <div className="space-y-1">
                     <h1 className="text-3xl font-bold">My Cars</h1>
                     <p className="text-muted-foreground">Manage your vehicles for easy booking.</p>
                 </div>
-                <Button>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Car
-                </Button>
+                <Dialog open={isAdding} onOpenChange={setIsAdding}>
+                    <DialogTrigger asChild>
+                        <Button className="shadow-md">
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add Car
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Register New Vehicle</DialogTitle>
+                            <DialogDescription>Add your car details for quicker booking requests.</DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleAddCar} className="space-y-4 py-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="make">Make</Label>
+                                    <Input id="make" value={make} onChange={e => setMake(e.target.value)} placeholder="e.g. Toyota" required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="model">Model</Label>
+                                    <Input id="model" value={model} onChange={e => setModel(e.target.value)} placeholder="e.g. Hilux" required />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="year">Year</Label>
+                                    <Input id="year" type="number" value={year} onChange={e => setYear(e.target.value)} placeholder="2023" required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="plate">License Plate</Label>
+                                    <Input id="plate" value={plate} onChange={e => setPlate(e.target.value)} placeholder="B 123 ABC" required />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button type="submit" className="w-full" disabled={submitting}>
+                                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Save Vehicle
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </div>
-            <Card>
+            
+            <Card className="shadow-lg border-muted/50 overflow-hidden">
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader>
-                            <TableRow>
+                            <TableRow className="bg-muted/10">
+                                <TableHead className="w-12"></TableHead>
                                 <TableHead>Vehicle</TableHead>
                                 <TableHead>License Plate</TableHead>
-                                <TableHead><span className="sr-only">Actions</span></TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
                                 Array.from({length: 2}).map((_, i) => (
                                     <TableRow key={i}>
+                                        <TableCell><Skeleton className="h-8 w-8 rounded-full" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-40" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                        <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                                        <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                                     </TableRow>
                                 ))
                             ) : cars.length > 0 ? (
                                 cars.map(car => (
-                                    <TableRow key={car.id}>
-                                        <TableCell className="font-medium">{car.year} {car.make} {car.model}</TableCell>
-                                        <TableCell>{car.licensePlate}</TableCell>
+                                    <TableRow key={car.id} className="hover:bg-muted/5 transition-colors">
+                                        <TableCell>
+                                            <div className="bg-muted p-2 rounded-full">
+                                                <CarIcon className="h-4 w-4 text-primary" />
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="font-semibold text-sm">
+                                            {car.year} {car.make} {car.model}
+                                        </TableCell>
+                                        <TableCell className="font-mono text-xs font-bold text-muted-foreground">{car.licensePlate || (car as any).plate_number}</TableCell>
                                         <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" className="h-8 w-8 p-0">
-                                                        <span className="sr-only">Open menu</span>
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem>Edit</DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => deleteCar(car.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                        <Trash2 className="h-4 w-4 mr-2" /> Delete
+                                                    </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
@@ -76,8 +181,11 @@ export default function CarManagementPage() {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={3} className="h-24 text-center">
-                                        No cars added yet.
+                                    <TableCell colSpan={4} className="h-48 text-center">
+                                        <div className="flex flex-col items-center justify-center gap-2">
+                                            <CarIcon className="h-8 w-8 text-muted-foreground opacity-20" />
+                                            <p className="text-muted-foreground font-medium italic">No vehicles registered to your profile yet.</p>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             )}
