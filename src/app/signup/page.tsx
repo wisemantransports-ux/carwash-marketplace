@@ -41,15 +41,14 @@ export default function SignupPage() {
   const onSubmit = async (values: SignupFormValues) => {
     setLoading(true);
     try {
-      // MANDATORY: name (string), role ('customer' or 'business-owner')
-      // Trigger coalesce keys: name, role
+      // Mandatory metadata keys: name (string), role (customer or business-owner)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {
           data: {
             name: values.fullName,
-            role: values.role,
+            role: values.role, // strictly "customer" or "business-owner"
           },
         },
       });
@@ -83,8 +82,8 @@ export default function SignupPage() {
               <ShieldCheck className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Join the Marketplace</CardTitle>
-          <CardDescription>Secure registrations for verified car wash services.</CardDescription>
+          <h1 className="text-2xl font-bold">Join the Marketplace</h1>
+          <p className="text-muted-foreground">Secure registrations for verified car wash services.</p>
         </CardHeader>
         <CardContent>
           <Form {...form}>

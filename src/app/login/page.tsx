@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -25,67 +25,66 @@ export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const redirecting = useRef(false);
 
   const handleRoleRedirect = useCallback(async (userId: string) => {
-    if (!userId) {
-      setCheckingSession(false);
-      setLoading(false);
-      return;
-    }
+    if (!userId || redirecting.current) return;
+    redirecting.current = true;
 
-    // Deterministic Role Resolution from public.users
-    const { data: profile, error } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', userId)
-      .maybeSingle();
+    try {
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('id, role')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (error) {
-      console.error("Profile load error:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-      });
-      toast({
-        variant: "destructive",
-        title: "Connection Error",
-        description: "Failed to load profile. Please try again or contact support.",
-      });
-      setCheckingSession(false);
-      setLoading(false);
-      return;
-    }
-
-    if (!profile) {
-      toast({
-        variant: "destructive",
-        title: "Profile Not Found",
-        description: "Your user profile is missing from the database. Please contact support.",
-      });
-      setCheckingSession(false);
-      setLoading(false);
-      return;
-    }
-
-    // Redirect strictly based on the database role
-    switch (profile.role) {
-      case 'admin':
-        router.replace('/admin/dashboard');
-        break;
-      case 'business-owner':
-        router.replace('/business/dashboard');
-        break;
-      case 'customer':
-        router.replace('/customer/home');
-        break;
-      default:
+      if (error || !profile) {
+        if (error) {
+          console.error("Profile load error:", {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
+        
         toast({
           variant: "destructive",
-          title: "Access Denied",
-          description: `Invalid role assigned: ${profile.role}`,
+          title: "Connection Error",
+          description: "Failed to load profile. Please try again or contact support.",
         });
+        
+        redirecting.current = false;
         setCheckingSession(false);
         setLoading(false);
+        return;
+      }
+
+      // Redirect strictly based on the database role
+      switch (profile.role) {
+        case 'admin':
+          router.replace('/admin/dashboard');
+          break;
+        case 'business-owner':
+          router.replace('/business/dashboard');
+          break;
+        case 'customer':
+          router.replace('/customer/home');
+          break;
+        default:
+          toast({
+            variant: "destructive",
+            title: "Access Denied",
+            description: `Invalid role assigned: ${profile.role}`,
+          });
+          redirecting.current = false;
+          setCheckingSession(false);
+          setLoading(false);
+      }
+    } catch (e) {
+      console.error("Fatal redirect error:", e);
+      redirecting.current = false;
+      setCheckingSession(false);
+      setLoading(false);
     }
   }, [router]);
 
