@@ -48,7 +48,7 @@ export default function LoginPage() {
           hint: error.hint
         });
         
-        // Reset state so user can try again
+        // Reset guard so user can try again if it was a transient error
         redirecting.current = false;
         setCheckingSession(false);
         setLoading(false);
@@ -62,8 +62,9 @@ export default function LoginPage() {
       }
 
       if (!profile) {
-        console.warn("No profile row found for user ID:", userId);
+        console.warn("No profile row found for user ID in public.users:", userId);
         
+        // This usually happens if the trigger hasn't finished yet
         redirecting.current = false;
         setCheckingSession(false);
         setLoading(false);
@@ -88,6 +89,7 @@ export default function LoginPage() {
           router.replace('/customer/home');
           break;
         default:
+          console.error("Invalid role detected:", profile.role);
           toast({
             variant: "destructive",
             title: "Access Denied",
@@ -112,7 +114,6 @@ export default function LoginPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user?.id && isMounted) {
-          // Ensuring user.id is defined before calling handleRoleRedirect
           await handleRoleRedirect(session.user.id);
         } else if (isMounted) {
           setCheckingSession(false);
@@ -146,12 +147,12 @@ export default function LoginPage() {
       if (authError) throw authError;
 
       if (authData.user?.id) {
-        // Proceed with role check only after successful login
         await handleRoleRedirect(authData.user.id);
       } else {
         throw new Error("User ID not found after authentication.");
       }
     } catch (error: any) {
+      console.error("Login submission error:", error);
       toast({
         variant: "destructive",
         title: "Login Failed",
@@ -179,7 +180,7 @@ export default function LoginPage() {
               <ShieldCheck className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-primary text-nowrap">Carwash Marketplace</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-primary">Carwash Marketplace</h1>
           <p className="text-muted-foreground">Sign in to manage your bookings and services.</p>
         </div>
 

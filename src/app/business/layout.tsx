@@ -1,4 +1,3 @@
-
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
 import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle } from "lucide-react";
@@ -29,7 +28,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   ];
 
   return (
-    <SharedLayout navItems={navItems} role="business">
+    <SharedLayout navItems={navItems} role="business-owner">
       <div className="space-y-6">
         {business && business.subscriptionStatus !== 'active' && business.subscriptionStatus !== 'payment_submitted' && (
           <Alert variant="destructive" className="border-red-200 bg-red-50">
