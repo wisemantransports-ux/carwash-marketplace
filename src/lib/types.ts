@@ -8,10 +8,13 @@ export type User = {
   name: string;
   role: UserRole;
   avatarUrl?: string;
-  // Trial tracking fields
+  // Fields from users_with_access view
   trial_start?: string;
   trial_expiry?: string;
   paid?: boolean;
+  trial_remaining?: number;
+  access_active?: boolean;
+  plan?: SubscriptionPlan;
 };
 
 export type Car = {

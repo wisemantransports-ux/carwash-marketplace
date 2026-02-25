@@ -5,7 +5,7 @@ import { Business, SubscriptionPlan, User as ProfileUser } from "@/lib/types";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Loader2, Info, ArrowRight, Upload, X, Clock } from "lucide-react";
+import { Check, Loader2, Info, ArrowRight, Upload, X, Clock, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -72,8 +72,9 @@ export default function SubscriptionPage() {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user?.id) {
+            // Use users_with_access view
             const { data: profile } = await supabase
-                .from('users')
+                .from('users_with_access')
                 .select('*')
                 .eq('id', session.user.id)
                 .maybeSingle();
@@ -120,25 +121,29 @@ export default function SubscriptionPage() {
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
-    const trialDaysLeft = userProfile?.trial_expiry 
-        ? Math.ceil((new Date(userProfile.trial_expiry).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-        : 0;
+    const trialRemaining = userProfile?.trial_remaining ?? 0;
 
     return (
         <div className="max-w-5xl mx-auto space-y-8 pb-12">
             <div className="flex flex-col gap-2">
                 <h1 className="text-4xl font-bold tracking-tight">Subscription Management</h1>
                 <p className="text-muted-foreground">Manage your platform access and monthly billing.</p>
-                {userProfile?.trial_expiry && !userProfile.paid && (
-                    <div className="flex items-center gap-2 mt-2">
-                        <Badge variant={trialDaysLeft > 0 ? "secondary" : "destructive"} className="flex gap-2 py-1 px-3">
+                
+                <div className="flex flex-wrap gap-3 mt-2">
+                    {userProfile?.paid ? (
+                        <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
+                            <ShieldCheck className="h-3.5 w-3.5 mr-2" />
+                            Premium Access Active ({userProfile.plan})
+                        </Badge>
+                    ) : (
+                        <Badge variant={trialRemaining > 0 ? "secondary" : "destructive"} className="flex gap-2 py-1 px-3">
                             <Clock className="h-3.5 w-3.5" />
-                            {trialDaysLeft > 0 
-                                ? `${trialDaysLeft} Days Remaining in Free Trial`
+                            {trialRemaining > 0 
+                                ? `${trialRemaining} Days Remaining in Free Trial`
                                 : "Free Trial Expired"}
                         </Badge>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {business?.subscriptionStatus === 'payment_submitted' && (
@@ -154,7 +159,7 @@ export default function SubscriptionPage() {
             {step === 'browse' ? (
                 <div className="grid gap-6 md:grid-cols-3">
                     {PLANS.map((plan) => {
-                        const isCurrent = business?.subscriptionPlan === plan.name && business?.subscriptionStatus === 'active';
+                        const isCurrent = (userProfile?.plan === plan.name || business?.subscriptionPlan === plan.name) && userProfile?.paid;
                         return (
                             <Card key={plan.name} className={`relative flex flex-col ${isCurrent ? 'border-primary ring-1 ring-primary shadow-lg' : ''}`}>
                                 {isCurrent && (

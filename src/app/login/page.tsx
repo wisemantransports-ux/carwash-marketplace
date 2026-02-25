@@ -29,15 +29,13 @@ export default function LoginPage() {
   const redirecting = useRef(false);
 
   const handleRoleRedirect = useCallback(async (userId: string) => {
-    // Single-run guard to prevent concurrent race conditions
     if (!userId || redirecting.current) return;
     redirecting.current = true;
 
     try {
-      // Fetch profile strictly using the confirmed userId
       const { data: profile, error } = await supabase
-        .from('users')
-        .select('*')
+        .from('users_with_access')
+        .select('id, role')
         .eq('id', userId)
         .maybeSingle();
 
@@ -47,15 +45,13 @@ export default function LoginPage() {
           code: error.code,
           details: error.details,
         });
-        
         redirecting.current = false;
         setCheckingSession(false);
         setLoading(false);
-        
         toast({
           variant: "destructive",
           title: "Profile Load Error",
-          description: error.message || "Failed to load your profile. Please try again.",
+          description: "Failed to load your profile. Please try again.",
         });
         return;
       }
@@ -64,16 +60,14 @@ export default function LoginPage() {
         redirecting.current = false;
         setCheckingSession(false);
         setLoading(false);
-        
         toast({
           variant: "destructive",
           title: "Profile Not Found",
-          description: "We couldn't find your user profile. Please contact support.",
+          description: "We couldn't find your user profile.",
         });
         return;
       }
 
-      // Redirect strictly based on the database role
       switch (profile.role) {
         case 'admin':
           router.replace('/admin/dashboard');
@@ -85,7 +79,6 @@ export default function LoginPage() {
           router.replace('/customer/home');
           break;
         default:
-          console.error("Invalid role detected:", profile.role);
           toast({
             variant: "destructive",
             title: "Access Denied",
@@ -105,7 +98,6 @@ export default function LoginPage() {
 
   useEffect(() => {
     let isMounted = true;
-    
     async function checkExistingSession() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -119,17 +111,13 @@ export default function LoginPage() {
         if (isMounted) setCheckingSession(false);
       }
     }
-    
     checkExistingSession();
     return () => { isMounted = false; };
   }, [handleRoleRedirect]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-    },
+    defaultValues: { email: '', password: '' },
   });
 
   const onSubmit = async (values: LoginFormValues) => {
@@ -139,16 +127,11 @@ export default function LoginPage() {
         email: values.email,
         password: values.password,
       });
-
       if (authError) throw authError;
-
       if (authData.user?.id) {
         await handleRoleRedirect(authData.user.id);
-      } else {
-        throw new Error("User ID not found after authentication.");
       }
     } catch (error: any) {
-      console.error("Login submission error:", error);
       toast({
         variant: "destructive",
         title: "Login Failed",
@@ -162,7 +145,7 @@ export default function LoginPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground animate-pulse">Establishing secure connection...</p>
+        <p className="text-sm text-muted-foreground">Establishing secure connection...</p>
       </div>
     );
   }
@@ -179,7 +162,6 @@ export default function LoginPage() {
           <h1 className="text-3xl font-extrabold tracking-tight text-primary">Carwash Marketplace</h1>
           <p className="text-muted-foreground">Sign in to manage your bookings and services.</p>
         </div>
-
         <Card className="border-2 shadow-xl">
           <CardHeader>
             <CardTitle>Welcome Back</CardTitle>
@@ -194,9 +176,7 @@ export default function LoginPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
-                      <FormControl>
-                        <Input placeholder="name@example.com" {...field} />
-                      </FormControl>
+                      <FormControl><Input placeholder="name@example.com" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -207,19 +187,13 @@ export default function LoginPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
-                      </FormControl>
+                      <FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <Button type="submit" className="w-full h-12 text-lg shadow-md" disabled={loading}>
-                  {loading ? (
-                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Authenticating...</>
-                  ) : (
-                    "Sign In"
-                  )}
+                  {loading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Authenticating...</> : "Sign In"}
                 </Button>
               </form>
             </Form>
@@ -227,9 +201,7 @@ export default function LoginPage() {
           <CardFooter className="flex flex-col gap-4 border-t bg-muted/10 p-6">
             <div className="text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
-              <Link href="/signup" className="text-primary font-bold hover:underline">
-                Register here
-              </Link>
+              <Link href="/signup" className="text-primary font-bold hover:underline">Register here</Link>
             </div>
           </CardFooter>
         </Card>

@@ -1,7 +1,7 @@
 
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, ShieldAlert, Lock } from "lucide-react";
+import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, ShieldAlert, Lock, Clock } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { mockGetBusinessById } from "@/lib/mock-api";
 import { Business, User as ProfileUser } from "@/lib/types";
@@ -22,9 +22,9 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.user?.id) {
-      // Fetch user profile for trial status
+      // Use users_with_access view
       const { data: profile } = await supabase
-        .from('users')
+        .from('users_with_access')
         .select('*')
         .eq('id', session.user.id)
         .maybeSingle();
@@ -50,20 +50,20 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     { href: "/business/subscription", label: "Subscription", icon: CreditCard },
   ];
 
-  // Logic to determine if access is blocked due to trial expiration
-  const isTrialExpired = userProfile?.trial_expiry && new Date(userProfile.trial_expiry) <= new Date() && !userProfile.paid;
-  const isBlocked = isTrialExpired && pathname !== "/business/subscription";
+  // Logic to determine if access is blocked based on users_with_access view
+  const isBlocked = userProfile?.access_active === false && pathname !== "/business/subscription";
+  const trialRemaining = userProfile?.trial_remaining ?? 0;
 
   return (
     <SharedLayout navItems={navItems} role="business-owner">
       <div className="space-y-6">
         {/* Trial Status Banners */}
-        {!userProfile?.paid && userProfile?.trial_expiry && !isTrialExpired && (
+        {userProfile?.paid === false && trialRemaining > 0 && (
           <Alert variant="default" className="bg-blue-50 border-blue-200">
-            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <Clock className="h-4 w-4 text-blue-600" />
             <AlertTitle>Free Trial Active</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-4">
-              <span>Your 14-day trial ends on {new Date(userProfile.trial_expiry).toLocaleDateString()}. Subscribe anytime to maintain full access.</span>
+              <span>Your trial ends in {trialRemaining} days. Subscribe anytime to maintain full access and avoid account deletion.</span>
               <Button size="sm" asChild>
                 <Link href="/business/subscription">Choose a Plan</Link>
               </Button>
@@ -78,9 +78,9 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
               <Lock className="h-12 w-12 text-destructive" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-3xl font-bold">Free Trial Expired</h2>
+              <h2 className="text-3xl font-bold">Your trial expired</h2>
               <p className="text-muted-foreground max-w-md mx-auto">
-                Your 14-day trial period has ended. To continue managing your car wash business and accepting bookings, please choose a subscription plan.
+                Please subscribe to a plan to continue managing your car wash business and accepting bookings. Unpaid accounts with expired trials may be automatically removed.
               </p>
             </div>
             <div className="flex gap-4">
@@ -94,7 +94,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           </div>
         ) : (
           <>
-            {business && business.subscriptionStatus !== 'active' && business.subscriptionStatus !== 'payment_submitted' && !userProfile?.trial_expiry && (
+            {business && business.subscriptionStatus !== 'active' && business.subscriptionStatus !== 'payment_submitted' && !userProfile?.paid && trialRemaining <= 0 && !isBlocked && (
               <Alert variant="destructive" className="border-red-200 bg-red-50">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Subscription Required</AlertTitle>

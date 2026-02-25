@@ -94,7 +94,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
         }
 
         const { data, error } = await supabase
-            .from('users')
+            .from('users_with_access')
             .select('*')
             .eq('id', userId)
             .maybeSingle();
@@ -109,22 +109,16 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
 
     useEffect(() => {
         let isMounted = true;
-
         const checkSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user?.id) {
                 if (isMounted) router.replace('/login');
                 return;
             }
-
             if (isMounted) await fetchProfile(session.user.id);
         };
-
         checkSession();
-
-        return () => {
-            isMounted = false;
-        };
+        return () => { isMounted = false; };
     }, [router, fetchProfile]);
 
     const navItems: NavItem[] = rawNavItems.map(item => ({
@@ -135,18 +129,12 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     return (
         <SidebarProvider>
             <Sidebar collapsible="icon">
-                <SidebarHeader>
-                    <CarwashMarketplaceLogo />
-                </SidebarHeader>
+                <SidebarHeader><CarwashMarketplaceLogo /></SidebarHeader>
                 <SidebarContent className="p-2">
                     <SidebarMenu>
                         {navItems.map(item => (
                             <SidebarMenuItem key={item.href}>
-                                <SidebarMenuButton
-                                    asChild
-                                    isActive={item.active}
-                                    tooltip={item.label}
-                                >
+                                <SidebarMenuButton asChild isActive={item.active} tooltip={item.label}>
                                     <Link href={item.href}>
                                         <item.icon />
                                         <span>{item.label}</span>
@@ -160,7 +148,6 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                     <UserMenu userProfile={userProfile} loading={loading} />
                 </div>
             </Sidebar>
-
             <SidebarInset>
                 <header className="flex h-16 shrink-0 items-center justify-between px-4 border-b">
                     <div className="flex items-center gap-2">
@@ -171,9 +158,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                     </div>
                 </header>
                 <main className="flex-1 overflow-auto bg-muted/10">
-                   <div className="p-4 md:p-6 lg:p-8">
-                    {children}
-                   </div>
+                   <div className="p-4 md:p-6 lg:p-8">{children}</div>
                 </main>
             </SidebarInset>
         </SidebarProvider>
