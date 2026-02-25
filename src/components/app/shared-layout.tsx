@@ -8,7 +8,7 @@ import type { UserRole } from "@/lib/types";
 import { Home, LogOut, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 
 type NavItem = {
@@ -39,7 +39,7 @@ function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: 
     const handleSignOut = async () => {
         try {
             await supabase.auth.signOut();
-            // Completely clear session and redirect
+            // Completely clear session and hard redirect
             window.location.href = '/login';
         } catch (error) {
             console.error('Error signing out:', error);
@@ -47,7 +47,7 @@ function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: 
         }
     };
 
-    if (loading) return <Loader2 className="h-4 w-4 animate-spin m-4" />;
+    if (loading) return <div className="flex justify-center p-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>;
     if (!userProfile) return null;
 
     return (
@@ -64,7 +64,7 @@ function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: 
                     </div>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-56 shadow-lg border-2">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => router.push('/')}>
@@ -72,7 +72,7 @@ function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: 
                     <span>View Landing Page</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Log out</span>
                 </DropdownMenuItem>
@@ -87,29 +87,49 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     const [userProfile, setUserProfile] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
 
+    const fetchProfile = useCallback(async (userId: string) => {
+        if (!userId) {
+            setLoading(false);
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (error) {
+            console.error("Profile load error in layout:", {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+            });
+        } else if (data) {
+            setUserProfile(data);
+        }
+        setLoading(false);
+    }, []);
+
     useEffect(() => {
-        const fetchProfile = async () => {
+        let isMounted = true;
+
+        const checkSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                router.replace('/login');
+            if (!session?.user?.id) {
+                if (isMounted) router.replace('/login');
                 return;
             }
 
-            const { data, error } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', session.user.id)
-                .maybeSingle();
-
-            if (error) {
-                console.error("Profile load error in layout:", error);
-            } else if (data) {
-                setUserProfile(data);
-            }
-            setLoading(false);
+            if (isMounted) await fetchProfile(session.user.id);
         };
-        fetchProfile();
-    }, [router]);
+
+        checkSession();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [router, fetchProfile]);
 
     const navItems: NavItem[] = rawNavItems.map(item => ({
         ...item,
@@ -154,7 +174,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                         </h1>
                     </div>
                 </header>
-                <main className="flex-1 overflow-auto">
+                <main className="flex-1 overflow-auto bg-muted/10">
                    <div className="p-4 md:p-6 lg:p-8">
                     {children}
                    </div>

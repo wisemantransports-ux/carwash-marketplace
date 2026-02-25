@@ -27,6 +27,12 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   const handleRoleRedirect = useCallback(async (userId: string) => {
+    if (!userId) {
+      setCheckingSession(false);
+      setLoading(false);
+      return;
+    }
+
     // Deterministic Role Resolution from public.users
     const { data: profile, error } = await supabase
       .from('users')
@@ -35,11 +41,15 @@ export default function LoginPage() {
       .maybeSingle();
 
     if (error) {
-      console.error("Profile load error:", error);
+      console.error("Profile load error:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+      });
       toast({
         variant: "destructive",
         title: "Connection Error",
-        description: "Failed to load profile. Please check your connection.",
+        description: "Failed to load profile. Please try again or contact support.",
       });
       setCheckingSession(false);
       setLoading(false);
@@ -50,7 +60,7 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Profile Not Found",
-        description: "Your user profile is missing. Please contact support.",
+        description: "Your user profile is missing from the database. Please contact support.",
       });
       setCheckingSession(false);
       setLoading(false);
@@ -58,7 +68,6 @@ export default function LoginPage() {
     }
 
     // Redirect strictly based on the database role
-    // Role values must match 'customer', 'business-owner', 'admin'
     switch (profile.role) {
       case 'admin':
         router.replace('/admin/dashboard');
@@ -82,10 +91,15 @@ export default function LoginPage() {
 
   useEffect(() => {
     async function checkExistingSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await handleRoleRedirect(session.user.id);
-      } else {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          await handleRoleRedirect(session.user.id);
+        } else {
+          setCheckingSession(false);
+        }
+      } catch (e) {
+        console.error("Session check error:", e);
         setCheckingSession(false);
       }
     }
@@ -110,8 +124,10 @@ export default function LoginPage() {
 
       if (authError) throw authError;
 
-      if (authData.user) {
+      if (authData.user?.id) {
         await handleRoleRedirect(authData.user.id);
+      } else {
+        throw new Error("User ID not found after authentication.");
       }
     } catch (error: any) {
       toast({
