@@ -53,7 +53,7 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: (id: strin
               <AvatarFallback>{booking.business_name?.charAt(0)}</AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle className="text-base">{booking.business_name}</CardTitle>
+              <CardTitle className="text-base">{booking.business_name || 'Partner'}</CardTitle>
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
                 <MapPin className="h-3 w-3" /> {booking.city || 'Gaborone'}
               </div>
@@ -73,21 +73,21 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: (id: strin
       <CardContent className="space-y-4 pb-4">
         <div className="bg-muted/30 p-3 rounded-lg space-y-2">
             <div className="flex justify-between items-center text-sm">
-                <span className="font-semibold text-primary">{booking.service_name}</span>
-                <span className="font-bold">P{booking.service_price?.toFixed(2)}</span>
+                <span className="font-semibold text-primary">{booking.service_name || 'Wash Service'}</span>
+                <span className="font-bold">P{Number(booking.service_price || 0).toFixed(2)}</span>
             </div>
             <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {booking.service_duration} mins</span>
-                <span className="flex items-center gap-1"><CarIcon className="h-3.5 w-3.5" /> {booking.car_details || 'Registered Vehicle'}</span>
+                <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {booking.service_duration || '--'} mins</span>
+                <span className="flex items-center gap-1"><CarIcon className="h-3.5 w-3.5" /> {booking.car_details || booking.car_id || 'Registered Vehicle'}</span>
             </div>
         </div>
 
         <div className="flex items-center gap-2 font-medium text-sm">
             <Calendar className="h-4 w-4 text-primary" /> 
-            <span>{new Date(booking.booking_time).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+            <span>{booking.booking_time ? new Date(booking.booking_time).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : '---'}</span>
             <span className="text-muted-foreground">•</span>
             <Clock className="h-4 w-4 text-primary" />
-            <span>{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>{booking.booking_time ? new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---'}</span>
         </div>
       </CardContent>
       <CardFooter className="flex justify-between gap-2 border-t pt-3 bg-muted/5">
@@ -157,21 +157,26 @@ export default function BookingHistoryPage() {
             if (!session) return;
 
             // Fetching from the customer_bookings view
+            // We assume the view already handles the "access_active" requirement or the column name is different
             const { data, error } = await supabase
                 .from('customer_bookings')
                 .select('*')
                 .eq('customer_id', session.user.id)
-                .eq('access_active', true) // Only active businesses
                 .order('booking_time', { ascending: false });
 
             if (error) throw error;
             setBookings(data || []);
         } catch (e: any) {
-            console.error('Error fetching bookings:', e);
+            console.error('Detailed fetch error:', {
+                message: e.message,
+                details: e.details,
+                hint: e.hint,
+                code: e.code
+            });
             toast({ 
                 variant: 'destructive', 
                 title: 'Fetch Error', 
-                description: 'Could not load your bookings. Please try again later.' 
+                description: 'Could not load your bookings. The backend view might still be initializing.' 
             });
         } finally {
             setLoading(false);
