@@ -129,3 +129,11 @@ export type Rating = {
   feedback: string;
   createdAt: Date;
 };
+
+export type BusinessEarning = {
+  id: string;
+  business_id: string;
+  amount: number;
+  status: string;
+  created_at: string;
+};
