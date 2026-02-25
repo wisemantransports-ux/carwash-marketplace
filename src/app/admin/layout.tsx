@@ -1,11 +1,11 @@
-
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, CheckCircle, Percent, Book, ShieldAlert, CreditCard } from "lucide-react";
+import { LayoutDashboard, CheckCircle, Percent, Book, ShieldAlert, CreditCard, Users } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/admin/partners", label: "Partners", icon: Users },
     { href: "/admin/verification", label: "Verification", icon: CheckCircle },
     { href: "/admin/payments", label: "Payments", icon: CreditCard },
     { href: "/admin/commissions", label: "Commissions", icon: Percent },

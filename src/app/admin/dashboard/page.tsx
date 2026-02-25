@@ -3,68 +3,76 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Banknote, Users, CheckCircle, XCircle, CreditCard, ShieldCheck, Loader2 } from "lucide-react";
+import { Banknote, Users, CheckCircle, CreditCard, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, Tooltip } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { mockGetBusinesses, mockUpdateBusinessStatus, mockGetPendingPayments } from "@/lib/mock-api";
-import { Business, PaymentSubmission } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
+import { User as ProfileUser } from "@/lib/types";
 import { toast } from "@/hooks/use-toast";
 import Link from "next/link";
 
-const chartData = [
-  { name: 'Mon', revenue: 4000 },
-  { name: 'Tue', revenue: 3000 },
-  { name: 'Wed', revenue: 2000 },
-  { name: 'Thu', revenue: 2780 },
-  { name: 'Fri', revenue: 1890 },
-  { name: 'Sat', revenue: 2390 },
-  { name: 'Sun', revenue: 3490 },
-];
-
 export default function AdminDashboardPage() {
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [pendingPayments, setPendingPayments] = useState<PaymentSubmission[]>([]);
+  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
+  const [totalRevenue, setTotalRevenue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const fetch = async () => {
+    const fetchData = async () => {
         try {
-            const { data: bizData } = await mockGetBusinesses();
-            const { data: payData } = await mockGetPendingPayments();
+            // Fetch businesses from users_with_access view
+            const { data: bizData, error: bizError } = await supabase
+                .from('users_with_access')
+                .select('*')
+                .eq('role', 'business-owner');
+            
+            if (bizError) throw bizError;
             setBusinesses(bizData || []);
-            setPendingPayments(payData || []);
-        } catch (error) {
-            console.error("Failed to fetch admin data", error);
+
+            // Fetch pending payments count
+            const { count: pendingCount, error: payError } = await supabase
+                .from('payment_submissions')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'pending');
+            
+            setPendingPaymentsCount(pendingCount || 0);
+
+            // Fetch approved payments for total revenue
+            const { data: revenueData } = await supabase
+                .from('payment_submissions')
+                .select('amount')
+                .eq('status', 'approved');
+            
+            const revenue = (revenueData || []).reduce((acc, curr) => acc + Number(curr.amount), 0);
+            setTotalRevenue(revenue);
+
+        } catch (error: any) {
+            console.error("Failed to fetch admin dashboard data", error);
+            toast({ variant: 'destructive', title: 'Data Fetch Error', description: error.message });
         } finally {
             setLoading(false);
         }
     }
-    fetch();
+    fetchData();
   }, []);
 
-  const handleStatusChange = async (id: string, status: 'verified' | 'suspended') => {
-    await mockUpdateBusinessStatus(id, status);
-    setBusinesses(businesses.map(b => b.id === id ? { ...b, status } : b));
-    toast({ title: `Business ${status === 'verified' ? 'Verified' : 'Suspended'}`, description: "Platform status updated successfully." });
-  }
-
   const stats = [
-    { label: "Platform Revenue (Fees)", value: "P45,230", trend: "+20.1%", icon: Banknote, color: "text-green-600" },
-    { label: "Verified Partners", value: businesses.filter(b => b.status === 'verified').length.toString(), trend: "Active Hubs", icon: ShieldCheck, color: "text-blue-600" },
-    { label: "Pending Payments", value: pendingPayments.length.toString(), trend: "Action Required", icon: CreditCard, color: "text-orange-600" },
-    { label: "New Registrations", value: businesses.filter(b => b.status === 'pending').length.toString(), trend: "Verification", icon: Users, color: "text-purple-600" },
+    { label: "Platform Revenue", value: `P${totalRevenue.toLocaleString()}`, trend: "From Subscriptions", icon: Banknote, color: "text-green-600" },
+    { label: "Active Partners", value: businesses.filter(b => b.access_active).length.toString(), trend: "Verified & Paid", icon: ShieldCheck, color: "text-blue-600" },
+    { label: "Pending Payments", value: pendingPaymentsCount.toString(), trend: "Action Required", icon: CreditCard, color: "text-orange-600" },
+    { label: "Partner Registrations", value: businesses.length.toString(), trend: "Total Onboarded", icon: Users, color: "text-purple-600" },
   ];
 
-  if (loading && !mounted) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
+  if (loading && !mounted) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-4xl font-bold tracking-tight text-primary">Platform Administration</h1>
-        <p className="text-muted-foreground">Manual oversight of business verification and manual mobile money subscriptions.</p>
+        <h1 className="text-4xl font-bold tracking-tight text-primary">Admin Overview</h1>
+        <p className="text-muted-foreground">Platform-wide oversight of business activity and revenue.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -86,11 +94,11 @@ export default function AdminDashboardPage() {
         <Card className="lg:col-span-4">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Partner Verifications</CardTitle>
-              <CardDescription>Management of registered car wash locations.</CardDescription>
+              <CardTitle>Recent Partners</CardTitle>
+              <CardDescription>Status tracking for registered car washes.</CardDescription>
             </div>
             <Button size="sm" variant="outline" asChild>
-              <Link href="/admin/verification">View All</Link>
+              <Link href="/admin/partners">View All Partners</Link>
             </Button>
           </CardHeader>
           <CardContent>
@@ -98,7 +106,7 @@ export default function AdminDashboardPage() {
                 <TableHeader>
                     <TableRow>
                         <TableHead>Partner</TableHead>
-                        <TableHead>Location</TableHead>
+                        <TableHead>Trial Days</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                     </TableRow>
@@ -106,111 +114,67 @@ export default function AdminDashboardPage() {
                 <TableBody>
                     {businesses.slice(0, 5).map(biz => (
                         <TableRow key={biz.id}>
-                            <TableCell className="font-medium">{biz.name}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{biz.city}</TableCell>
+                            <TableCell className="font-medium">
+                                <div>{biz.name}</div>
+                                <div className="text-[10px] text-muted-foreground">{biz.email}</div>
+                            </TableCell>
                             <TableCell>
-                                <Badge variant={biz.status === 'verified' ? 'secondary' : biz.status === 'suspended' ? 'destructive' : 'outline'} className="text-[10px]">
-                                    {biz.status}
+                                <div className="flex items-center gap-1">
+                                    <span className="text-xs font-bold">{biz.trial_remaining || 0}</span>
+                                    {biz.trial_remaining <= 3 && !biz.paid && (
+                                        <AlertCircle className="h-3 w-3 text-destructive" />
+                                    )}
+                                </div>
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant={biz.access_active ? 'secondary' : 'destructive'} className="text-[10px]">
+                                    {biz.access_active ? 'ACTIVE' : 'EXPIRED'}
                                 </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                                {biz.status === 'pending' && (
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleStatusChange(biz.id, 'verified')}>
-                                        <CheckCircle className="h-4 w-4" />
-                                    </Button>
-                                )}
-                                {biz.status === 'verified' && (
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => handleStatusChange(biz.id, 'suspended')}>
-                                        <XCircle className="h-4 w-4" />
-                                    </Button>
-                                )}
+                                <Button size="sm" variant="ghost" asChild>
+                                    <Link href="/admin/partners">Manage</Link>
+                                </Button>
                             </TableCell>
                         </TableRow>
                     ))}
                 </TableBody>
             </Table>
           </CardContent>
-          <CardFooter className="border-t bg-muted/10">
-              <p className="text-xs text-muted-foreground py-2">Last verification audit performed recently.</p>
-          </CardFooter>
         </Card>
 
         <Card className="lg:col-span-3">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Pending Payments</CardTitle>
-              <CardDescription>Manual MM verification.</CardDescription>
+              <CardTitle>Action Center</CardTitle>
+              <CardDescription>Critical items requiring attention.</CardDescription>
             </div>
-            <Button size="sm" variant="outline" asChild>
-              <Link href="/admin/payments">Process</Link>
-            </Button>
           </CardHeader>
-          <CardContent>
-             <div className="space-y-4">
-               {pendingPayments.length > 0 ? pendingPayments.slice(0, 3).map(sub => (
-                 <div key={sub.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
-                   <div className="space-y-1">
-                     <p className="text-sm font-bold">{sub.businessId}</p>
-                     <p className="text-[10px] text-muted-foreground font-mono">{sub.referenceText}</p>
-                   </div>
-                   <div className="text-right">
-                     <Badge className="text-[10px] mb-1">P{sub.amount}</Badge>
-                     <p className="text-[10px] text-muted-foreground">{new Date(sub.submittedAt).toLocaleDateString()}</p>
-                   </div>
-                 </div>
-               )) : (
-                 <div className="text-center py-8 text-muted-foreground text-sm italic">
-                   No pending payments found.
-                 </div>
-               )}
+          <CardContent className="space-y-4">
+             <div className="p-4 rounded-lg border bg-orange-50 border-orange-200">
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-bold text-orange-800">Pending Payments</span>
+                    <Badge variant="outline" className="bg-white">{pendingPaymentsCount}</Badge>
+                </div>
+                <p className="text-xs text-orange-700 mb-4">Manual Mobile Money verifications awaiting review.</p>
+                <Button className="w-full bg-orange-600 hover:bg-orange-700" asChild>
+                    <Link href="/admin/payments">Process Payments</Link>
+                </Button>
+             </div>
+
+             <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-bold text-blue-800">New Verifications</span>
+                    <Badge variant="outline" className="bg-white">Queue</Badge>
+                </div>
+                <p className="text-xs text-blue-700 mb-4">New business applications requiring profile approval.</p>
+                <Button className="w-full bg-blue-600 hover:bg-blue-700" asChild>
+                    <Link href="/admin/verification">Verify Profiles</Link>
+                </Button>
              </div>
           </CardContent>
         </Card>
       </div>
-      
-      <Card>
-          <CardHeader>
-            <CardTitle>Revenue Analytics</CardTitle>
-            <CardDescription>Daily platform fee accumulation from monthly business subscriptions.</CardDescription>
-          </CardHeader>
-          <CardContent className="h-[300px]">
-            {mounted ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
-                  <XAxis 
-                    dataKey="name" 
-                    stroke="hsl(var(--muted-foreground))" 
-                    fontSize={12} 
-                    tickLine={false} 
-                    axisLine={false} 
-                  />
-                  <Tooltip 
-                    cursor={{fill: 'hsl(var(--muted)/0.2)'}}
-                    content={({active, payload}) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-background border rounded-lg p-2 shadow-md">
-                            <p className="text-xs font-bold uppercase">{payload[0].payload.name}</p>
-                            <p className="text-sm text-primary">P{payload[0].value?.toLocaleString()}</p>
-                          </div>
-                        )
-                      }
-                      return null;
-                    }}
-                  />
-                  <Bar 
-                    dataKey="revenue" 
-                    fill="hsl(var(--primary))" 
-                    radius={[4, 4, 0, 0]} 
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="w-full h-full bg-muted animate-pulse rounded-lg" />
-            )}
-          </CardContent>
-        </Card>
     </div>
   );
 }
