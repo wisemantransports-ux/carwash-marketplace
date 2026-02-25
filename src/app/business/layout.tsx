@@ -1,7 +1,7 @@
 
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, ShieldAlert, Lock, Clock } from "lucide-react";
+import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, ShieldAlert, Lock, Clock, UserCircle } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { mockGetBusinessById } from "@/lib/mock-api";
 import { Business, User as ProfileUser } from "@/lib/types";
@@ -48,10 +48,11 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     { href: "/business/employees", label: "Employees", icon: Users },
     { href: "/business/earnings", label: "Earnings", icon: DollarSign },
     { href: "/business/subscription", label: "Subscription", icon: CreditCard },
+    { href: "/business/profile", label: "Profile", icon: UserCircle },
   ];
 
   // Logic to determine if access is blocked based on users_with_access view
-  const isBlocked = userProfile?.access_active === false && pathname !== "/business/subscription";
+  const isBlocked = userProfile?.access_active === false && pathname !== "/business/subscription" && pathname !== "/business/profile";
   const trialRemaining = userProfile?.trial_remaining ?? 0;
 
   return (

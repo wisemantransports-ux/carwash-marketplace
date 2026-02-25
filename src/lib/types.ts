@@ -8,6 +8,9 @@ export type User = {
   name: string;
   role: UserRole;
   avatarUrl?: string;
+  address?: string;
+  city?: string;
+  description?: string;
   // Fields from users_with_access view
   trial_start?: string;
   trial_expiry?: string;
@@ -29,10 +32,11 @@ export type Car = {
 export type Service = {
   id: string;
   businessId: string;
-  name: string;
+  service_name: string;
   description: string;
   price: number;
   duration: number; // in minutes
+  created_at?: string;
 };
 
 export type BusinessStatus = 'pending' | 'verified' | 'suspended';

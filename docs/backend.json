@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -8,7 +9,14 @@
         "name": { "type": "string", "description": "Full name of the user." },
         "email": { "type": "string", "format": "email", "description": "Contact email." },
         "role": { "type": "string", "enum": ["customer", "business-owner", "admin"], "description": "Platform access role." },
-        "avatarUrl": { "type": "string", "description": "URL to the user's profile picture." }
+        "avatarUrl": { "type": "string", "description": "URL to the user's profile picture." },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "description": { "type": "string" },
+        "paid": { "type": "boolean" },
+        "trial_start": { "type": "string", "format": "date-time" },
+        "trial_expiry": { "type": "string", "format": "date-time" },
+        "plan": { "type": "string" }
       },
       "required": ["name", "email", "role"]
     },
@@ -38,11 +46,12 @@
       "description": "A specific wash package offered by a business.",
       "type": "object",
       "properties": {
-        "businessId": { "type": "string" },
-        "name": { "type": "string" },
+        "business_id": { "type": "string" },
+        "service_name": { "type": "string" },
         "description": { "type": "string" },
         "price": { "type": "number" },
-        "duration": { "type": "number", "description": "Duration in minutes." }
+        "duration": { "type": "number", "description": "Duration in minutes." },
+        "created_at": { "type": "string", "format": "date-time" }
       }
     },
     "Employee": {
@@ -134,7 +143,7 @@
       "schema": "#/backend/entities/Business",
       "description": "Registered car wash businesses."
     },
-    "/businesses/{businessId}/services/{serviceId}": {
+    "/services/{serviceId}": {
       "schema": "#/backend/entities/Service",
       "description": "Service catalog for a business."
     },
