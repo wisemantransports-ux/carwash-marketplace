@@ -20,36 +20,69 @@ export default function EarningsPage() {
   });
 
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchEarnings() {
       setLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
-          setLoading(false);
+        if (!session?.user || !isMounted) {
+          if (isMounted) setLoading(false);
           return;
         }
 
-        // Fetch earnings with linked booking, customer, and service data
-        const { data, error } = await supabase
+        // Step 1: Fetch flat earnings data
+        const { data: earningsData, error: earningsError } = await supabase
           .from('business_earnings')
-          .select(`
-            *,
-            bookings:reference_id (
+          .select('*')
+          .eq('business_id', session.user.id)
+          .order('created_at', { ascending: false });
+
+        if (earningsError) throw earningsError;
+
+        if (!earningsData || earningsData.length === 0) {
+          if (isMounted) {
+            setEarnings([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        // Step 2: Fetch related bookings if any earnings are from bookings
+        const bookingIds = earningsData
+          .filter(e => e.source === 'booking' && e.reference_id)
+          .map(e => e.reference_id);
+
+        let bookingsMap: Record<string, any> = {};
+
+        if (bookingIds.length > 0) {
+          const { data: relatedBookings, error: bookingsError } = await supabase
+            .from('bookings')
+            .select(`
               id,
               booking_time,
               status,
               customer:customer_id ( name ),
               service:service_id ( service_name, price )
-            )
-          `)
-          .eq('business_id', session.user.id)
-          .order('created_at', { ascending: false });
+            `)
+            .in('id', bookingIds);
 
-        if (error) throw error;
+          if (!bookingsError && relatedBookings) {
+            bookingsMap = relatedBookings.reduce((acc: any, b: any) => {
+              acc[b.id] = b;
+              return acc;
+            }, {});
+          }
+        }
 
-        if (data) {
-          const earningsData = data as any[];
-          setEarnings(earningsData);
+        // Step 3: Combine data
+        if (isMounted) {
+          const combinedData = earningsData.map(e => ({
+            ...e,
+            bookings: bookingsMap[e.reference_id] || null
+          }));
+
+          setEarnings(combinedData);
           
           const stats = earningsData.reduce((acc, item) => {
             acc.total += item.amount;
@@ -61,18 +94,25 @@ export default function EarningsPage() {
           setSummaries(stats);
         }
       } catch (error: any) {
-        console.error('Error fetching earnings:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Fetch Failed',
-          description: error.message || 'Could not load your earnings records.',
-        });
+        if (isMounted) {
+          console.error('Error fetching earnings details:', {
+            message: error.message,
+            code: error.code,
+            details: error.details
+          });
+          toast({
+            variant: 'destructive',
+            title: 'Fetch Failed',
+            description: 'Could not load your earnings records. Please try again.',
+          });
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     fetchEarnings();
+    return () => { isMounted = false; };
   }, []);
 
   if (loading) {
@@ -87,7 +127,7 @@ export default function EarningsPage() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col gap-2">
-        <h1 className="text-4xl font-bold tracking-tight">Financial Overview</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-primary">Financial Overview</h1>
         <p className="text-muted-foreground text-lg">Track your service revenue and platform payouts.</p>
       </div>
 
@@ -126,22 +166,22 @@ export default function EarningsPage() {
         </Card>
       </div>
 
-      <Card className="shadow-lg border-muted/50">
-        <CardHeader>
+      <Card className="shadow-lg border-muted/50 overflow-hidden">
+        <CardHeader className="bg-muted/10 border-b">
           <CardTitle>Earnings History</CardTitle>
           <CardDescription>
-            Detailed list of earnings from completed bookings.
+            Detailed list of revenue records for your business.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {earnings.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
-                  <TableHead>Booking Detail</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Source</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Service</TableHead>
-                  <TableHead>Date & Time</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Earnings</TableHead>
                 </TableRow>
@@ -150,7 +190,10 @@ export default function EarningsPage() {
                 {earnings.map((earning) => (
                   <TableRow key={earning.id} className="group hover:bg-muted/20 transition-colors">
                     <TableCell className="font-mono text-[10px] font-bold">
-                      #{earning.reference_id?.slice(-6).toUpperCase() || 'MANUAL'}
+                      #{earning.reference_id?.slice(-6).toUpperCase() || 'N/A'}
+                    </TableCell>
+                    <TableCell className="capitalize text-xs font-medium">
+                      {earning.source}
                     </TableCell>
                     <TableCell>
                       {earning.bookings?.customer?.name || (
@@ -161,11 +204,6 @@ export default function EarningsPage() {
                       <span className="text-sm font-medium">
                         {earning.bookings?.service?.service_name || 'N/A'}
                       </span>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {earning.bookings?.booking_time 
-                        ? new Date(earning.bookings.booking_time).toLocaleString() 
-                        : new Date(earning.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
                       <Badge 
