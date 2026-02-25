@@ -18,6 +18,7 @@ const users: User[] = [
 const businesses: Business[] = [
     { id: 'biz-1', ownerId: 'user-2', name: 'Sparkle Clean Station', address: '123 Main St', city: 'Gaborone', type: 'station', rating: 4.8, reviewCount: 150, imageUrl: findImage('car-wash-1'), status: 'verified', subscriptionPlan: 'Pro', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) },
     { id: 'biz-2', ownerId: 'user-2', name: 'Pula Mobile Wash', address: 'Mobile Service', city: 'Gaborone', type: 'mobile', rating: 4.9, reviewCount: 210, imageUrl: findImage('car-wash-2'), status: 'verified', subscriptionPlan: 'Starter', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) },
+    { id: 'biz-3', ownerId: 'user-4', name: 'Elite Auto Spa', address: 'Plot 45, G-West', city: 'Gaborone', type: 'station', rating: 0, reviewCount: 0, imageUrl: findImage('car-wash-3'), status: 'pending', subscriptionPlan: 'None', subscriptionStatus: 'inactive' },
 ];
 
 let paymentSubmissions: PaymentSubmission[] = [];
@@ -61,6 +62,12 @@ export const mockGetBusinesses = async (): Promise<{ data: Business[]; error: nu
 export const mockGetVerifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
     await delay(400);
     const filtered = businesses.filter(b => b.status === 'verified' && b.subscriptionStatus === 'active');
+    return { data: filtered, error: null };
+}
+
+export const mockGetUnverifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
+    await delay(400);
+    const filtered = businesses.filter(b => b.status === 'pending');
     return { data: filtered, error: null };
 }
 
