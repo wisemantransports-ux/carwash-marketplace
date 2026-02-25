@@ -40,10 +40,11 @@ function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: 
     const handleSignOut = async () => {
         try {
             await supabase.auth.signOut();
-            router.replace('/login');
+            // Deterministic session clearing
+            window.location.href = '/login';
         } catch (error) {
             console.error('Error signing out:', error);
-            router.replace('/login');
+            window.location.href = '/login';
         }
     };
 
@@ -99,11 +100,11 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                 .from('users')
                 .select('*')
                 .eq('id', session.user.id)
-                .single();
+                .maybeSingle();
 
             if (error) {
-                console.error("Profile load error:", error);
-            } else {
+                console.error("Profile load error in layout:", error);
+            } else if (data) {
                 setUserProfile(data);
             }
             setLoading(false);

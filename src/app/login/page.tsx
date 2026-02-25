@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -29,7 +28,7 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   const handleRoleRedirect = useCallback(async (userId: string) => {
-    // DETERMINISTIC ROLE GATE: Query public.users for the verified role
+    // Deterministic Role Resolution from public.users
     const { data: profile, error } = await supabase
       .from('users')
       .select('id, role')
@@ -37,11 +36,16 @@ export default function LoginPage() {
       .maybeSingle();
 
     if (error) {
-      console.error("Profile load error:", error);
+      console.error("Profile load error:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Failed to load user profile. Please try again.",
+        title: "Connection Error",
+        description: "Could not retrieve your profile. Please check your connection.",
       });
       setCheckingSession(false);
       setLoading(false);
@@ -49,10 +53,11 @@ export default function LoginPage() {
     }
 
     if (!profile) {
+      // If profile is missing, it might be a slow trigger or RLS issue
       toast({
         variant: "destructive",
-        title: "Profile Not Found",
-        description: "Your user record hasn't been created yet. This may take a few seconds after signup.",
+        title: "Access Denied",
+        description: "User profile not found in our records. Please contact support.",
       });
       setCheckingSession(false);
       setLoading(false);
@@ -74,7 +79,7 @@ export default function LoginPage() {
         toast({
           variant: "destructive",
           title: "Access Denied",
-          description: "No recognized dashboard for your role.",
+          description: `No dashboard mapping for role: ${profile.role}`,
         });
         setCheckingSession(false);
         setLoading(false);
@@ -142,7 +147,7 @@ export default function LoginPage() {
               <ShieldCheck className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-primary">Carwash Marketplace</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-primary text-nowrap">Carwash Marketplace</h1>
           <p className="text-muted-foreground">Sign in to manage your bookings and services.</p>
         </div>
 

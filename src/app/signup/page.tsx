@@ -42,7 +42,7 @@ export default function SignupPage() {
   const onSubmit = async (values: SignupFormValues) => {
     setLoading(true);
     try {
-      // MANDATORY: Use 'name' and hyphenated 'business-owner' role for trigger compatibility
+      // Mandatory metadata: name (string), role (hyphenated business-owner or customer)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
