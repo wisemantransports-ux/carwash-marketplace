@@ -42,7 +42,7 @@ export default function SignupPage() {
   const onSubmit = async (values: SignupFormValues) => {
     setLoading(true);
     try {
-      // Mandatory metadata: name (string), role (hyphenated business-owner or customer)
+      // Mandatory metadata: name (string), role ('business-owner' or 'customer')
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
@@ -67,7 +67,7 @@ export default function SignupPage() {
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: error.message || "An error occurred during signup. Please ensure your details are correct.",
+        description: error.message || "An error occurred during signup. Please try again.",
       });
     } finally {
       setLoading(false);

@@ -45,7 +45,7 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Connection Error",
-        description: "Could not retrieve your profile. Please check your connection.",
+        description: "Failed to load profile. Please check your connection.",
       });
       setCheckingSession(false);
       setLoading(false);
@@ -53,11 +53,10 @@ export default function LoginPage() {
     }
 
     if (!profile) {
-      // If profile is missing, it might be a slow trigger or RLS issue
       toast({
         variant: "destructive",
         title: "Access Denied",
-        description: "User profile not found in our records. Please contact support.",
+        description: "User profile not found. Please contact support.",
       });
       setCheckingSession(false);
       setLoading(false);
@@ -79,7 +78,7 @@ export default function LoginPage() {
         toast({
           variant: "destructive",
           title: "Access Denied",
-          description: `No dashboard mapping for role: ${profile.role}`,
+          description: `Invalid role: ${profile.role}`,
         });
         setCheckingSession(false);
         setLoading(false);

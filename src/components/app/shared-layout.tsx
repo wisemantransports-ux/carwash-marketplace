@@ -40,7 +40,7 @@ function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: 
     const handleSignOut = async () => {
         try {
             await supabase.auth.signOut();
-            // Deterministic session clearing
+            // Clear all state and hard redirect to login
             window.location.href = '/login';
         } catch (error) {
             console.error('Error signing out:', error);
