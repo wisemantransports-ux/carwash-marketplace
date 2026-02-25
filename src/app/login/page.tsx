@@ -47,15 +47,18 @@ export default function LoginPage() {
           });
         }
         
-        toast({
-          variant: "destructive",
-          title: "Connection Error",
-          description: "Failed to load profile. Please try again or contact support.",
-        });
-        
+        // Reset state so user can try again or see error
         redirecting.current = false;
         setCheckingSession(false);
         setLoading(false);
+        
+        if (!profile && !error) {
+          toast({
+            variant: "destructive",
+            title: "Profile Not Found",
+            description: "We couldn't find your user profile. Please contact support.",
+          });
+        }
         return;
       }
 
@@ -89,20 +92,24 @@ export default function LoginPage() {
   }, [router]);
 
   useEffect(() => {
+    let isMounted = true;
+    
     async function checkExistingSession() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.id) {
+        if (session?.user?.id && isMounted) {
           await handleRoleRedirect(session.user.id);
-        } else {
+        } else if (isMounted) {
           setCheckingSession(false);
         }
       } catch (e) {
         console.error("Session check error:", e);
-        setCheckingSession(false);
+        if (isMounted) setCheckingSession(false);
       }
     }
+    
     checkExistingSession();
+    return () => { isMounted = false; };
   }, [handleRoleRedirect]);
 
   const form = useForm<LoginFormValues>({
