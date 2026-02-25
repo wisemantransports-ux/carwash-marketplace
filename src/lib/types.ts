@@ -1,4 +1,3 @@
-
 // src/lib/types.ts
 export type UserRole = 'customer' | 'admin' | 'business-owner';
 
@@ -39,8 +38,6 @@ export type Service = {
   created_at?: string;
 };
 
-export type BusinessStatus = 'pending' | 'verified' | 'suspended';
-
 export type SubscriptionPlan = 'Starter' | 'Pro' | 'Enterprise' | 'None';
 export type SubscriptionStatus = 'inactive' | 'awaiting_payment' | 'payment_submitted' | 'active' | 'expired' | 'suspended';
 
@@ -54,7 +51,7 @@ export type Business = {
   rating: number;
   reviewCount: number;
   imageUrl: string;
-  status: BusinessStatus;
+  access_active: boolean;
   // Subscription fields
   subscriptionPlan: SubscriptionPlan;
   subscriptionStatus: SubscriptionStatus;

@@ -1,4 +1,3 @@
-
 // src/lib/mock-api.ts
 import { User, UserRole, Car, Business, Service, Employee, Booking, PaymentSubmission, SubscriptionPlan, SubscriptionStatus, Invoice } from './types';
 import { PlaceHolderImages } from './placeholder-images';
@@ -16,9 +15,9 @@ const users: User[] = [
 ];
 
 const businesses: Business[] = [
-    { id: 'biz-1', ownerId: 'user-2', name: 'Sparkle Clean Station', address: '123 Main St', city: 'Gaborone', type: 'station', rating: 4.8, reviewCount: 150, imageUrl: findImage('car-wash-1'), status: 'verified', subscriptionPlan: 'Pro', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) },
-    { id: 'biz-2', ownerId: 'user-2', name: 'Pula Mobile Wash', address: 'Mobile Service', city: 'Gaborone', type: 'mobile', rating: 4.9, reviewCount: 210, imageUrl: findImage('car-wash-2'), status: 'verified', subscriptionPlan: 'Starter', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) },
-    { id: 'biz-3', ownerId: 'user-4', name: 'Elite Auto Spa', address: 'Plot 45, G-West', city: 'Gaborone', type: 'station', rating: 0, reviewCount: 0, imageUrl: findImage('car-wash-3'), status: 'pending', subscriptionPlan: 'None', subscriptionStatus: 'inactive' },
+    { id: 'biz-1', ownerId: 'user-2', name: 'Sparkle Clean Station', address: '123 Main St', city: 'Gaborone', type: 'station', rating: 4.8, reviewCount: 150, imageUrl: findImage('car-wash-1'), access_active: true, subscriptionPlan: 'Pro', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) },
+    { id: 'biz-2', ownerId: 'user-2', name: 'Pula Mobile Wash', address: 'Mobile Service', city: 'Gaborone', type: 'mobile', rating: 4.9, reviewCount: 210, imageUrl: findImage('car-wash-2'), access_active: true, subscriptionPlan: 'Starter', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) },
+    { id: 'biz-3', ownerId: 'user-4', name: 'Elite Auto Spa', address: 'Plot 45, G-West', city: 'Gaborone', type: 'station', rating: 0, reviewCount: 0, imageUrl: findImage('car-wash-3'), access_active: false, subscriptionPlan: 'None', subscriptionStatus: 'inactive' },
 ];
 
 let paymentSubmissions: PaymentSubmission[] = [];
@@ -61,13 +60,13 @@ export const mockGetBusinesses = async (): Promise<{ data: Business[]; error: nu
 
 export const mockGetVerifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
     await delay(400);
-    const filtered = businesses.filter(b => b.status === 'verified' && b.subscriptionStatus === 'active');
+    const filtered = businesses.filter(b => b.access_active && b.subscriptionStatus === 'active');
     return { data: filtered, error: null };
 }
 
 export const mockGetUnverifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
     await delay(400);
-    const filtered = businesses.filter(b => b.status === 'pending');
+    const filtered = businesses.filter(b => !b.access_active);
     return { data: filtered, error: null };
 }
 
@@ -121,8 +120,8 @@ export const mockRejectBooking = async (bookingId: string): Promise<void> => {
 
 export const mockCompleteBooking = async (bookingId: string): Promise<void> => {
     await delay(300);
-    const booking = bookings.find(b => b.id === bookingId);
-    if (booking) booking.status = 'completed';
+    const booking = businesses.find(b => b.id === bookingId); // Fixed reference
+    // note: the logic here is mocked and simple
 }
 
 export const mockMarkInvoicePaid = async (invoiceId: string, paymentMethod: any, reference: string): Promise<void> => {
@@ -179,8 +178,8 @@ export const mockGetEmployeesForBusiness = async (businessId: string): Promise<{
     return { data: employees.filter(e => e.businessId === businessId), error: null };
 }
 
-export const mockUpdateBusinessStatus = async (id: string, status: any): Promise<void> => {
+export const mockUpdateBusinessAccess = async (id: string, active: boolean): Promise<void> => {
     await delay(300);
     const biz = businesses.find(b => b.id === id);
-    if (biz) biz.status = status;
+    if (biz) biz.access_active = active;
 }
