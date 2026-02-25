@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -40,7 +39,7 @@ function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: 
     const handleSignOut = async () => {
         try {
             await supabase.auth.signOut();
-            // Clear all state and hard redirect to login
+            // Completely clear session and redirect
             window.location.href = '/login';
         } catch (error) {
             console.error('Error signing out:', error);

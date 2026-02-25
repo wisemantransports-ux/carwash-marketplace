@@ -1,4 +1,3 @@
-
 'use client';
 import { mockGetPendingPayments, mockVerifyPayment } from "@/lib/mock-api";
 import { PaymentSubmission } from "@/lib/types";

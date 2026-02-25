@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -36,12 +35,7 @@ export default function LoginPage() {
       .maybeSingle();
 
     if (error) {
-      console.error("Profile load error:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      });
+      console.error("Profile load error:", error);
       toast({
         variant: "destructive",
         title: "Connection Error",
@@ -55,8 +49,8 @@ export default function LoginPage() {
     if (!profile) {
       toast({
         variant: "destructive",
-        title: "Access Denied",
-        description: "User profile not found. Please contact support.",
+        title: "Profile Not Found",
+        description: "Your user profile is missing. Please contact support.",
       });
       setCheckingSession(false);
       setLoading(false);
@@ -64,6 +58,7 @@ export default function LoginPage() {
     }
 
     // Redirect strictly based on the database role
+    // Role values must match 'customer', 'business-owner', 'admin'
     switch (profile.role) {
       case 'admin':
         router.replace('/admin/dashboard');
@@ -78,7 +73,7 @@ export default function LoginPage() {
         toast({
           variant: "destructive",
           title: "Access Denied",
-          description: `Invalid role: ${profile.role}`,
+          description: `Invalid role assigned: ${profile.role}`,
         });
         setCheckingSession(false);
         setLoading(false);

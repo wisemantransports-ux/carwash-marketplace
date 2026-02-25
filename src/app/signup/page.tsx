@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -20,7 +19,7 @@ const signupSchema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.enum(["customer", "business"]),
+  role: z.enum(["customer", "business-owner"]),
 });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
@@ -42,14 +41,15 @@ export default function SignupPage() {
   const onSubmit = async (values: SignupFormValues) => {
     setLoading(true);
     try {
-      // Mandatory metadata: name (string), role ('business-owner' or 'customer')
+      // MANDATORY: name (string), role ('customer' or 'business-owner')
+      // Trigger coalesce keys: name, role
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {
           data: {
             name: values.fullName,
-            role: values.role === 'business' ? 'business-owner' : 'customer',
+            role: values.role,
           },
         },
       });
@@ -142,7 +142,7 @@ export default function SignupPage() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="customer">Customer (Car Owner)</SelectItem>
-                        <SelectItem value="business">Business Owner (Operator)</SelectItem>
+                        <SelectItem value="business-owner">Business Owner (Operator)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
