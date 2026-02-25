@@ -1,10 +1,11 @@
+
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
-import type { UserRole } from "@/lib/types";
+import type { UserRole, User as ProfileUser } from "@/lib/types";
 import { Home, LogOut, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -33,13 +34,12 @@ function CarwashMarketplaceLogo() {
     );
 }
 
-function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: boolean }) {
+function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, loading: boolean }) {
     const router = useRouter();
 
     const handleSignOut = async () => {
         try {
             await supabase.auth.signOut();
-            // Completely clear session and hard redirect
             window.location.href = '/login';
         } catch (error) {
             console.error('Error signing out:', error);
@@ -55,7 +55,7 @@ function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: 
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2 h-auto w-full justify-start p-2 hover:bg-sidebar-accent">
                     <Avatar className="h-8 w-8">
-                        <AvatarImage src={userProfile.avatar_url} alt={userProfile.name} />
+                        <AvatarImage src={userProfile.avatarUrl} alt={userProfile.name} />
                         <AvatarFallback>{userProfile.name?.charAt(0) || 'U'}</AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col items-start group-data-[collapsible=icon]:hidden text-left overflow-hidden">
@@ -84,7 +84,7 @@ function UserMenu({ userProfile, loading }: { userProfile: any | null, loading: 
 export default function SharedLayout({ children, navItems: rawNavItems, role }: SharedLayoutProps) {
     const pathname = usePathname();
     const router = useRouter();
-    const [userProfile, setUserProfile] = useState<any | null>(null);
+    const [userProfile, setUserProfile] = useState<ProfileUser | null>(null);
     const [loading, setLoading] = useState(true);
 
     const fetchProfile = useCallback(async (userId: string) => {
@@ -100,13 +100,9 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
             .maybeSingle();
 
         if (error) {
-            console.error("Profile load error in layout:", {
-                message: error.message,
-                code: error.code,
-                details: error.details,
-            });
+            console.error("Profile load error in layout:", error);
         } else if (data) {
-            setUserProfile(data);
+            setUserProfile(data as ProfileUser);
         }
         setLoading(false);
     }, []);

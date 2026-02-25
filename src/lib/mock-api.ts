@@ -11,7 +11,7 @@ const findImage = (id: string) => PlaceHolderImages.find(img => img.id === id)?.
 
 const users: User[] = [
   { id: 'user-1', email: 'customer@test.com', name: 'John Doe', role: 'customer', avatarUrl: findImage('user-avatar-1') },
-  { id: 'user-2', email: 'owner@test.com', name: 'Jane Smith', role: 'business', avatarUrl: findImage('user-avatar-2') },
+  { id: 'user-2', email: 'owner@test.com', name: 'Jane Smith', role: 'business-owner', avatarUrl: findImage('user-avatar-2'), trial_start: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), trial_expiry: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString(), paid: false },
   { id: 'user-3', email: 'admin@test.com', name: 'Admin User', role: 'admin' },
 ];
 
@@ -93,6 +93,11 @@ export const mockGetBookingsForBusiness = async (businessId: string): Promise<{ 
     await delay(500);
     const businessBookings = [...bookings].filter(b => b.businessId === businessId).sort((a,b) => a.bookingTime.getTime() - b.bookingTime.getTime());
     return { data: businessBookings, error: null };
+}
+
+export const mockGetBookingsCountForBusiness = async (businessId: string): Promise<number> => {
+    await delay(200);
+    return bookings.filter(b => b.businessId === businessId).length;
 }
 
 export const mockGetBookingById = async (id: string): Promise<{ data: Booking | null; error: null }> => {

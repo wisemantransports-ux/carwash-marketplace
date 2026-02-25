@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -36,7 +37,7 @@ export default function LoginPage() {
       // Fetch profile strictly using the confirmed userId
       const { data: profile, error } = await supabase
         .from('users')
-        .select('id, role')
+        .select('*')
         .eq('id', userId)
         .maybeSingle();
 
@@ -45,10 +46,8 @@ export default function LoginPage() {
           message: error.message,
           code: error.code,
           details: error.details,
-          hint: error.hint
         });
         
-        // Reset guard so user can try again if it was a transient error
         redirecting.current = false;
         setCheckingSession(false);
         setLoading(false);
@@ -62,9 +61,6 @@ export default function LoginPage() {
       }
 
       if (!profile) {
-        console.warn("No profile row found for user ID in public.users:", userId);
-        
-        // This usually happens if the trigger hasn't finished yet
         redirecting.current = false;
         setCheckingSession(false);
         setLoading(false);
@@ -72,7 +68,7 @@ export default function LoginPage() {
         toast({
           variant: "destructive",
           title: "Profile Not Found",
-          description: "We couldn't find your user profile. If you just signed up, please wait a moment and try again.",
+          description: "We couldn't find your user profile. Please contact support.",
         });
         return;
       }

@@ -1,16 +1,18 @@
+
 'use client';
 import { mockGetBusinessById, mockSubmitPayment } from "@/lib/mock-api";
-import { Business, SubscriptionPlan } from "@/lib/types";
-import { useEffect, useState } from "react";
+import { Business, SubscriptionPlan, User as ProfileUser } from "@/lib/types";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Loader2, Info, ArrowRight, Upload, X } from "lucide-react";
+import { Check, Loader2, Info, ArrowRight, Upload, X, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { supabase } from "@/lib/supabase";
 
 const PLANS = [
     { 
@@ -55,6 +57,7 @@ const PLANS = [
 
 export default function SubscriptionPage() {
     const [business, setBusiness] = useState<Business | null>(null);
+    const [userProfile, setUserProfile] = useState<ProfileUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[0] | null>(null);
     const [step, setStep] = useState<'browse' | 'pay'>('browse');
@@ -64,14 +67,27 @@ export default function SubscriptionPage() {
     const [reference, setReference] = useState('');
     const [network, setNetwork] = useState<'Orange' | 'Mascom'>('Orange');
 
-    useEffect(() => {
-        const fetch = async () => {
-            const { data } = await mockGetBusinessById('biz-2'); // Pula Mobile Wash
-            setBusiness(data);
-            setLoading(false);
-        };
-        fetch();
+    const fetch = useCallback(async () => {
+        setLoading(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user?.id) {
+            const { data: profile } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', session.user.id)
+                .maybeSingle();
+            setUserProfile(profile as ProfileUser);
+        }
+
+        const { data } = await mockGetBusinessById('biz-2'); 
+        setBusiness(data);
+        setLoading(false);
     }, []);
+
+    useEffect(() => {
+        fetch();
+    }, [fetch]);
 
     const handleSelectPlan = (plan: typeof PLANS[0]) => {
         setSelectedPlan(plan);
@@ -89,7 +105,7 @@ export default function SubscriptionPage() {
             amount: selectedPlan.price,
             mobileNetwork: network,
             referenceText: reference,
-            proofImageUrl: 'https://picsum.photos/seed/proof/400/600', // Mocked upload
+            proofImageUrl: 'https://picsum.photos/seed/proof/400/600',
         });
         
         toast({
@@ -97,21 +113,32 @@ export default function SubscriptionPage() {
             description: "An admin will verify your payment shortly.",
         });
         
-        // Refresh local state
-        const { data } = await mockGetBusinessById(business.id);
-        setBusiness(data);
+        await fetch();
         setStep('browse');
         setSubmitting(false);
     };
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
+    const trialDaysLeft = userProfile?.trial_expiry 
+        ? Math.ceil((new Date(userProfile.trial_expiry).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
+
     return (
         <div className="max-w-5xl mx-auto space-y-8 pb-12">
             <div className="flex flex-col gap-2">
                 <h1 className="text-4xl font-bold tracking-tight">Subscription Management</h1>
                 <p className="text-muted-foreground">Manage your platform access and monthly billing.</p>
-                <p className="text-xs text-primary font-medium italic">Note: Customers do not pay the platform. Only verified car wash businesses subscribe to use the system.</p>
+                {userProfile?.trial_expiry && !userProfile.paid && (
+                    <div className="flex items-center gap-2 mt-2">
+                        <Badge variant={trialDaysLeft > 0 ? "secondary" : "destructive"} className="flex gap-2 py-1 px-3">
+                            <Clock className="h-3.5 w-3.5" />
+                            {trialDaysLeft > 0 
+                                ? `${trialDaysLeft} Days Remaining in Free Trial`
+                                : "Free Trial Expired"}
+                        </Badge>
+                    </div>
+                )}
             </div>
 
             {business?.subscriptionStatus === 'payment_submitted' && (

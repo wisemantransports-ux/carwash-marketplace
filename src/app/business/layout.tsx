@@ -1,23 +1,46 @@
+
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, ShieldAlert, Lock } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
 import { mockGetBusinessById } from "@/lib/mock-api";
-import { Business } from "@/lib/types";
+import { Business, User as ProfileUser } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
+import { usePathname } from "next/navigation";
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [business, setBusiness] = useState<Business | null>(null);
+  const [userProfile, setUserProfile] = useState<ProfileUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session?.user?.id) {
+      // Fetch user profile for trial status
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      
+      setUserProfile(profile as ProfileUser);
+
+      // Fetch business associated with this owner (simplified for demo)
+      const { data } = await mockGetBusinessById('biz-2'); 
+      setBusiness(data);
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    const fetch = async () => {
-      const { data } = await mockGetBusinessById('biz-2'); // Pula Mobile Wash
-      setBusiness(data);
-    };
-    fetch();
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
   const navItems = [
     { href: "/business/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -27,22 +50,65 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     { href: "/business/subscription", label: "Subscription", icon: CreditCard },
   ];
 
+  // Logic to determine if access is blocked due to trial expiration
+  const isTrialExpired = userProfile?.trial_expiry && new Date(userProfile.trial_expiry) <= new Date() && !userProfile.paid;
+  const isBlocked = isTrialExpired && pathname !== "/business/subscription";
+
   return (
     <SharedLayout navItems={navItems} role="business-owner">
       <div className="space-y-6">
-        {business && business.subscriptionStatus !== 'active' && business.subscriptionStatus !== 'payment_submitted' && (
-          <Alert variant="destructive" className="border-red-200 bg-red-50">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Subscription Required</AlertTitle>
+        {/* Trial Status Banners */}
+        {!userProfile?.paid && userProfile?.trial_expiry && !isTrialExpired && (
+          <Alert variant="default" className="bg-blue-50 border-blue-200">
+            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <AlertTitle>Free Trial Active</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-4">
-              <span>Your account is currently inactive. Please subscribe to a plan to start receiving customer bookings.</span>
-              <Button size="sm" variant="destructive" asChild>
-                <Link href="/business/subscription">Renew Now</Link>
+              <span>Your 14-day trial ends on {new Date(userProfile.trial_expiry).toLocaleDateString()}. Subscribe anytime to maintain full access.</span>
+              <Button size="sm" asChild>
+                <Link href="/business/subscription">Choose a Plan</Link>
               </Button>
             </AlertDescription>
           </Alert>
         )}
-        {children}
+
+        {/* Expired Blocker */}
+        {isBlocked ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-background border rounded-xl shadow-lg space-y-6 text-center px-4">
+            <div className="bg-destructive/10 p-4 rounded-full">
+              <Lock className="h-12 w-12 text-destructive" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-3xl font-bold">Free Trial Expired</h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Your 14-day trial period has ended. To continue managing your car wash business and accepting bookings, please choose a subscription plan.
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <Button size="lg" asChild>
+                <Link href="/business/subscription">View Pricing Plans</Link>
+              </Button>
+              <Button size="lg" variant="outline" onClick={() => window.location.reload()}>
+                I've Paid
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {business && business.subscriptionStatus !== 'active' && business.subscriptionStatus !== 'payment_submitted' && !userProfile?.trial_expiry && (
+              <Alert variant="destructive" className="border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Subscription Required</AlertTitle>
+                <AlertDescription className="flex items-center justify-between gap-4">
+                  <span>Your account is currently inactive. Please subscribe to a plan to start receiving customer bookings.</span>
+                  <Button size="sm" variant="destructive" asChild>
+                    <Link href="/business/subscription">Renew Now</Link>
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+            {children}
+          </>
+        )}
       </div>
     </SharedLayout>
   );
