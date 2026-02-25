@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { User as ProfileUser } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -10,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, MapPin, Globe, ShieldCheck, Clock, CreditCard } from 'lucide-react';
+import { Loader2, Store, MapPin, Globe, ShieldCheck, Clock, CreditCard, Upload, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 
@@ -18,6 +17,7 @@ export default function BusinessProfilePage() {
   const [profile, setProfile] = useState<ProfileUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Editable fields
   const [name, setName] = useState('');
@@ -25,6 +25,10 @@ export default function BusinessProfilePage() {
   const [city, setCity] = useState('');
   const [description, setDescription] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  
+  // File upload state
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -50,6 +54,15 @@ export default function BusinessProfilePage() {
     fetchProfile();
   }, []);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      // Create a preview URL
+      setAvatarUrl(URL.createObjectURL(selectedFile));
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -59,6 +72,38 @@ export default function BusinessProfilePage() {
 
     setSaving(true);
     const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    let finalAvatarUrl = avatarUrl;
+
+    // Handle file upload if a new file was selected
+    if (file) {
+      setUploading(true);
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${session.user.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `logos/${fileName}`;
+
+        // Note: Ensure the 'business-assets' bucket is created and public in Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from('business-assets')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('business-assets')
+          .getPublicUrl(filePath);
+
+        finalAvatarUrl = publicUrl;
+      } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Upload Failed', description: error.message || 'Could not upload image.' });
+        setSaving(false);
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
     
     const { error } = await supabase
       .from('users')
@@ -67,13 +112,15 @@ export default function BusinessProfilePage() {
         address,
         city,
         description,
-        avatar_url: avatarUrl,
+        avatar_url: finalAvatarUrl,
       })
       .eq('id', session?.user.id);
 
     if (error) {
       toast({ variant: 'destructive', title: 'Save Failed', description: error.message });
     } else {
+      setAvatarUrl(finalAvatarUrl);
+      setFile(null);
       toast({ title: 'Profile Updated', description: 'Your business details have been saved.' });
     }
     setSaving(false);
@@ -98,25 +145,61 @@ export default function BusinessProfilePage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSave} className="space-y-6">
-                <div className="flex flex-col sm:flex-row gap-6 items-start">
-                  <div className="relative h-24 w-24 rounded-2xl overflow-hidden border bg-muted shrink-0">
+                <div className="flex flex-col sm:flex-row gap-6 items-center">
+                  <div className="relative h-32 w-32 rounded-2xl overflow-hidden border bg-muted shrink-0 shadow-sm">
                     {avatarUrl ? (
                       <Image src={avatarUrl} alt="Logo" fill className="object-cover" />
                     ) : (
                       <div className="h-full w-full flex items-center justify-center">
-                        <Store className="h-8 w-8 text-muted-foreground" />
+                        <Store className="h-10 w-10 text-muted-foreground" />
+                      </div>
+                    )}
+                    {uploading && (
+                      <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
                       </div>
                     )}
                   </div>
-                  <div className="flex-1 w-full space-y-2">
-                    <Label htmlFor="logo">Logo URL</Label>
-                    <Input 
-                      id="logo" 
-                      placeholder="https://example.com/logo.png" 
-                      value={avatarUrl}
-                      onChange={(e) => setAvatarUrl(e.target.value)}
+                  
+                  <div className="flex-1 w-full space-y-3">
+                    <Label>Business Logo</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading || saving}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        {avatarUrl ? 'Change Logo' : 'Upload Logo'}
+                      </Button>
+                      {file && (
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive"
+                          onClick={() => {
+                            setFile(null);
+                            setAvatarUrl(profile.avatarUrl || '');
+                          }}
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Recommended: Square image, PNG or JPG (max 2MB).
+                    </p>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleFileChange}
                     />
-                    <p className="text-[10px] text-muted-foreground italic">Provide a direct link to your business logo image.</p>
                   </div>
                 </div>
 
@@ -171,9 +254,9 @@ export default function BusinessProfilePage() {
                   />
                 </div>
 
-                <Button type="submit" className="w-full" disabled={saving}>
+                <Button type="submit" className="w-full" disabled={saving || uploading}>
                   {saving ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
-                  Save Changes
+                  {file ? 'Upload and Save Changes' : 'Save Changes'}
                 </Button>
               </form>
             </CardContent>
