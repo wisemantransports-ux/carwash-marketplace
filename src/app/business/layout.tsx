@@ -1,4 +1,3 @@
-
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
 import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt } from "lucide-react";
@@ -10,6 +9,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -39,6 +39,18 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     fetchData();
   }, [fetchData]);
 
+  // Access Gating Logic
+  const now = new Date();
+  const expiry = userProfile?.trial_expiry ? new Date(userProfile.trial_expiry) : null;
+  const isPaid = userProfile?.paid === true;
+  const isTrialActive = expiry ? expiry >= now : false;
+  
+  // If trial_expiry is null and paid is false -> treat as expired
+  const hasAccess = isPaid || isTrialActive;
+  
+  const isBlocked = !hasAccess && pathname !== "/business/subscription" && pathname !== "/business/profile";
+  const trialRemaining = userProfile?.trial_remaining ?? 0;
+
   const navItems = [
     { href: "/business/dashboard", label: "Operations", icon: LayoutDashboard },
     { href: "/business/services", label: "Services", icon: Car },
@@ -49,13 +61,18 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     { href: "/business/profile", label: "Profile", icon: UserCircle },
   ];
 
-  const isBlocked = userProfile?.access_active === false && pathname !== "/business/subscription" && pathname !== "/business/profile";
-  const trialRemaining = userProfile?.trial_remaining ?? 0;
+  // Filter nav items if blocked: only Subscription and Profile allowed
+  const filteredNavItems = hasAccess 
+    ? navItems 
+    : navItems.filter(item => ["/business/subscription", "/business/profile"].includes(item.href));
+
+  if (loading) return <div className="flex justify-center items-center min-h-screen"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
   return (
-    <SharedLayout navItems={navItems} role="business-owner">
+    <SharedLayout navItems={filteredNavItems} role="business-owner">
       <div className="space-y-6">
-        {userProfile?.paid === false && trialRemaining > 0 && (
+        {/* Trial Status Banner */}
+        {!isPaid && trialRemaining > 0 && (
           <Alert variant="default" className="bg-blue-50 border-blue-200">
             <Clock className="h-4 w-4 text-blue-600" />
             <AlertTitle>14-Day Free Trial Active</AlertTitle>
@@ -68,15 +85,16 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           </Alert>
         )}
 
+        {/* Blocking Screen */}
         {isBlocked ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-background border rounded-xl shadow-lg space-y-6 text-center px-4">
+          <div className="flex flex-col items-center justify-center py-20 bg-background border rounded-xl shadow-lg space-y-6 text-center px-4 animate-in fade-in zoom-in duration-300">
             <div className="bg-destructive/10 p-4 rounded-full">
               <Lock className="h-12 w-12 text-destructive" />
             </div>
             <div className="space-y-2">
               <h2 className="text-3xl font-bold">Subscription Required</h2>
               <p className="text-muted-foreground max-w-md mx-auto">
-                Your 14-day free trial has expired. To continue accepting car wash bookings and managing your business, please subscribe to one of our professional plans.
+                Your 14-day free trial has expired. To continue managing your business, please subscribe to one of our professional plans.
               </p>
             </div>
             <div className="flex gap-4">
@@ -87,15 +105,13 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           </div>
         ) : (
           <>
-            {business && business.subscriptionStatus !== 'active' && business.subscriptionStatus !== 'payment_submitted' && !userProfile?.paid && trialRemaining <= 0 && !isBlocked && (
-              <Alert variant="destructive" className="border-red-200 bg-red-50">
+            {/* Expiry Warning (if not explicitly blocked yet but expired) */}
+            {!isPaid && !isTrialActive && !isBlocked && pathname === "/business/subscription" && (
+              <Alert variant="destructive" className="border-red-200 bg-red-50 mb-6">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Trial Expired</AlertTitle>
-                <AlertDescription className="flex items-center justify-between gap-4">
-                  <span>Please subscribe to a plan to start receiving new customer bookings.</span>
-                  <Button size="sm" variant="destructive" asChild>
-                    <Link href="/business/subscription">Renew Now</Link>
-                  </Button>
+                <AlertDescription>
+                  Your access is restricted. Please select a plan and submit payment to reactivate your dashboard.
                 </AlertDescription>
               </Alert>
             )}
