@@ -6,7 +6,7 @@ import type { Employee } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2 } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,31 +37,41 @@ export default function EmployeeRegistryPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            // 1. Fetch Business
+            // 1. Fetch Business associated with current user
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('id, name')
                 .eq('owner_id', user.id)
                 .maybeSingle();
             
-            if (bizError) throw bizError;
+            if (bizError) {
+                console.error("Fetch business error:", bizError);
+                throw bizError;
+            }
             
             if (bizData) {
                 setBusiness(bizData);
                 
-                // 2. Fetch Employees - Explicitly select all required columns
+                // 2. Fetch all employees for this business
                 const { data: empData, error: empError } = await supabase
                     .from('employees')
                     .select('id, business_id, name, phone, image_url, id_reference')
                     .eq('business_id', bizData.id)
                     .order('name');
                 
-                if (empError) throw empError;
+                if (empError) {
+                    console.error("Fetch employees error:", empError);
+                    throw empError;
+                }
                 setEmployees(empData || []);
             }
         } catch (error: any) {
-            console.error("Registry load error:", error);
-            toast({ variant: 'destructive', title: 'Load Error', description: 'Could not load staff registry.' });
+            console.error("Registry load error detail:", error);
+            toast({ 
+                variant: 'destructive', 
+                title: 'Load Error', 
+                description: 'Could not load your staff registry. Please refresh the page.' 
+            });
         } finally {
             setLoading(false);
         }
@@ -75,7 +85,7 @@ export default function EmployeeRegistryPage() {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             if (file.size > 2 * 1024 * 1024) {
-                toast({ variant: 'destructive', title: 'File Too Large', description: 'Photo must be under 2MB.' });
+                toast({ variant: 'destructive', title: 'File Too Large', description: 'Staff photo must be under 2MB.' });
                 return;
             }
             setImageFile(file);
@@ -87,14 +97,15 @@ export default function EmployeeRegistryPage() {
 
     const handleAddEmployee = async (e: React.FormEvent) => {
         e.preventDefault();
+        
         if (!business) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Business profile not found.' });
+            toast({ variant: 'destructive', title: 'Access Denied', description: 'Business profile not found.' });
             return;
         }
 
         // Validation
         if (!name.trim() || !phone.trim() || !idReference.trim()) {
-            toast({ variant: 'destructive', title: 'Validation Error', description: 'Name, phone, and ID are required.' });
+            toast({ variant: 'destructive', title: 'Missing Info', description: 'Full Name, Phone, and ID are required.' });
             return;
         }
 
@@ -110,10 +121,13 @@ export default function EmployeeRegistryPage() {
                     .from('business-assets')
                     .upload(`employees/${fileName}`, imageFile, {
                         cacheControl: '3600',
-                        upsert: false
+                        upsert: true
                     });
                 
-                if (uploadError) throw uploadError;
+                if (uploadError) {
+                    console.error("Photo upload error:", uploadError);
+                    throw new Error("Failed to upload staff photo.");
+                }
 
                 const { data: { publicUrl } } = supabase.storage
                     .from('business-assets')
@@ -122,7 +136,7 @@ export default function EmployeeRegistryPage() {
                 uploadedImageUrl = publicUrl;
             }
 
-            // 2. Insert into database with UUID and verified business_id
+            // 2. Insert into database
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
@@ -134,9 +148,12 @@ export default function EmployeeRegistryPage() {
                     image_url: uploadedImageUrl
                 });
             
-            if (insertError) throw insertError;
+            if (insertError) {
+                console.error("Employee insertion error detail:", insertError);
+                throw insertError;
+            }
 
-            // 3. Reset form and refresh list
+            // 3. Reset form and immediately refetch
             setName('');
             setPhone('');
             setIdReference('');
@@ -146,37 +163,42 @@ export default function EmployeeRegistryPage() {
             
             toast({
                 title: "Employee Registered",
-                description: `${name} has been added to your team.`,
+                description: `${name} has been added to your verified team.`,
             });
             
-            // Immediate refresh
             await fetchData();
         } catch (error: any) {
             console.error("Employee registration failed:", error);
             toast({
                 variant: 'destructive',
                 title: "Registration Failed",
-                description: error.message || "An unexpected error occurred during registration.",
+                description: error.message || "An unexpected error occurred. Please check your connection and try again.",
             });
         } finally {
             setSubmitting(false);
         }
     };
 
-    const handleDeleteEmployee = async (id: string) => {
+    const handleDeleteEmployee = async (id: string, empName: string) => {
         try {
             const { error } = await supabase
                 .from('employees')
                 .delete()
                 .eq('id', id);
             
-            if (error) throw error;
+            if (error) {
+                console.error("Delete error:", error);
+                throw error;
+            }
             
-            toast({ title: 'Employee Removed', description: 'The staff member has been removed.' });
-            await fetchData(); // Refresh list after deletion
+            toast({ title: 'Employee Removed', description: `${empName} has been removed from your registry.` });
+            await fetchData();
         } catch (error: any) {
-            console.error("Delete error:", error);
-            toast({ variant: 'destructive', title: 'Delete Failed', description: 'Could not remove staff member.' });
+            toast({ 
+                variant: 'destructive', 
+                title: 'Removal Failed', 
+                description: 'Could not remove staff member. Please try again.' 
+            });
         }
     };
 
@@ -189,7 +211,7 @@ export default function EmployeeRegistryPage() {
                 </div>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                     <DialogTrigger asChild>
-                        <Button className="shadow-lg">
+                        <Button className="shadow-lg px-6">
                             <PlusCircle className="mr-2 h-4 w-4" /> Add Employee
                         </Button>
                     </DialogTrigger>
@@ -197,12 +219,12 @@ export default function EmployeeRegistryPage() {
                         <DialogHeader>
                             <DialogTitle>Register New Staff</DialogTitle>
                             <DialogDescription>
-                                Enter verified details. Omang/ID is required for safety.
+                                Enter verified details. Omang/ID is required for safety and insurance.
                             </DialogDescription>
                         </DialogHeader>
                         <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
                             <div className="flex justify-center mb-4">
-                                <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group">
+                                <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group cursor-pointer shadow-inner">
                                     {imagePreview ? (
                                         <Image src={imagePreview} alt="Preview" fill className="object-cover" />
                                     ) : (
@@ -225,17 +247,19 @@ export default function EmployeeRegistryPage() {
                                 <Label htmlFor="name">Full Name (as per ID)</Label>
                                 <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Enter full name" required />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="phone">Phone Number</Label>
-                                <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+267 7X XXX XXX" required />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="idref">ID Number (Omang)</Label>
-                                <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="Enter ID number" required />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="phone">Phone Number</Label>
+                                    <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+267 7XXXXXXX" required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="idref">ID Number (Omang)</Label>
+                                    <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="Enter ID number" required />
+                                </div>
                             </div>
                             <DialogFooter className="pt-4">
-                                <Button type="submit" className="w-full h-12" disabled={submitting}>
-                                    {submitting ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                                <Button type="submit" className="w-full h-12 text-lg" disabled={submitting}>
+                                    {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
                                     Complete Registration
                                 </Button>
                             </DialogFooter>
@@ -249,28 +273,28 @@ export default function EmployeeRegistryPage() {
                     <Table>
                         <TableHeader>
                             <TableRow className="bg-muted/30">
-                                <TableHead>Staff Member</TableHead>
+                                <TableHead className="pl-6">Staff Member</TableHead>
                                 <TableHead>Phone</TableHead>
                                 <TableHead>ID Reference</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead className="text-right pr-6">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
                                 Array.from({length: 3}).map((_, i) => (
                                     <TableRow key={i}>
-                                        <TableCell><Skeleton className="h-10 w-40 rounded-full" /></TableCell>
+                                        <TableCell className="pl-6"><Skeleton className="h-10 w-40 rounded-full" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                                        <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                                        <TableCell className="text-right pr-6"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                                     </TableRow>
                                 ))
                             ) : employees.length > 0 ? (
                                 employees.map(employee => (
                                     <TableRow key={employee.id} className="hover:bg-muted/10 transition-colors">
-                                        <TableCell>
+                                        <TableCell className="pl-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <Avatar className="border">
+                                                <Avatar className="h-10 w-10 border shadow-sm">
                                                     <AvatarImage src={employee.image_url} alt={employee.name} className="object-cover" />
                                                     <AvatarFallback className="bg-primary/10 text-primary font-bold">
                                                         {employee.name.charAt(0)}
@@ -285,10 +309,10 @@ export default function EmployeeRegistryPage() {
                                                 {employee.phone}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="font-mono text-xs font-bold text-primary bg-primary/5 w-fit px-2 py-1 rounded">
+                                        <TableCell className="font-mono text-[10px] font-bold text-primary bg-primary/5 w-fit px-2 py-1 rounded">
                                             {employee.id_reference}
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="text-right pr-6">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" className="h-8 w-8 p-0">
@@ -296,7 +320,7 @@ export default function EmployeeRegistryPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48 shadow-xl border-2">
-                                                    <DropdownMenuItem onClick={() => handleDeleteEmployee(employee.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                    <DropdownMenuItem onClick={() => handleDeleteEmployee(employee.id, employee.name)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                         <Trash2 className="mr-2 h-4 w-4" /> Remove from Team
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -306,10 +330,15 @@ export default function EmployeeRegistryPage() {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <ShieldCheck className="h-12 w-12 opacity-10 mb-2" />
-                                            No staff members registered.
+                                    <TableCell colSpan={4} className="h-64 text-center text-muted-foreground">
+                                        <div className="flex flex-col items-center justify-center gap-4">
+                                            <div className="p-4 bg-muted/20 rounded-full">
+                                                <ShieldCheck className="h-12 w-12 opacity-10" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="font-bold text-lg">No staff registered yet</p>
+                                                <p className="text-sm">Click "Add Employee" to start building your verified team.</p>
+                                            </div>
                                         </div>
                                     </TableCell>
                                 </TableRow>
