@@ -49,7 +49,8 @@ export default function EmployeeRegistryPage() {
             }
 
             // Diagnostic Log for Checklist #2 & #3
-            console.log(`[${new Date().toISOString()}] Checklist Check: Fetching staff for business_id: ${user.id}`);
+            console.log(`[DEBUG] Current Auth User ID: ${user.id}`);
+            console.log(`[DEBUG] Attempting to fetch staff where business_id = ${user.id}`);
 
             // Fetch directly aligned with RLS: USING (business_id = auth.uid())
             const { data: empData, error: empError } = await supabase
@@ -62,12 +63,17 @@ export default function EmployeeRegistryPage() {
             
             // Checklist #6: Handle empty list
             setEmployees(empData || []);
+            console.log(`[DEBUG] Successfully fetched ${empData?.length || 0} employees.`);
+
+            // TEMPORARY PROBE: Check if any data exists in table regardless of ID (for debugging only)
+            const { data: anyData } = await supabase.from('employees').select('id, business_id').limit(5);
+            console.log('[DEBUG PROBE] Sample of rows in employees table:', anyData);
+
         } catch (error: any) {
-            console.error(`[${new Date().toISOString()}] Checklist Error - Fetch Failure:`, {
+            console.error(`[CRITICAL] Employee Fetch Failure:`, {
                 message: error.message,
                 code: error.code,
-                details: error.details,
-                timestamp: new Date().toISOString()
+                details: error.details
             });
             setFetchError("Unable to fetch employees. Please check database connection or RLS policies.");
             toast({ 
@@ -162,7 +168,10 @@ export default function EmployeeRegistryPage() {
                     image_url: uploadedImageUrl
                 });
             
-            if (insertError) throw insertError;
+            if (insertError) {
+                console.error('[DEBUG] Insert Error:', insertError);
+                throw insertError;
+            }
 
             // Reset form and close
             setName(''); setPhone(''); setIdReference('');
@@ -174,7 +183,7 @@ export default function EmployeeRegistryPage() {
             // Checklist #4: Re-fetch to sync
             await fetchData();
         } catch (error: any) {
-            console.error(`[${new Date().toISOString()}] Checklist Error - Insertion Failed:`, error);
+            console.error(`[ERROR] Registration Failed:`, error);
             // Re-fetch to clear optimistic state if insert failed
             await fetchData();
             toast({

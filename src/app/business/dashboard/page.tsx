@@ -4,7 +4,7 @@ import type { Booking, Business, Employee } from "@/lib/types";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw, AlertTriangle, AlertCircle } from "lucide-react";
+import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw, AlertTriangle, AlertCircle } from "lucide-center";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,6 +34,7 @@ export default function BusinessDashboardPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 const userId = user.id;
+                console.log('[DEBUG DASHBOARD] Fetching data for user ID:', userId);
                 
                 // 1. Fetch Business Profile
                 const { data: bizData } = await supabase
@@ -72,19 +73,18 @@ export default function BusinessDashboardPage() {
                     
                     setBookings(bookingData || []);
 
-                    // Checklist #2: Fetch Employees using user.id (Auth UID)
-                    try {
-                        const { data: empData, error: empError } = await supabase
-                            .from('employees')
-                            .select('*')
-                            .eq('business_id', userId)
-                            .order('name');
-                        
-                        if (empError) throw empError;
+                    // 4. Fetch Employees using user.id (Auth UID) - Correct RLS Alignment
+                    const { data: empData, error: empError } = await supabase
+                        .from('employees')
+                        .select('*')
+                        .eq('business_id', userId)
+                        .order('name');
+                    
+                    if (empError) {
+                        console.error('[DEBUG DASHBOARD] Employee fetch error:', empError);
+                    } else {
                         setEmployees(empData || []);
-                    } catch (err: any) {
-                        console.error("Dashboard Employee Fetch Error:", err);
-                        setFetchError("Unable to fetch employees. Please check database connection.");
+                        console.log(`[DEBUG DASHBOARD] Successfully loaded ${empData?.length || 0} staff members.`);
                     }
                 }
             }
@@ -287,7 +287,7 @@ export default function BusinessDashboardPage() {
                 </div>
 
                 <div className="space-y-6">
-                    {/* Checklist integration: Team Overview */}
+                    {/* Team Overview Section */}
                     <Card className="shadow-md">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
@@ -301,9 +301,9 @@ export default function BusinessDashboardPage() {
                             {fetchError ? (
                                 <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20 text-center space-y-2">
                                     <AlertTriangle className="h-6 w-6 text-destructive mx-auto" />
-                                    <p className="text-xs font-bold text-destructive">Unable to fetch employees. Please check database connection.</p>
+                                    <p className="text-xs font-bold text-destructive">Unable to fetch team list.</p>
                                     <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={fetchData}>
-                                        Retry Connection
+                                        Retry
                                     </Button>
                                 </div>
                             ) : employees.length > 0 ? (
@@ -327,9 +327,9 @@ export default function BusinessDashboardPage() {
                             ) : (
                                 <div className="text-center py-10 bg-muted/10 rounded-xl border border-dashed">
                                     <Users className="h-8 w-8 mx-auto text-muted-foreground opacity-20 mb-2" />
-                                    <p className="text-xs text-muted-foreground italic">No employees registered yet.</p>
+                                    <p className="text-xs text-muted-foreground italic">No staff registered.</p>
                                     <Button variant="link" size="sm" asChild className="text-[10px] h-6">
-                                        <Link href="/business/employees">Register Team</Link>
+                                        <Link href="/business/employees">Add Team Members</Link>
                                     </Button>
                                 </div>
                             )}

@@ -12,6 +12,8 @@ export const isSupabaseConfigured =
 
 if (!isSupabaseConfigured) {
   console.warn('Supabase credentials are missing or invalid. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables.');
+} else {
+  console.log('Supabase initialized with URL:', supabaseUrl);
 }
 
 export const supabase = createClient(
