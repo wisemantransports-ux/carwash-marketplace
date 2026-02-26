@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -246,11 +247,14 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                                     <SelectValue placeholder="Select a registered car" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {cars.map(car => (
-                                        <SelectItem key={car.id} value={car.id}>
-                                            {car.year} {car.make} {car.model} ({car.licensePlate || (car as any).plate_number})
-                                        </SelectItem>
-                                    ))}
+                                    {cars.map(car => {
+                                        const plate = car.licensePlate || (car as any).plate_number;
+                                        return (
+                                            <SelectItem key={car.id} value={car.id}>
+                                                {car.year ? `${car.year} ` : ''}{car.make} {car.model}{plate ? ` (${plate})` : ''}
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                         </div>

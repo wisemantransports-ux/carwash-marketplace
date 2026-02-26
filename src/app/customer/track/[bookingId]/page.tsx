@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -5,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import type { Booking, Employee } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Phone, CheckCircle, MessageSquare, MapPin, Clock, User, AlertCircle, Loader2 } from 'lucide-react';
+import { Phone, CheckCircle, MessageSquare, MapPin, Clock, User, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -176,7 +177,7 @@ export default function MobileServiceTrackingPage({ params }: { params: Promise<
                         </div>
                         <div className="space-y-1">
                             <p className="font-bold text-lg">Staff Assignment Pending</p>
-                            <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                            <p className="text-sm text-muted-foreground max-xs mx-auto">
                                 The business will assign a professional detailer to your booking shortly.
                             </p>
                         </div>
@@ -196,7 +197,7 @@ export default function MobileServiceTrackingPage({ params }: { params: Promise<
                     <div className="space-y-1.5">
                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Vehicle Details</p>
                         <p className="text-sm font-bold">
-                            {booking.car?.plate_number} ({booking.car?.make} {booking.car?.model})
+                            {booking.car?.make} {booking.car?.model} {booking.car?.plate_number ? `(${booking.car.plate_number})` : ''}
                         </p>
                     </div>
                     <div className="space-y-1.5">

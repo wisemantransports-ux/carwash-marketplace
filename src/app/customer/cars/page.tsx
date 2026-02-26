@@ -47,15 +47,26 @@ export default function CarManagementPage() {
 
     const handleAddCar = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        if (!make.trim() || !model.trim()) {
+            toast({ variant: 'destructive', title: 'Fields Required', description: 'Make and Model are required.' });
+            return;
+        }
+
         setSubmitting(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
+            
+            // Year is a number in DB, ensure we pass null if empty to avoid NaN errors
+            const yearVal = year.trim() ? parseInt(year) : null;
+            const plateVal = plate.trim() || null;
+
             const { error } = await supabase.from('cars').insert({
                 owner_id: session?.user.id,
-                make,
-                model,
-                year: parseInt(year),
-                plate_number: plate
+                make: make.trim(),
+                model: model.trim(),
+                year: yearVal,
+                plate_number: plateVal
             });
             if (error) throw error;
             toast({ title: 'Car Registered', description: `${make} ${model} added to your profile.` });
@@ -96,27 +107,27 @@ export default function CarManagementPage() {
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Register New Vehicle</DialogTitle>
-                            <DialogDescription>Add your car details for quicker booking requests.</DialogDescription>
+                            <DialogDescription>Enter your car details. Only Make and Model are required.</DialogDescription>
                         </DialogHeader>
                         <form onSubmit={handleAddCar} className="space-y-4 py-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="make">Make</Label>
+                                    <Label htmlFor="make">Make *</Label>
                                     <Input id="make" value={make} onChange={e => setMake(e.target.value)} placeholder="e.g. Toyota" required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="model">Model</Label>
+                                    <Label htmlFor="model">Model *</Label>
                                     <Input id="model" value={model} onChange={e => setModel(e.target.value)} placeholder="e.g. Hilux" required />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="year">Year</Label>
-                                    <Input id="year" type="number" value={year} onChange={e => setYear(e.target.value)} placeholder="2023" required />
+                                    <Label htmlFor="year">Year (Optional)</Label>
+                                    <Input id="year" type="number" value={year} onChange={e => setYear(e.target.value)} placeholder="2023" />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="plate">License Plate</Label>
-                                    <Input id="plate" value={plate} onChange={e => setPlate(e.target.value)} placeholder="B 123 ABC" required />
+                                    <Label htmlFor="plate">License Plate (Optional)</Label>
+                                    <Input id="plate" value={plate} onChange={e => setPlate(e.target.value)} placeholder="B 123 ABC" />
                                 </div>
                             </div>
                             <DialogFooter>
@@ -160,9 +171,9 @@ export default function CarManagementPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="font-semibold text-sm">
-                                            {car.year} {car.make} {car.model}
+                                            {car.year ? `${car.year} ` : ''}{car.make} {car.model}
                                         </TableCell>
-                                        <TableCell className="font-mono text-xs font-bold text-muted-foreground">{car.licensePlate || (car as any).plate_number}</TableCell>
+                                        <TableCell className="font-mono text-xs font-bold text-muted-foreground">{car.licensePlate || (car as any).plate_number || 'N/A'}</TableCell>
                                         <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
