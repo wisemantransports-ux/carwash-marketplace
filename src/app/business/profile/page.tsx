@@ -11,6 +11,7 @@ import { toast } from '@/hooks/use-toast';
 import { Loader2, Store, MapPin, Globe, ShieldCheck, Clock, CreditCard, Upload, X, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
+import Link from 'next/link';
 import { ShareBusinessCard } from '@/components/app/share-business-card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Business } from '@/lib/types';
