@@ -20,9 +20,10 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user?.id) {
+        // Explicitly fetch snake_case columns
         const { data: biz, error } = await supabase
           .from('businesses')
-          .select('*')
+          .select('id, owner_id, status, subscription_status, subscription_plan, sub_end_date')
           .eq('owner_id', user.id)
           .maybeSingle();
         

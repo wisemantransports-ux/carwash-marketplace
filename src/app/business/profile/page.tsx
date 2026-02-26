@@ -165,8 +165,9 @@ export default function BusinessProfilePage() {
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
+  const now = Date.now();
   const trialRemaining = profile?.sub_end_date 
-    ? Math.max(0, Math.ceil((new Date(profile.sub_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    ? Math.max(0, Math.ceil((new Date(profile.sub_end_date).getTime() - now) / (1000 * 60 * 60 * 24)))
     : 0;
 
   const isStatusActive = profile?.subscription_status === 'active' || (trialRemaining > 0 && profile?.status === 'verified');

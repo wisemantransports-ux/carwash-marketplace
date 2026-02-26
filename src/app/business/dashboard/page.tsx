@@ -26,9 +26,9 @@ export default function BusinessDashboardPage() {
                 
                 const { data: bizData } = await supabase
                     .from('businesses')
-                    .select('*')
+                    .select('id, owner_id, name, type, status, subscription_status, subscription_plan, sub_end_date')
                     .eq('owner_id', userId)
-                    .single();
+                    .maybeSingle();
                 
                 if (bizData) {
                     const biz = bizData as Business;
