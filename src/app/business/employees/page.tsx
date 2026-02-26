@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import type { Employee, Business } from "@/lib/types";
+import type { Employee } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, X } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,10 +49,10 @@ export default function EmployeeRegistryPage() {
             if (bizData) {
                 setBusiness(bizData);
                 
-                // 2. Fetch Employees
+                // 2. Fetch Employees - Explicitly select all required columns
                 const { data: empData, error: empError } = await supabase
                     .from('employees')
-                    .select('*')
+                    .select('id, business_id, name, phone, image_url, id_reference')
                     .eq('business_id', bizData.id)
                     .order('name');
                 
@@ -60,7 +60,7 @@ export default function EmployeeRegistryPage() {
                 setEmployees(empData || []);
             }
         } catch (error: any) {
-            console.error("Employee fetch error:", error);
+            console.error("Registry load error:", error);
             toast({ variant: 'destructive', title: 'Load Error', description: 'Could not load staff registry.' });
         } finally {
             setLoading(false);
@@ -94,21 +94,24 @@ export default function EmployeeRegistryPage() {
 
         // Validation
         if (!name.trim() || !phone.trim() || !idReference.trim()) {
-            toast({ variant: 'destructive', title: 'Validation Error', description: 'Name, phone, and Omang/ID are required.' });
+            toast({ variant: 'destructive', title: 'Validation Error', description: 'Name, phone, and ID are required.' });
             return;
         }
 
         setSubmitting(true);
         try {
-            let image_url = null;
+            let uploadedImageUrl = null;
 
-            // 1. Upload Photo if present
+            // 1. Upload Photo if selected
             if (imageFile) {
                 const fileExt = imageFile.name.split('.').pop();
                 const fileName = `${business.id}/${Date.now()}.${fileExt}`;
                 const { error: uploadError } = await supabase.storage
                     .from('business-assets')
-                    .upload(`employees/${fileName}`, imageFile);
+                    .upload(`employees/${fileName}`, imageFile, {
+                        cacheControl: '3600',
+                        upsert: false
+                    });
                 
                 if (uploadError) throw uploadError;
 
@@ -116,47 +119,44 @@ export default function EmployeeRegistryPage() {
                     .from('business-assets')
                     .getPublicUrl(`employees/${fileName}`);
                 
-                image_url = publicUrl;
+                uploadedImageUrl = publicUrl;
             }
 
-            // 2. Insert into database
+            // 2. Insert into database with UUID and verified business_id
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
-                    id: crypto.randomUUID(), // Generate UUID as requested
+                    id: crypto.randomUUID(),
                     business_id: business.id,
-                    name,
-                    phone,
-                    id_reference: idReference,
-                    image_url: image_url
+                    name: name.trim(),
+                    phone: phone.trim(),
+                    id_reference: idReference.trim(),
+                    image_url: uploadedImageUrl
                 });
             
             if (insertError) throw insertError;
 
-            toast({
-                title: "Employee Registered",
-                description: `${name} has been added to your team.`,
-            });
-            
-            // 3. Reset form and refresh
+            // 3. Reset form and refresh list
             setName('');
             setPhone('');
             setIdReference('');
             setImageFile(null);
             setImagePreview(null);
             setIsAddOpen(false);
+            
+            toast({
+                title: "Employee Registered",
+                description: `${name} has been added to your team.`,
+            });
+            
+            // Immediate refresh
             await fetchData();
         } catch (error: any) {
-            console.error("Employee insertion error detail:", {
-                message: error.message,
-                code: error.code,
-                details: error.details,
-                hint: error.hint
-            });
+            console.error("Employee registration failed:", error);
             toast({
                 variant: 'destructive',
                 title: "Registration Failed",
-                description: error.message || "An error occurred while creating the employee profile.",
+                description: error.message || "An unexpected error occurred during registration.",
             });
         } finally {
             setSubmitting(false);
@@ -171,19 +171,21 @@ export default function EmployeeRegistryPage() {
                 .eq('id', id);
             
             if (error) throw error;
-            setEmployees(prev => prev.filter(e => e.id !== id));
-            toast({ title: 'Employee Removed', description: 'The employee has been removed from your team.' });
+            
+            toast({ title: 'Employee Removed', description: 'The staff member has been removed.' });
+            await fetchData(); // Refresh list after deletion
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Delete Failed', description: error.message });
+            console.error("Delete error:", error);
+            toast({ variant: 'destructive', title: 'Delete Failed', description: 'Could not remove staff member.' });
         }
     };
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-primary">Employee Registry</h1>
-                    <p className="text-muted-foreground">Manage your verified team members for mobile detailing.</p>
+                    <p className="text-muted-foreground">Manage your verified team members for platform accountability.</p>
                 </div>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                     <DialogTrigger asChild>
@@ -195,8 +197,7 @@ export default function EmployeeRegistryPage() {
                         <DialogHeader>
                             <DialogTitle>Register New Staff</DialogTitle>
                             <DialogDescription>
-                                Enter legal details for your verified team member. 
-                                Omang/ID is required for mobile security.
+                                Enter verified details. Omang/ID is required for safety.
                             </DialogDescription>
                         </DialogHeader>
                         <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
@@ -221,7 +222,7 @@ export default function EmployeeRegistryPage() {
                             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
 
                             <div className="space-y-2">
-                                <Label htmlFor="name">Full Name (as per Omang/ID)</Label>
+                                <Label htmlFor="name">Full Name (as per ID)</Label>
                                 <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Enter full name" required />
                             </div>
                             <div className="space-y-2">
@@ -235,7 +236,7 @@ export default function EmployeeRegistryPage() {
                             <DialogFooter className="pt-4">
                                 <Button type="submit" className="w-full h-12" disabled={submitting}>
                                     {submitting ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                                    Register Employee
+                                    Complete Registration
                                 </Button>
                             </DialogFooter>
                         </form>
@@ -249,8 +250,8 @@ export default function EmployeeRegistryPage() {
                         <TableHeader>
                             <TableRow className="bg-muted/30">
                                 <TableHead>Staff Member</TableHead>
-                                <TableHead>Phone Number</TableHead>
-                                <TableHead>Omang/ID</TableHead>
+                                <TableHead>Phone</TableHead>
+                                <TableHead>ID Reference</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -258,12 +259,7 @@ export default function EmployeeRegistryPage() {
                             {loading ? (
                                 Array.from({length: 3}).map((_, i) => (
                                     <TableRow key={i}>
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <Skeleton className="h-10 w-10 rounded-full" />
-                                                <Skeleton className="h-5 w-32" />
-                                            </div>
-                                        </TableCell>
+                                        <TableCell><Skeleton className="h-10 w-40 rounded-full" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                                         <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
@@ -275,8 +271,10 @@ export default function EmployeeRegistryPage() {
                                         <TableCell>
                                             <div className="flex items-center gap-3">
                                                 <Avatar className="border">
-                                                    <AvatarImage src={employee.image_url} alt={employee.name} />
-                                                    <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
+                                                    <AvatarImage src={employee.image_url} alt={employee.name} className="object-cover" />
+                                                    <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                                        {employee.name.charAt(0)}
+                                                    </AvatarFallback>
                                                 </Avatar>
                                                 <span className="font-bold">{employee.name}</span>
                                             </div>
@@ -311,7 +309,7 @@ export default function EmployeeRegistryPage() {
                                     <TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic">
                                         <div className="flex flex-col items-center gap-2">
                                             <ShieldCheck className="h-12 w-12 opacity-10 mb-2" />
-                                            No verified employees found in your registry.
+                                            No staff members registered.
                                         </div>
                                     </TableCell>
                                 </TableRow>
