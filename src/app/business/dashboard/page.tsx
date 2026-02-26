@@ -4,7 +4,7 @@ import type { Booking, Business } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, User, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck } from "lucide-react";
+import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,18 +24,16 @@ export default function BusinessDashboardPage() {
             if (session?.user) {
                 const userId = session.user.id;
                 
-                // Fetch Business from businesses table using correct snake_case fields
                 const { data: bizData } = await supabase
                     .from('businesses')
                     .select('*')
                     .eq('owner_id', userId)
-                    .maybeSingle();
+                    .single();
                 
                 if (bizData) {
                     setBusiness(bizData as Business);
                     const businessId = bizData.id;
 
-                    // Fetch stats from ratings
                     const { data: ratingsData } = await supabase
                         .from('ratings')
                         .select('*, customer:customer_id(name)')
@@ -51,7 +49,6 @@ export default function BusinessDashboardPage() {
                         });
                     }
 
-                    // Fetch Bookings
                     const { data: bookingData } = await supabase
                         .from('bookings')
                         .select('*')
@@ -97,10 +94,10 @@ export default function BusinessDashboardPage() {
     const requested = bookings.filter(b => b.status === 'requested');
     const active = bookings.filter(b => b.status === 'accepted' || b.status === 'in-progress');
 
-    // Trial calculation
     const now = new Date();
     const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
     const trialDays = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+    const isPlanActive = business.subscription_status === 'active' || trialDays > 0;
 
     return (
         <div className="space-y-8">
@@ -139,9 +136,9 @@ export default function BusinessDashboardPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-xl font-bold">{business.subscription_plan || 'No Plan'}</div>
-                        <p className={cn("text-xs mt-1 font-medium", trialDays > 0 ? "text-blue-600" : "text-destructive")}>
-                            {trialDays > 0 ? `${trialDays} Days Trial Left` : "Subscription Expired"}
+                        <div className="text-xl font-bold">{business.subscription_plan || 'Starter'}</div>
+                        <p className={cn("text-xs mt-1 font-medium", isPlanActive ? "text-blue-600" : "text-destructive")}>
+                            {trialDays > 0 ? `${trialDays} Days Trial Left` : business.subscription_status === 'active' ? "Active Subscription" : "Expired"}
                         </p>
                     </CardContent>
                 </Card>

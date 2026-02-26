@@ -42,33 +42,22 @@ export default function BusinessProfilePage() {
           status, subscription_plan, subscription_status, sub_end_date, logo_url
         `)
         .eq('owner_id', user.id)
-        .maybeSingle();
+        .single();
 
       if (profileError) {
-        console.error("Profile fetch error details:", {
-          message: profileError.message,
-          code: profileError.code,
-          details: profileError.details,
-          hint: profileError.hint
-        });
+        console.error("Profile fetch error:", profileError);
         toast({
           variant: 'destructive',
           title: 'Load Error',
-          description: 'Unable to load your profile. Please check your connection or contact support.'
+          description: 'Unable to load your profile. Please try again later.'
         });
       } else if (profileData) {
         setProfile(profileData);
-        // Populate form fields with fetched data
         setName(profileData.name || '');
         setAddress(profileData.address || '');
         setCity(profileData.city || '');
         setType(profileData.type || 'station');
         setLogoUrl(profileData.logo_url || '');
-      } else {
-        toast({
-          title: 'Setup Required',
-          description: 'No business profile found. Please fill in your details below.'
-        });
       }
     } catch (error: any) {
       console.error("Fatal fetch error:", error);
@@ -149,7 +138,6 @@ export default function BusinessProfilePage() {
         description: 'Your business profile has been updated successfully.'
       });
       
-      // Re-fetch fresh data after save to update layout and other components
       await fetchProfile();
     } catch (error: any) {
       console.error("Profile save error:", error);
@@ -177,7 +165,7 @@ export default function BusinessProfilePage() {
     ? Math.max(0, Math.ceil((new Date(profile.sub_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  const isInactive = profile?.subscription_status !== 'active' && trialRemaining <= 0;
+  const isActive = profile?.subscription_status === 'active' || trialRemaining > 0;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
@@ -186,7 +174,7 @@ export default function BusinessProfilePage() {
         <p className="text-muted-foreground">Manage your public presence and account status.</p>
       </div>
 
-      {isInactive && (
+      {!isActive && (
         <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Plan Inactive</AlertTitle>
@@ -335,7 +323,7 @@ export default function BusinessProfilePage() {
                 <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Current Plan</p>
                 <div className="flex items-center gap-2">
                   <CreditCard className="h-4 w-4 text-primary" />
-                  <span className="font-semibold">{profile?.subscription_plan || 'None'}</span>
+                  <span className="font-semibold">{profile?.subscription_plan || 'Starter'}</span>
                 </div>
               </div>
 

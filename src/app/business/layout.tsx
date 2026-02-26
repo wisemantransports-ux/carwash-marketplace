@@ -25,7 +25,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           .from('businesses')
           .select('*')
           .eq('owner_id', session.user.id)
-          .maybeSingle();
+          .single();
         
         if (error) {
           console.error("Layout business fetch error:", error);
@@ -109,7 +109,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
             </div>
             <div className="space-y-2">
               <h2 className="text-3xl font-bold">Access Restricted</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
+              <p className="text-muted-foreground max-md mx-auto">
                 {!isVerified 
                   ? "Your account is awaiting admin verification. Please check back later."
                   : "Your trial has ended. Please submit payment to continue managing your services."}
