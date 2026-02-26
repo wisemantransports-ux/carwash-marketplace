@@ -45,10 +45,18 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 
-                // Fetch Business
-                const { data: biz } = await supabase.from('users').select('*').eq('id', businessId).maybeSingle();
-                if (biz) {
-                  setBusiness({ ...biz, avatarUrl: biz.avatar_url } as ProfileUser);
+                // Fetch Business Owner Profile
+                const { data: userProfile } = await supabase.from('users').select('*').eq('id', businessId).maybeSingle();
+                
+                // Fetch Business Plan and other info
+                const { data: bizRecord } = await supabase.from('businesses').select('*').eq('owner_id', businessId).maybeSingle();
+
+                if (userProfile) {
+                  setBusiness({ 
+                    ...userProfile, 
+                    avatarUrl: userProfile.avatar_url,
+                    plan: bizRecord?.subscription_plan || 'None'
+                  } as ProfileUser);
                 }
 
                 // Fetch Services
@@ -93,22 +101,37 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error('Not authenticated');
 
+            // 1. Insert Booking strictly mapping columns
             const { data: newBooking, error } = await supabase.from('bookings').insert({
                 customer_id: session.user.id,
-                business_id: business.id,
+                business_id: businessId,
                 service_id: selectedService.id,
                 car_id: selectedCarId,
                 booking_time: new Date(bookingTime).toISOString(),
-                status: 'requested',
-                price: selectedService.price,
-                payment: { escrowStatus: 'funded', commission: selectedService.price * 0.1 }
+                status: 'pending'
             }).select().single();
 
             if (error) throw error;
 
-            toast({ title: 'Booking Requested', description: 'The business has been notified.' });
-            setBookingOpen(false);
-            router.push(`/customer/booking-confirmation/${newBooking.id}`);
+            toast({ title: 'Booking Successful', description: 'Your request has been registered.' });
+
+            // 2. Conditional WhatsApp Redirect
+            // Only for Pro or Enterprise plans which allow mobile services
+            const allowsMobile = business.plan === 'Pro' || business.plan === 'Enterprise';
+            
+            if (allowsMobile) {
+                const selectedCar = cars.find(c => c.id === selectedCarId);
+                const message = `Hello! I've just booked a *${selectedService.name}* for my *${selectedCar?.make} ${selectedCar?.model}* via HydroFlow Pro.\n\n*Time:* ${new Date(bookingTime).toLocaleString()}\n*Ref:* ${newBooking.id.slice(-8).toUpperCase()}`;
+                
+                // Using a placeholder number as business phone isn't explicitly in schema, but we'll use a valid Mascom/Orange format
+                const businessPhone = "26777491261"; 
+                const whatsappUrl = `https://wa.me/${businessPhone}?text=${encodeURIComponent(message)}`;
+                
+                window.location.href = whatsappUrl;
+            } else {
+                setBookingOpen(false);
+                router.push(`/customer/booking-confirmation/${newBooking.id}`);
+            }
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Booking Failed', description: e.message });
         } finally {
@@ -153,7 +176,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                                 <CardHeader className="flex-1 pb-2">
                                     <div className="flex justify-between items-start">
                                         <CardTitle className="text-xl group-hover:text-primary transition-colors">{service.name}</CardTitle>
-                                        <div className="text-xl font-bold text-primary">P{service.price.toFixed(2)}</div>
+                                        <div className="text-xl font-bold text-primary">P{Number(service.price).toFixed(2)}</div>
                                     </div>
                                     <CardDescription className="text-sm line-clamp-2">{service.description}</CardDescription>
                                 </CardHeader>
@@ -173,7 +196,6 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                     </div>
                 </div>
 
-                {/* Spare Shop Preview Section */}
                 <div className="space-y-6 border-t pt-8">
                     <div className="flex items-center gap-2 text-muted-foreground">
                         <Package className="h-6 w-6" />
@@ -229,7 +251,6 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                 </Card>
             </div>
 
-            {/* Booking Dialog */}
             <Dialog open={bookingOpen} onOpenChange={setBookingOpen}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
@@ -272,7 +293,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                     <DialogFooter>
                         <Button className="w-full" size="lg" disabled={submitting} onClick={confirmBooking}>
                             {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                            Confirm Request (P{selectedService?.price.toFixed(2)})
+                            Confirm Request
                         </Button>
                     </DialogFooter>
                 </DialogContent>
