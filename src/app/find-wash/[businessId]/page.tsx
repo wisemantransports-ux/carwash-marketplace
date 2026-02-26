@@ -2,11 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { User as ProfileUser, Service } from '@/lib/types';
+import type { User as ProfileUser, Service, Rating } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Banknote, Loader2, ArrowLeft, ShieldCheck, MapPin, Star, Store } from 'lucide-react';
+import { Clock, Banknote, Loader2, ArrowLeft, ShieldCheck, MapPin, Star, Store, UserCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -14,6 +14,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
     const { businessId } = React.use(params);
     const [business, setBusiness] = useState<ProfileUser | null>(null);
     const [services, setServices] = useState<Service[]>([]);
+    const [ratings, setRatings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -21,7 +22,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
             setLoading(true);
             try {
                 // Fetch Business Info
-                const { data: bizData, error: bizError } = await supabase
+                const { data: bizData } = await supabase
                     .from('users_with_access')
                     .select('*')
                     .eq('id', businessId)
@@ -38,8 +39,22 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                         .from('services')
                         .select('*')
                         .eq('business_id', businessId);
-                    
                     setServices(svcsData || []);
+
+                    // Fetch Recent Ratings
+                    const { data: ratingsData } = await supabase
+                        .from('ratings')
+                        .select(`
+                            id,
+                            rating,
+                            feedback,
+                            createdAt:created_at,
+                            customer:customer_id ( name )
+                        `)
+                        .eq('business_id', businessId)
+                        .order('created_at', { ascending: false })
+                        .limit(3);
+                    setRatings(ratingsData || []);
                 }
             } catch (e) {
                 console.error('Error loading business details:', e);
@@ -67,6 +82,10 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
         );
     }
 
+    const avgRating = ratings.length > 0 
+        ? (ratings.reduce((acc, curr) => acc + curr.rating, 0) / ratings.length).toFixed(1)
+        : "5.0";
+
     return (
         <div className="min-h-screen bg-background">
              <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b">
@@ -90,81 +109,120 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                 </div>
             </header>
 
-            <main className="container mx-auto px-4 py-12 max-w-4xl space-y-8">
-                <div className="flex flex-col md:flex-row gap-8 items-start">
-                    <div className="relative h-48 w-full md:w-64 rounded-2xl overflow-hidden border shadow-xl shrink-0 bg-muted">
-                        {business.avatarUrl ? (
-                            <Image src={business.avatarUrl} alt={business.name} fill className="object-cover" />
-                        ) : (
-                            <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                                <Store className="h-12 w-12 opacity-20" />
-                            </div>
-                        )}
-                        <div className="absolute top-2 right-2">
-                             <Badge variant="secondary" className="bg-white/90 text-black uppercase font-bold">{business.plan}</Badge>
-                        </div>
-                    </div>
-                    <div className="space-y-4 flex-1">
-                        <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-wider">
-                            <ShieldCheck className="h-4 w-4" />
-                            <span>Verified Partner</span>
-                        </div>
-                        <h1 className="text-4xl font-extrabold">{business.name}</h1>
-                        <div className="flex flex-col gap-2 text-muted-foreground">
-                            <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
-                            <div className="flex items-center gap-1.5 pt-1">
-                                <div className="flex">
-                                    {[1, 2, 3, 4, 5].map((s) => (
-                                        <Star key={s} className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                                    ))}
-                                </div>
-                                <span className="text-xs font-bold text-foreground">5.0</span>
-                                <span className="text-xs">(Verified Listing)</span>
-                            </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                            {business.description || "Welcome to our professional car wash facility. We take pride in delivering showroom-quality results for every vehicle."}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="space-y-6 pt-8">
-                    <h2 className="text-2xl font-bold border-b pb-2">Service Catalog</h2>
-                    <div className="grid gap-4">
-                        {services.length > 0 ? services.map(service => (
-                            <Card key={service.id} className="group hover:border-primary transition-colors bg-card">
-                                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                    <div className="space-y-1">
-                                        <CardTitle className="text-xl group-hover:text-primary transition-colors">{service.service_name}</CardTitle>
-                                        <CardDescription>{service.description}</CardDescription>
-                                        <div className="flex items-center gap-4 text-xs font-medium pt-2">
-                                            <span className="flex items-center gap-1.5 bg-muted px-2 py-1 rounded"><Clock className="h-3 w-3" /> {service.duration} min</span>
-                                            <span className="flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-1 rounded font-bold"><Banknote className="h-3 w-3" /> P{service.price.toFixed(2)}</span>
-                                        </div>
+            <main className="container mx-auto px-4 py-12 max-w-5xl space-y-12">
+                <div className="grid md:grid-cols-3 gap-8 items-start">
+                    <div className="md:col-span-2 space-y-8">
+                        <div className="flex flex-col md:flex-row gap-8 items-start">
+                            <div className="relative h-48 w-full md:w-64 rounded-2xl overflow-hidden border shadow-xl shrink-0 bg-muted">
+                                {business.avatarUrl ? (
+                                    <Image src={business.avatarUrl} alt={business.name} fill className="object-cover" />
+                                ) : (
+                                    <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                                        <Store className="h-12 w-12 opacity-20" />
                                     </div>
-                                    <Button asChild className="shrink-0">
-                                        <Link href="/login">Sign In to Book</Link>
-                                    </Button>
-                                </CardHeader>
-                            </Card>
-                        )) : (
-                            <div className="text-center py-20 bg-muted/20 rounded-2xl border-2 border-dashed">
-                                <p className="text-muted-foreground font-medium italic">No services are currently listed for this partner.</p>
+                                )}
+                                <div className="absolute top-2 right-2">
+                                    <Badge variant="secondary" className="bg-white/90 text-black uppercase font-bold">{business.plan}</Badge>
+                                </div>
                             </div>
-                        )}
-                    </div>
-                </div>
+                            <div className="space-y-4 flex-1">
+                                <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-wider">
+                                    <ShieldCheck className="h-4 w-4" />
+                                    <span>Verified Partner</span>
+                                </div>
+                                <h1 className="text-4xl font-extrabold">{business.name}</h1>
+                                <div className="flex flex-col gap-2 text-muted-foreground">
+                                    <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
+                                    <div className="flex items-center gap-1.5 pt-1">
+                                        <div className="flex">
+                                            {[1, 2, 3, 4, 5].map((s) => (
+                                                <Star key={s} className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
+                                            ))}
+                                        </div>
+                                        <span className="text-sm font-bold text-foreground">{avgRating}</span>
+                                        <span className="text-sm text-muted-foreground">({ratings.length} verified reviews)</span>
+                                    </div>
+                                </div>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                    {business.description || "Welcome to our professional car wash facility. We take pride in delivering showroom-quality results for every vehicle."}
+                                </p>
+                            </div>
+                        </div>
 
-                <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8 text-center space-y-6">
-                    <div className="space-y-2">
-                        <h3 className="text-xl font-bold">Ready to book a professional wash?</h3>
-                        <p className="text-sm text-muted-foreground max-w-md mx-auto">Join the marketplace to manage your vehicle details and track your booking history.</p>
+                        <div className="space-y-6">
+                            <h2 className="text-2xl font-bold border-b pb-2">Service Catalog</h2>
+                            <div className="grid gap-4">
+                                {services.length > 0 ? services.map(service => (
+                                    <Card key={service.id} className="group hover:border-primary transition-colors bg-card">
+                                        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            <div className="space-y-1">
+                                                <CardTitle className="text-xl group-hover:text-primary transition-colors">{service.service_name}</CardTitle>
+                                                <CardDescription>{service.description}</CardDescription>
+                                                <div className="flex items-center gap-4 text-xs font-medium pt-2">
+                                                    <span className="flex items-center gap-1.5 bg-muted px-2 py-1 rounded"><Clock className="h-3 w-3" /> {service.duration} min</span>
+                                                    <span className="flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-1 rounded font-bold"><Banknote className="h-3 w-3" /> P{service.price.toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                            <Button asChild className="shrink-0">
+                                                <Link href="/login">Sign In to Book</Link>
+                                            </Button>
+                                        </CardHeader>
+                                    </Card>
+                                )) : (
+                                    <div className="text-center py-20 bg-muted/20 rounded-2xl border-2 border-dashed">
+                                        <p className="text-muted-foreground font-medium italic">No services are currently listed for this partner.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row justify-center gap-4">
-                        <Button asChild size="lg" className="px-8"><Link href="/signup">Create Free Account</Link></Button>
-                        <Button variant="outline" size="lg" className="px-8" asChild><Link href="/login">Log In</Link></Button>
+
+                    <div className="space-y-8">
+                        <Card className="bg-muted/30 border-dashed">
+                            <CardHeader>
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                                    Recent Reviews
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {ratings.length > 0 ? ratings.map((review) => (
+                                    <div key={review.id} className="space-y-2 border-b last:border-0 pb-4 last:pb-0">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <UserCircle className="h-4 w-4 text-muted-foreground" />
+                                                <span className="text-xs font-bold">{review.customer?.name || 'Customer'}</span>
+                                            </div>
+                                            <div className="flex">
+                                                {Array.from({ length: 5 }).map((_, i) => (
+                                                    <Star key={i} className={cn("h-3 w-3", i < review.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300")} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {review.feedback && (
+                                            <p className="text-xs text-muted-foreground italic leading-relaxed">
+                                                &quot;{review.feedback}&quot;
+                                            </p>
+                                        )}
+                                        <p className="text-[10px] text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                )) : (
+                                    <div className="text-center py-8">
+                                        <p className="text-xs text-muted-foreground italic">No reviews yet. Be the first to rate!</p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8 text-center space-y-6">
+                            <div className="space-y-2">
+                                <h3 className="text-xl font-bold">Ready to book?</h3>
+                                <p className="text-sm text-muted-foreground">Join the marketplace to manage your vehicle details and track bookings.</p>
+                            </div>
+                            <Button asChild size="lg" className="w-full"><Link href="/signup">Create Free Account</Link></Button>
+                            <p className="text-[10px] text-muted-foreground italic">Registration is quick and free for customers.</p>
+                        </div>
                     </div>
-                    <p className="text-[10px] text-muted-foreground italic">Registration is quick and gives you full access to mobile tracking and digital invoices.</p>
                 </div>
             </main>
         </div>

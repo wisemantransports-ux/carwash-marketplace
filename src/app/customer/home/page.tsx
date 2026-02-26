@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 
-function BusinessCard({ business }: { business: ProfileUser }) {
+function BusinessCard({ business }: { business: any }) {
   const trialDays = business.trial_remaining ?? 0;
 
   return (
@@ -60,12 +60,12 @@ function BusinessCard({ business }: { business: ProfileUser }) {
         <div className="flex items-center gap-1.5">
           <div className="flex">
             {[1, 2, 3, 4, 5].map((s) => (
-              <Star key={s} className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+              <Star key={s} className={s <= Math.floor(business.avg_rating || 5) ? "h-3 w-3 text-yellow-400 fill-yellow-400" : "h-3 w-3 text-gray-300"} />
             ))}
           </div>
-          <span className="text-xs font-bold">5.0</span>
+          <span className="text-xs font-bold">{(business.avg_rating || 5.0).toFixed(1)}</span>
           <span className="text-[10px] text-muted-foreground ml-auto">
-            {business.access_active ? 'Active Now' : 'Currently Unavailable'}
+            {business.review_count || 0} Reviews
           </span>
         </div>
       </CardContent>
@@ -81,7 +81,7 @@ function BusinessCard({ business }: { business: ProfileUser }) {
 }
 
 export default function CustomerHomePage() {
-  const [businesses, setBusinesses] = useState<ProfileUser[]>([]);
+  const [businesses, setBusinesses] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -89,19 +89,40 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
-        const { data, error } = await supabase
+        // Step 1: Fetch verified businesses
+        const { data: bizData, error: bizError } = await supabase
           .from('users_with_access')
           .select('*')
           .eq('role', 'business-owner')
           .eq('access_active', true);
         
-        if (error) throw error;
+        if (bizError) throw bizError;
+
+        // Step 2: Fetch ratings summary for these businesses
+        const { data: ratingsData } = await supabase
+          .from('ratings')
+          .select('business_id, rating');
+
+        const ratingsMap = (ratingsData || []).reduce((acc: any, curr: any) => {
+          if (!acc[curr.business_id]) acc[curr.business_id] = { total: 0, count: 0 };
+          acc[curr.business_id].total += curr.rating;
+          acc[curr.business_id].count += 1;
+          return acc;
+        }, {});
         
-        const formatted = (data || []).map(u => ({
+        const formatted = (bizData || []).map(u => ({
           ...u,
           avatarUrl: u.avatar_url,
-          accessActive: u.access_active
-        })) as ProfileUser[];
+          accessActive: u.access_active,
+          avg_rating: ratingsMap[u.id] ? (ratingsMap[u.id].total / ratingsMap[u.id].count) : 5.0,
+          review_count: ratingsMap[u.id] ? ratingsMap[u.id].count : 0
+        })) as any[];
+
+        // Step 3: Sort by rating (primary) and count (secondary)
+        formatted.sort((a, b) => {
+            if (b.avg_rating !== a.avg_rating) return b.avg_rating - a.avg_rating;
+            return b.review_count - a.review_count;
+        });
         
         setBusinesses(formatted);
       } catch (e: any) {
@@ -125,11 +146,11 @@ export default function CustomerHomePage() {
         <div className="flex-1 space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
             <ShieldCheck className="h-3 w-3" />
-            <span>Active Trust Seals Only</span>
+            <span>Top Rated Partners Only</span>
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-primary">Discover Top Washes</h1>
           <p className="text-muted-foreground text-lg max-w-2xl">
-            Browse professional mobile detailers and stations verified for quality. Only businesses with active trust seals are shown.
+            Browse professional mobile detailers and stations. Only businesses with active trust seals and high ratings are shown first.
           </p>
           
           <div className="flex gap-4 max-w-2xl pt-2">
@@ -145,7 +166,6 @@ export default function CustomerHomePage() {
           </div>
         </div>
 
-        {/* Spare Shop Awareness Card */}
         <Card className="w-full lg:w-80 bg-muted/30 border-dashed shrink-0">
           <CardHeader className="pb-3">
             <div className="flex justify-between items-start">

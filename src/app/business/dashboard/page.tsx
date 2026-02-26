@@ -5,7 +5,7 @@ import type { Booking, Business } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, User, Loader2, CheckCircle2, XCircle, PlayCircle } from "lucide-react";
+import { Calendar, Clock, Car, User, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +14,7 @@ import { ShareBusinessCard } from "@/components/app/share-business-card";
 export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [business, setBusiness] = useState<Business | null>(null);
+    const [stats, setStats] = useState({ avgRating: 0, totalReviews: 0, latestReview: null as any });
     const [loading, setLoading] = useState(true);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -24,6 +25,24 @@ export default function BusinessDashboardPage() {
             if (session?.user) {
                 const businessId = session.user.id;
                 setCurrentUserId(businessId);
+                
+                // Fetch stats from Supabase
+                const { data: ratingsData } = await supabase
+                    .from('ratings')
+                    .select('*, customer:customer_id(name)')
+                    .eq('business_id', businessId)
+                    .order('created_at', { ascending: false });
+
+                if (ratingsData && ratingsData.length > 0) {
+                    const avg = ratingsData.reduce((acc, curr) => acc + curr.rating, 0) / ratingsData.length;
+                    setStats({
+                        avgRating: avg,
+                        totalReviews: ratingsData.length,
+                        latestReview: ratingsData[0]
+                    });
+                }
+
+                // Fetch bookings/business info
                 const { data: bizData } = await mockGetBusinessById(businessId);
                 const { data: bookingData } = await mockGetBookingsForBusiness(businessId);
                 setBusiness(bizData);
@@ -52,7 +71,7 @@ export default function BusinessDashboardPage() {
         fetchData();
     };
 
-    if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
+    if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
 
     const requested = bookings.filter(b => b.status === 'requested');
     const active = bookings.filter(b => b.status === 'accepted' || b.status === 'in-progress');
@@ -62,11 +81,52 @@ export default function BusinessDashboardPage() {
             <div className="flex flex-col md:flex-row justify-between items-start gap-6">
                 <div className="flex flex-col gap-2">
                     <h1 className="text-4xl font-bold tracking-tight text-primary">Operations</h1>
-                    <p className="text-muted-foreground text-lg">Manage incoming requests and active wash operations.</p>
+                    <p className="text-muted-foreground text-lg">Manage incoming requests and track customer feedback.</p>
                 </div>
                 <div className="w-full md:w-80 shrink-0">
                     <ShareBusinessCard businessId={currentUserId || ''} />
                 </div>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-3">
+                <Card className="bg-primary/5 border-primary/20">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground uppercase flex items-center gap-2">
+                            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /> Average Rating
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold">{stats.avgRating.toFixed(1)} / 5.0</div>
+                        <p className="text-xs text-muted-foreground mt-1">From {stats.totalReviews} verified reviews</p>
+                    </CardContent>
+                </Card>
+
+                {stats.latestReview ? (
+                    <Card className="md:col-span-2">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground uppercase flex items-center gap-2">
+                                <MessageCircle className="h-4 w-4 text-primary" /> Latest Feedback
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="font-bold text-sm">{stats.latestReview.customer?.name}</span>
+                                <div className="flex">
+                                    {Array.from({ length: 5 }).map((_, i) => (
+                                        <Star key={i} className={cn("h-3 w-3", i < stats.latestReview.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-200")} />
+                                    ))}
+                                </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground italic line-clamp-1">
+                                &quot;{stats.latestReview.feedback || 'No comment provided'}&quot;
+                            </p>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <Card className="md:col-span-2 flex items-center justify-center bg-muted/10">
+                        <p className="text-sm text-muted-foreground italic">No feedback received yet. Complete more bookings to get rated!</p>
+                    </Card>
+                )}
             </div>
 
             <Tabs defaultValue="requests" className="w-full">
