@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { User as ProfileUser, Service, Car, Business } from '@/lib/types';
-import { Clock, Banknote, Loader2, Store, Calendar as CalendarIcon, MapPin, ShieldCheck, Package, Info } from 'lucide-react';
+import { Clock, Banknote, Loader2, Store, Calendar as CalendarIcon, MapPin, ShieldCheck, Package } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/hooks/use-toast';
@@ -34,7 +34,6 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
     const [selectedService, setSelectedService] = useState<Service | null>(null);
     const [submitting, setSubmitting] = useState(false);
     
-    // Booking Form State
     const [selectedCarId, setSelectedCarId] = useState<string>('');
     const [bookingTime, setBookingTime] = useState<string>('');
 
@@ -46,10 +45,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 
-                // Fetch Business Owner Profile (using ID as owner_id reference)
                 const { data: userProfile } = await supabase.from('users').select('*').eq('id', businessId).maybeSingle();
-                
-                // Fetch Business Details
                 const { data: bizData } = await supabase.from('businesses').select('*').eq('owner_id', businessId).maybeSingle();
 
                 if (userProfile) {
@@ -64,11 +60,9 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                     setBizRecord(bizData as Business);
                 }
 
-                // Fetch Services
                 const { data: svcs } = await supabase.from('services').select('*').eq('business_id', businessId);
                 setServices(svcs || []);
 
-                // Fetch Cars for dropdown
                 if (session) {
                     const { data: userCars } = await supabase.from('cars').select('*').eq('owner_id', session.user.id);
                     setCars(userCars || []);
@@ -115,7 +109,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             
             if (countError) throw countError;
 
-            if (count && count > 0) {
+            if (count !== null && count > 0) {
                 toast({ 
                     variant: 'destructive', 
                     title: 'Active Booking Found', 

@@ -23,13 +23,12 @@ import {
 
 function BookingCard({ booking, onCancel }: { booking: any, onCancel: () => void }) {
   const isUpcoming = !['completed', 'cancelled', 'rejected'].includes(booking.status);
-  const canCancel = booking.status === 'requested' || booking.status === 'pending' || booking.status === 'accepted';
+  const canCancel = ['requested', 'pending', 'accepted'].includes(booking.status);
   const [cancelling, setCancelling] = useState(false);
 
   const handleCancel = async () => {
     setCancelling(true);
     try {
-      // Respect RLS: Only allow logged-in user to cancel their own bookings
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'cancelled' })
@@ -42,7 +41,6 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: () => void
         description: 'Your booking has been successfully cancelled.' 
       });
       
-      // Trigger full list refetch from parent
       onCancel();
     } catch (error: any) {
       toast({ 
@@ -85,12 +83,12 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: () => void
       <CardContent className="space-y-4 pb-4">
         <div className="bg-muted/30 p-3 rounded-lg space-y-2">
             <div className="flex justify-between items-center text-sm">
-                <span className="font-semibold text-primary">{booking.name || 'Wash Service'}</span>
-                <span className="font-bold">P{Number(booking.service_price || 0).toFixed(2)}</span>
+                <span className="font-semibold text-primary">{booking.service_name || 'Wash Service'}</span>
+                <span className="font-bold">P{Number(booking.price || 0).toFixed(2)}</span>
             </div>
             <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {booking.service_duration || '--'} mins</span>
-                <span className="flex items-center gap-1"><CarIcon className="h-3.5 w-3.5" /> {booking.car_details || booking.car_id || 'Registered Vehicle'}</span>
+                <span className="flex items-center gap-1"><CarIcon className="h-3.5 w-3.5" /> {booking.car_details || 'Registered Vehicle'}</span>
             </div>
         </div>
 
@@ -128,7 +126,7 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: () => void
                         <DialogHeader>
                             <DialogTitle>Cancel Booking?</DialogTitle>
                             <DialogDescription>
-                                Are you sure you want to cancel your {booking.name} at {booking.business_name}? This action cannot be undone.
+                                Are you sure you want to cancel your {booking.service_name} at {booking.business_name}? This action cannot be undone.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
@@ -168,15 +166,36 @@ export default function BookingHistoryPage() {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
 
-            // Updated query to handle multiple relevant ID mappings for resilience
+            // Direct fetch with joins to ensure car and business details are correct
             const { data, error } = await supabase
-                .from('customer_bookings')
-                .select('*')
-                .or(`customer_id.eq.${session.user.id}`)
+                .from('bookings')
+                .select(`
+                    *,
+                    business:business_id ( name, city, logo_url ),
+                    service:service_id ( name, duration ),
+                    car:car_id ( make, model )
+                `)
+                .eq('customer_id', session.user.id)
                 .order('booking_time', { ascending: false });
 
             if (error) throw error;
-            setBookings(data || []);
+
+            const formatted = (data || []).map(b => ({
+                booking_id: b.id,
+                status: b.status,
+                booking_time: b.booking_time,
+                price: b.price,
+                business_id: b.business_id,
+                business_name: b.business?.name || 'Partner',
+                city: b.business?.city || 'Gaborone',
+                business_avatar: b.business?.logo_url,
+                service_name: b.service?.name || 'Wash Service',
+                service_duration: b.service?.duration,
+                car_details: b.car ? `${b.car.make} ${b.car.model}` : 'Registered Vehicle',
+                mobile_status: b.mobileBookingStatus
+            }));
+
+            setBookings(formatted);
         } catch (e: any) {
             console.error('Detailed fetch error:', e);
             toast({ 
