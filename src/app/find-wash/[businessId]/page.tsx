@@ -76,7 +76,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                     <Store className="h-12 w-12 text-destructive" />
                 </div>
                 <h1 className="text-2xl font-bold">Business Not Available</h1>
-                <p className="text-muted-foreground max-w-sm">This business is currently not accepting bookings through the marketplace.</p>
+                <p className="text-muted-foreground max-sm">This business is currently not accepting bookings through the marketplace.</p>
                 <Button asChild><Link href="/find-wash">Back to Search</Link></Button>
             </div>
         );
@@ -156,7 +156,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                                     <Card key={service.id} className="group hover:border-primary transition-colors bg-card">
                                         <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div className="space-y-1">
-                                                <CardTitle className="text-xl group-hover:text-primary transition-colors">{service.service_name}</CardTitle>
+                                                <CardTitle className="text-xl group-hover:text-primary transition-colors">{service.name}</CardTitle>
                                                 <CardDescription>{service.description}</CardDescription>
                                                 <div className="flex items-center gap-4 text-xs font-medium pt-2">
                                                     <span className="flex items-center gap-1.5 bg-muted px-2 py-1 rounded"><Clock className="h-3 w-3" /> {service.duration} min</span>

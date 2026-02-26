@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from "react";
@@ -73,7 +72,7 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: (id: strin
       <CardContent className="space-y-4 pb-4">
         <div className="bg-muted/30 p-3 rounded-lg space-y-2">
             <div className="flex justify-between items-center text-sm">
-                <span className="font-semibold text-primary">{booking.service_name || 'Wash Service'}</span>
+                <span className="font-semibold text-primary">{booking.name || 'Wash Service'}</span>
                 <span className="font-bold">P{Number(booking.service_price || 0).toFixed(2)}</span>
             </div>
             <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
@@ -116,7 +115,7 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: (id: strin
                         <DialogHeader>
                             <DialogTitle>Cancel Booking?</DialogTitle>
                             <DialogDescription>
-                                Are you sure you want to cancel your {booking.service_name} at {booking.business_name}? This action cannot be undone.
+                                Are you sure you want to cancel your {booking.name} at {booking.business_name}? This action cannot be undone.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
@@ -157,7 +156,6 @@ export default function BookingHistoryPage() {
             if (!session) return;
 
             // Fetching from the customer_bookings view
-            // We assume the view already handles the "access_active" requirement or the column name is different
             const { data, error } = await supabase
                 .from('customer_bookings')
                 .select('*')

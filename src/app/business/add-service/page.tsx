@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -83,7 +82,7 @@ export default function AddServicePage() {
       .from('services')
       .insert({
         business_id: session?.user.id,
-        service_name: serviceName,
+        name: serviceName,
         description,
         price: parseFloat(price),
         duration: parseInt(duration),

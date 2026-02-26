@@ -152,7 +152,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                             <Card key={service.id} className="group hover:border-primary transition-all duration-300">
                                 <CardHeader className="flex-1 pb-2">
                                     <div className="flex justify-between items-start">
-                                        <CardTitle className="text-xl group-hover:text-primary transition-colors">{service.service_name}</CardTitle>
+                                        <CardTitle className="text-xl group-hover:text-primary transition-colors">{service.name}</CardTitle>
                                         <div className="text-xl font-bold text-primary">P{service.price.toFixed(2)}</div>
                                     </div>
                                     <CardDescription className="text-sm line-clamp-2">{service.description}</CardDescription>
@@ -235,7 +235,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                     <DialogHeader>
                         <DialogTitle>Finalize Your Booking</DialogTitle>
                         <DialogDescription>
-                            Select your vehicle and preferred time for: <span className="font-bold text-foreground">{selectedService?.service_name}</span>
+                            Select your vehicle and preferred time for: <span className="font-bold text-foreground">{selectedService?.name}</span>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-6 py-6">

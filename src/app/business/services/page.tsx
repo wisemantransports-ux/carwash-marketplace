@@ -1,4 +1,3 @@
-
 'use client';
 import { supabase } from "@/lib/supabase";
 import type { Service } from "@/lib/types";
@@ -87,7 +86,7 @@ export default function ServicesManagementPage() {
                             ) : services.length > 0 ? (
                                 services.map(service => (
                                     <TableRow key={service.id}>
-                                        <TableCell className="font-medium">{service.service_name}</TableCell>
+                                        <TableCell className="font-medium">{service.name}</TableCell>
                                         <TableCell className="text-muted-foreground max-w-xs truncate">{service.description}</TableCell>
                                         <TableCell>{service.duration} min</TableCell>
                                         <TableCell className="font-bold">P{service.price.toFixed(2)}</TableCell>

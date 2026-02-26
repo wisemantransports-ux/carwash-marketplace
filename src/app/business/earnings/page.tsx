@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -63,7 +62,7 @@ export default function EarningsPage() {
               booking_time,
               status,
               customer:customer_id ( name ),
-              service:service_id ( service_name, price )
+              service:service_id ( name, price )
             `)
             .in('id', bookingIds);
 
@@ -202,7 +201,7 @@ export default function EarningsPage() {
                     </TableCell>
                     <TableCell>
                       <span className="text-sm font-medium">
-                        {earning.bookings?.service?.service_name || 'N/A'}
+                        {earning.bookings?.service?.name || 'N/A'}
                       </span>
                     </TableCell>
                     <TableCell>

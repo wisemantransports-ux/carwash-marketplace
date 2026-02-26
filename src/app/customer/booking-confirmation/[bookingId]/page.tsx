@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -21,7 +20,7 @@ export default function BookingConfirmationPage({ params }: { params: Promise<{ 
                 .select(`
                     *,
                     business:business_id ( name, city ),
-                    service:service_id ( service_name )
+                    service:service_id ( name )
                 `)
                 .eq('id', bookingId)
                 .maybeSingle();
@@ -77,7 +76,7 @@ export default function BookingConfirmationPage({ params }: { params: Promise<{ 
 
                         <div className="space-y-2">
                             <Badge variant="outline" className="text-primary font-bold px-4 py-1">
-                                {booking?.service?.service_name} • P{booking?.price.toFixed(2)}
+                                {booking?.service?.name} • P{booking?.price.toFixed(2)}
                             </Badge>
                             <p className="text-[10px] text-muted-foreground italic">
                                 Once accepted, an invoice will be automatically generated and visible in your dashboard.

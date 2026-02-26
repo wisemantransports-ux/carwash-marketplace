@@ -31,7 +31,7 @@ export type Car = {
 export type Service = {
   id: string;
   businessId: string;
-  service_name: string;
+  name: string;
   description: string;
   price: number;
   duration: number; // in minutes
@@ -143,6 +143,6 @@ export type BusinessEarning = {
     booking_time: string;
     status: string;
     customer?: { name: string };
-    service?: { service_name: string; price: number };
+    service?: { name: string; price: number };
   };
 };
