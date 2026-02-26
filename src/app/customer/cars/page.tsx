@@ -1,4 +1,3 @@
-
 'use client';
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -20,7 +19,7 @@ export default function CarManagementPage() {
     const [isAdding, setIsAdding] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    // Simplified form state: Only Make and Model
+    // Form state: Only Make and Model are required
     const [make, setMake] = useState('');
     const [model, setModel] = useState('');
 
@@ -55,7 +54,7 @@ export default function CarManagementPage() {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             
-            // Inserting with only required fields, explicitly setting others to null for clarity
+            // Inserting with only make and model
             const { error } = await supabase.from('cars').insert({
                 owner_id: session?.user.id,
                 make: make.trim(),
@@ -103,13 +102,13 @@ export default function CarManagementPage() {
                     </DialogTrigger>
                     <DialogContent className="max-w-md">
                         <DialogHeader>
-                            <DialogTitle className="text-2xl">Register Vehicle</DialogTitle>
-                            <DialogDescription>Enter your car details to proceed with bookings.</DialogDescription>
+                            <DialogTitle className="text-2xl">Register New Vehicle</DialogTitle>
+                            <DialogDescription>Enter your car details. Only Make and Model are required.</DialogDescription>
                         </DialogHeader>
                         <form onSubmit={handleAddCar} className="space-y-6 py-4">
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="make" className="text-sm font-bold">Vehicle Make *</Label>
+                                    <Label htmlFor="make" className="text-sm font-bold">Make *</Label>
                                     <Input 
                                         id="make" 
                                         value={make} 
@@ -120,7 +119,7 @@ export default function CarManagementPage() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="model" className="text-sm font-bold">Vehicle Model *</Label>
+                                    <Label htmlFor="model" className="text-sm font-bold">Model *</Label>
                                     <Input 
                                         id="model" 
                                         value={model} 
@@ -134,7 +133,7 @@ export default function CarManagementPage() {
                             <DialogFooter className="pt-2">
                                 <Button type="submit" className="w-full h-14 text-lg shadow-xl" disabled={submitting}>
                                     {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
-                                    Complete Registration
+                                    Save Vehicle
                                 </Button>
                             </DialogFooter>
                         </form>
