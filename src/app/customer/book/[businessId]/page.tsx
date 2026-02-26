@@ -125,7 +125,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                 return;
             }
 
-            // 2. Insert Booking strictly mapping valid columns
+            // 2. Insert Booking
             const { data: newBooking, error } = await supabase.from('bookings').insert({
                 customer_id: session.user.id,
                 business_id: businessId,

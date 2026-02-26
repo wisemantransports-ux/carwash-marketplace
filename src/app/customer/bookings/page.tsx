@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-function BookingCard({ booking, onCancel }: { booking: any, onCancel: (id: string) => void }) {
+function BookingCard({ booking, onCancel }: { booking: any, onCancel: () => void }) {
   const isUpcoming = !['completed', 'cancelled', 'rejected'].includes(booking.status);
   const canCancel = booking.status === 'requested' || booking.status === 'pending' || booking.status === 'accepted';
   const [cancelling, setCancelling] = useState(false);
@@ -42,8 +42,8 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: (id: strin
         description: 'Your booking has been successfully cancelled.' 
       });
       
-      // Update parent state / Refetch
-      onCancel(booking.booking_id);
+      // Trigger full list refetch from parent
+      onCancel();
     } catch (error: any) {
       toast({ 
         variant: 'destructive', 
@@ -162,17 +162,17 @@ export default function BookingHistoryPage() {
     const [bookings, setBookings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const fetchBookings = async () => {
+    const fetchBookings = useCallback(async () => {
         setLoading(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
 
-            // Fetching from the customer_bookings view
+            // Updated query to handle multiple relevant ID mappings for resilience
             const { data, error } = await supabase
                 .from('customer_bookings')
                 .select('*')
-                .eq('customer_id', session.user.id)
+                .or(`customer_id.eq.${session.user.id}`)
                 .order('booking_time', { ascending: false });
 
             if (error) throw error;
@@ -187,15 +187,11 @@ export default function BookingHistoryPage() {
         } finally {
             setLoading(false);
         }
-    }
+    }, []);
 
     useEffect(() => {
         fetchBookings();
-    }, []);
-
-    const handleRefresh = () => {
-        fetchBookings();
-    }
+    }, [fetchBookings]);
 
     const upcomingBookings = bookings.filter(b => 
         !['completed', 'cancelled', 'rejected'].includes(b.status)
@@ -211,7 +207,7 @@ export default function BookingHistoryPage() {
                     <h1 className="text-3xl font-bold tracking-tight">My Bookings</h1>
                     <p className="text-muted-foreground">Manage your car wash appointments and track mobile services.</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+                <Button variant="outline" size="sm" onClick={() => fetchBookings()} disabled={loading}>
                     {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Repeat className="h-4 w-4 mr-2" />}
                     Refresh
                 </Button>
@@ -237,7 +233,7 @@ export default function BookingHistoryPage() {
                     ) : upcomingBookings.length > 0 ? (
                         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                             {upcomingBookings.map(b => (
-                                <BookingCard key={b.booking_id} booking={b} onCancel={handleRefresh} />
+                                <BookingCard key={b.booking_id} booking={b} onCancel={fetchBookings} />
                             ))}
                         </div>
                     ) : (
@@ -266,7 +262,7 @@ export default function BookingHistoryPage() {
                     ) : pastBookings.length > 0 ? (
                         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                             {pastBookings.map(b => (
-                                <BookingCard key={b.booking_id} booking={b} onCancel={handleRefresh} />
+                                <BookingCard key={b.booking_id} booking={b} onCancel={fetchBookings} />
                             ))}
                         </div>
                     ) : (
