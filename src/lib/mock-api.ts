@@ -29,8 +29,8 @@ const services: Service[] = [
 ];
 
 const cars: Car[] = [
-    { id: 'car-1', userId: 'user-1', make: 'Toyota', model: 'Hilux', year: 2021, licensePlate: 'B 123 ABC' },
-    { id: 'car-2', userId: 'user-1', make: 'Ford', model: 'Ranger', year: 2022, licensePlate: 'B 789 XYZ' },
+    { id: 'car-1', owner_id: 'user-1', make: 'Toyota', model: 'Hilux', plate_number: 'B 123 ABC' },
+    { id: 'car-2', owner_id: 'user-1', make: 'Ford', model: 'Ranger', plate_number: 'B 789 XYZ' },
 ];
 
 const employees: Employee[] = [
@@ -120,7 +120,7 @@ export const mockGetPendingPayments = async (): Promise<{ data: PaymentSubmissio
 
 export const mockGetCarsForUser = async (userId: string): Promise<{ data: Car[]; error: null }> => {
     await delay(300);
-    return { data: cars.filter(c => c.userId === userId), error: null };
+    return { data: cars.filter(c => c.owner_id === userId), error: null };
 }
 
 export const mockGetEmployeesForBusiness = async (businessId: string): Promise<{ data: Employee[]; error: null }> => {

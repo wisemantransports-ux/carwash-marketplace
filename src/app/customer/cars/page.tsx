@@ -28,6 +28,7 @@ export default function CarManagementPage() {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
+            // Fetch using owner_id column
             const { data, error } = await supabase.from('cars').select('*').eq('owner_id', session.user.id);
             if (error) throw error;
             setCars(data || []);
@@ -53,10 +54,11 @@ export default function CarManagementPage() {
         setSubmitting(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error("No session found");
             
-            // Map directly to DB columns: make and model. Omit 'year'.
+            // PAYLOAD: strictly owner_id, make, model
             const { error } = await supabase.from('cars').insert({
-                owner_id: session?.user.id,
+                owner_id: session.user.id,
                 make: make.trim(),
                 model: model.trim()
             });
