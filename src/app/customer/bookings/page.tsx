@@ -29,6 +29,7 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: (id: strin
   const handleCancel = async () => {
     setCancelling(true);
     try {
+      // Respect RLS: Only allow logged-in user to cancel their own bookings
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'cancelled' })
@@ -40,6 +41,8 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: (id: strin
         title: 'Booking Cancelled', 
         description: 'Your booking has been successfully cancelled.' 
       });
+      
+      // Update parent state / Refetch
       onCancel(booking.booking_id);
     } catch (error: any) {
       toast({ 
@@ -175,16 +178,11 @@ export default function BookingHistoryPage() {
             if (error) throw error;
             setBookings(data || []);
         } catch (e: any) {
-            console.error('Detailed fetch error:', {
-                message: e.message,
-                details: e.details,
-                hint: e.hint,
-                code: e.code
-            });
+            console.error('Detailed fetch error:', e);
             toast({ 
                 variant: 'destructive', 
                 title: 'Fetch Error', 
-                description: 'Could not load your bookings. The backend view might still be initializing.' 
+                description: 'Could not load your bookings. Please try again.' 
             });
         } finally {
             setLoading(false);

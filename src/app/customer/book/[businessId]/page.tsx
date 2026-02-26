@@ -106,7 +106,26 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error('Not authenticated');
 
-            // 1. Insert Booking strictly mapping valid columns (including price for display)
+            // 1. Prevent Multiple Active Bookings for the Same Car
+            const { count, error: countError } = await supabase
+                .from('bookings')
+                .select('*', { count: 'exact', head: true })
+                .eq('car_id', selectedCarId)
+                .eq('status', 'pending');
+            
+            if (countError) throw countError;
+
+            if (count && count > 0) {
+                toast({ 
+                    variant: 'destructive', 
+                    title: 'Active Booking Found', 
+                    description: 'This car already has a pending booking. Please wait for it to complete before booking again.' 
+                });
+                setSubmitting(false);
+                return;
+            }
+
+            // 2. Insert Booking strictly mapping valid columns
             const { data: newBooking, error } = await supabase.from('bookings').insert({
                 customer_id: session.user.id,
                 business_id: businessId,
@@ -119,7 +138,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
 
             if (error) throw error;
 
-            // 2. Conditional WhatsApp Redirect
+            // 3. Conditional WhatsApp Redirect
             const allowsMobile = bizRecord.subscription_plan === 'Pro' || bizRecord.subscription_plan === 'Enterprise';
             const hasWhatsapp = !!bizRecord.whatsapp_number;
             
@@ -132,7 +151,6 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                 
                 toast({ title: 'Booking Saved', description: 'Opening WhatsApp to coordinate with the business...' });
                 
-                // Allow user to see the success toast briefly before redirect
                 setTimeout(() => {
                     window.location.href = whatsappUrl;
                 }, 1000);
