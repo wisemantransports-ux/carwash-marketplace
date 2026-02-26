@@ -1,5 +1,5 @@
-
 'use client';
+import { supabase } from "@/lib/supabase";
 import { mockGetBookingsForBusiness, mockAcceptBooking, mockRejectBooking, mockCompleteBooking, mockGetBusinessById } from "@/lib/mock-api";
 import type { Booking, Business } from "@/lib/types";
 import { useEffect, useState } from "react";
@@ -9,20 +9,31 @@ import { Calendar, Clock, Car, User, Loader2, CheckCircle2, XCircle, PlayCircle 
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ShareBusinessCard } from "@/components/app/share-business-card";
 
 export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [business, setBusiness] = useState<Business | null>(null);
     const [loading, setLoading] = useState(true);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
-        const businessId = "biz-2"; 
-        const { data: bizData } = await mockGetBusinessById(businessId);
-        const { data: bookingData } = await mockGetBookingsForBusiness(businessId);
-        setBusiness(bizData);
-        setBookings(bookingData);
-        setLoading(false);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                const businessId = session.user.id;
+                setCurrentUserId(businessId);
+                const { data: bizData } = await mockGetBusinessById(businessId);
+                const { data: bookingData } = await mockGetBookingsForBusiness(businessId);
+                setBusiness(bizData);
+                setBookings(bookingData);
+            }
+        } catch (error) {
+            console.error("Dashboard fetch error:", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -48,9 +59,14 @@ export default function BusinessDashboardPage() {
 
     return (
         <div className="space-y-8">
-            <div className="flex flex-col gap-2">
-                <h1 className="text-4xl font-bold tracking-tight">Operations</h1>
-                <p className="text-muted-foreground">Manage incoming requests and active wash operations.</p>
+            <div className="flex flex-col md:flex-row justify-between items-start gap-6">
+                <div className="flex flex-col gap-2">
+                    <h1 className="text-4xl font-bold tracking-tight text-primary">Operations</h1>
+                    <p className="text-muted-foreground text-lg">Manage incoming requests and active wash operations.</p>
+                </div>
+                <div className="w-full md:w-80 shrink-0">
+                    <ShareBusinessCard businessId={currentUserId || ''} />
+                </div>
             </div>
 
             <Tabs defaultValue="requests" className="w-full">
@@ -93,8 +109,14 @@ export default function BusinessDashboardPage() {
                             ))}
                         </div>
                     ) : (
-                        <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20">
-                            <p className="text-muted-foreground">No new booking requests at this time.</p>
+                        <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl bg-muted/20 space-y-6 text-center">
+                            <div className="space-y-2">
+                                <p className="text-muted-foreground font-medium italic">No new booking requests at this time.</p>
+                                <p className="text-sm text-muted-foreground max-w-xs mx-auto">Share your professional link to help customers find and book your services.</p>
+                            </div>
+                            <div className="w-full max-w-sm px-4">
+                                <ShareBusinessCard businessId={currentUserId || ''} />
+                            </div>
                         </div>
                     )}
                 </TabsContent>

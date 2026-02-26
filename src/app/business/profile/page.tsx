@@ -12,6 +12,7 @@ import { toast } from '@/hooks/use-toast';
 import { Loader2, Store, MapPin, Globe, ShieldCheck, Clock, CreditCard, Upload, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
+import { ShareBusinessCard } from '@/components/app/share-business-card';
 
 export default function BusinessProfilePage() {
   const [profile, setProfile] = useState<ProfileUser | null>(null);
@@ -130,7 +131,7 @@ export default function BusinessProfilePage() {
   if (!profile) return <div className="text-center py-20">Profile not found.</div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-5xl mx-auto space-y-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight">Business Profile</h1>
         <p className="text-muted-foreground">Manage your public presence and account status.</p>
@@ -264,6 +265,8 @@ export default function BusinessProfilePage() {
         </div>
 
         <div className="space-y-6">
+          <ShareBusinessCard businessId={profile.id} />
+          
           <Card className="bg-muted/30">
             <CardHeader>
               <CardTitle className="text-lg">Account Status</CardTitle>
