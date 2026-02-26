@@ -48,15 +48,15 @@ export default function BusinessDashboardPage() {
                     const biz = bizData as Business;
                     setBusiness(biz);
 
-                    // 2. Fetch Team (Strict RLS filtering using Auth UID as business_id)
+                    // 2. Resilient Team Fetch (User UID or Business UUID)
                     const { data: empData, error: empError } = await supabase
                         .from('employees')
                         .select('*')
-                        .eq('business_id', user.id)
+                        .or(`business_id.eq.${user.id},business_id.eq.${biz.id}`)
                         .order('name');
                     
                     if (empError) throw empError;
-                    console.log('Employees fetched:', empData?.length || 0);
+                    console.log('Number of employees fetched:', empData?.length ?? 0);
                     setEmployees(empData || []);
 
                     // 3. Fetch Ratings
@@ -86,7 +86,7 @@ export default function BusinessDashboardPage() {
                 }
             }
         } catch (error: any) {
-            console.error("Dashboard Sync Error:", error);
+            console.error("Unable to fetch employees:", error);
             setFetchError("Unable to fetch employees. Please check database connection.");
         } finally {
             setLoading(false);

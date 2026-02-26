@@ -50,25 +50,34 @@ export default function EmployeeRegistryPage() {
 
             console.log('Logged-in UID:', user.id);
 
-            // Strict RLS-compliant fetch using Auth UID as business_id
+            // 1. Get Business UUID for resilient fetching
+            const { data: biz } = await supabase
+                .from('businesses')
+                .select('id')
+                .eq('owner_id', user.id)
+                .maybeSingle();
+            
+            const bizId = biz?.id;
+
+            // 2. Fetch using resilient OR filter (UID or UUID)
             const { data, error } = await supabase
                 .from('employees')
                 .select('*')
-                .eq('business_id', user.id)
+                .or(`business_id.eq.${user.id},business_id.eq.${bizId || user.id}`)
                 .order('name');
             
             if (error) throw error;
             
-            console.log('Employees fetched:', data?.length || 0);
+            console.log('Number of employees fetched:', data?.length ?? 0);
             setEmployees(data || []);
 
         } catch (error: any) {
-            console.error(`[CRITICAL] Employee Fetch Failure:`, error);
+            console.error(`Unable to fetch employees:`, error);
             setFetchError("Unable to fetch employees. Please check database connection.");
             toast({ 
                 variant: 'destructive', 
                 title: 'Fetch Error', 
-                description: error.message 
+                description: 'Unable to fetch employees. Please check database connection.' 
             });
         } finally {
             setLoading(false);
@@ -109,7 +118,7 @@ export default function EmployeeRegistryPage() {
 
         setSubmitting(true);
         
-        // 1. Optimistic Update: Add to UI immediately to prevent "vanishing" UI
+        // 1. Optimistic Update: Add to UI immediately
         const tempId = crypto.randomUUID();
         const optimisticEmployee: Employee = {
             id: tempId,
@@ -128,20 +137,22 @@ export default function EmployeeRegistryPage() {
             if (imageFile) {
                 const fileExt = imageFile.name.split('.').pop();
                 const fileName = `${Date.now()}.${fileExt}`;
+                const filePath = `employees/${user.id}/${fileName}`;
+                
                 const { error: uploadError } = await supabase.storage
                     .from('business-assets')
-                    .upload(`employees/${user.id}/${fileName}`, imageFile);
+                    .upload(filePath, imageFile);
                 
                 if (uploadError) throw uploadError;
 
                 const { data: { publicUrl } } = supabase.storage
                     .from('business-assets')
-                    .getPublicUrl(`employees/${user.id}/${fileName}`);
+                    .getPublicUrl(filePath);
                 
                 uploadedImageUrl = publicUrl;
             }
 
-            // 2. Persistent Insert: Using User UID as business_id for RLS compliance
+            // 2. Persistent Insert
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
@@ -161,12 +172,11 @@ export default function EmployeeRegistryPage() {
             
             toast({ title: "Employee Registered", description: "Staff added to team successfully." });
             
-            // 3. Persistent Sync: Re-fetch to confirm server state and overwrite optimistic state correctly
+            // 3. Persistent Sync: Re-fetch from Supabase to confirm
             await fetchData();
         } catch (error: any) {
             console.error(`[ERROR] Registration Failed:`, error);
-            // Re-fetch to clear optimistic entry if insert failed
-            await fetchData();
+            await fetchData(); // Rollback optimistic state
             toast({
                 variant: 'destructive',
                 title: "Registration Error",
