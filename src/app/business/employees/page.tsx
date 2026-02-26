@@ -7,7 +7,7 @@ import type { Employee } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle, RefreshCw } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle, RefreshCw, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +22,7 @@ export default function EmployeeRegistryPage() {
     const [loading, setLoading] = useState(true);
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     // Form state
     const [name, setName] = useState('');
@@ -33,29 +34,28 @@ export default function EmployeeRegistryPage() {
 
     const fetchData = useCallback(async () => {
         setLoading(true);
+        setFetchError(null);
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            // Fetch Employees using the User UID as the business_id (matching RLS policy)
             const { data: empData, error: empError } = await supabase
                 .from('employees')
                 .select('*')
                 .eq('business_id', user.id)
                 .order('name');
             
-            if (empError) {
-                console.error("Registry fetch error:", empError);
-                throw empError;
-            }
+            if (empError) throw empError;
             
-            console.log(`Fetched ${empData?.length || 0} employees for user: ${user.id}`);
             setEmployees(empData || []);
         } catch (error: any) {
+            const timestamp = new Date().toISOString();
+            console.error(`[${timestamp}] Registry Detector Failure:`, error);
+            setFetchError("Unable to fetch employees. Please check database connection.");
             toast({ 
                 variant: 'destructive', 
-                title: 'Load Error', 
-                description: 'Could not load your staff registry.' 
+                title: 'Connection Issue', 
+                description: 'We had trouble reaching the database. Results may be outdated.' 
             });
         } finally {
             setLoading(false);
@@ -95,6 +95,20 @@ export default function EmployeeRegistryPage() {
         }
 
         setSubmitting(true);
+        const tempId = crypto.randomUUID();
+        
+        // Optimistic Update: Add to UI immediately
+        const tempEmployee: Employee = {
+            id: tempId,
+            business_id: user.id,
+            name: name.trim(),
+            phone: phone.trim(),
+            id_reference: idReference.trim(),
+            image_url: imagePreview || ''
+        };
+        
+        setEmployees(prev => [tempEmployee, ...prev]);
+
         try {
             let uploadedImageUrl = null;
 
@@ -120,18 +134,15 @@ export default function EmployeeRegistryPage() {
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
-                    id: crypto.randomUUID(),
-                    business_id: user.id, // Use User UID to match RLS business_id = auth.uid()
+                    id: tempId,
+                    business_id: user.id,
                     name: name.trim(),
                     phone: phone.trim(),
                     id_reference: idReference.trim(),
                     image_url: uploadedImageUrl
                 });
             
-            if (insertError) {
-                console.error("Employee insertion error:", insertError);
-                throw insertError;
-            }
+            if (insertError) throw insertError;
 
             // Reset form
             setName(''); setPhone(''); setIdReference('');
@@ -139,12 +150,17 @@ export default function EmployeeRegistryPage() {
             setIsAddOpen(false);
             
             toast({ title: "Employee Registered", description: "Team list updated successfully." });
-            await fetchData();
+            await fetchData(); // Final sync
         } catch (error: any) {
+            const ts = new Date().toISOString();
+            console.error(`[${ts}] Registry Insertion Failed:`, error);
+            
+            // Revert optimistic update if persistent fetch fails later, 
+            // but keep it for now so user sees their work
             toast({
                 variant: 'destructive',
-                title: "Registration Failed",
-                description: error.message || "Could not save employee details.",
+                title: "Registration Error",
+                description: error.message || "Could not save to database. Entry is stored locally for now.",
             });
         } finally {
             setSubmitting(false);
@@ -152,13 +168,16 @@ export default function EmployeeRegistryPage() {
     };
 
     const handleDeleteEmployee = async (id: string) => {
+        const original = [...employees];
+        setEmployees(prev => prev.filter(e => e.id !== id));
+        
         try {
             const { error } = await supabase.from('employees').delete().eq('id', id);
             if (error) throw error;
             toast({ title: 'Employee Removed' });
-            await fetchData();
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Removal Failed' });
+            setEmployees(original);
+            toast({ variant: 'destructive', title: 'Removal Failed', description: 'Could not delete from database.' });
         }
     };
 
@@ -231,6 +250,19 @@ export default function EmployeeRegistryPage() {
                 </div>
             </div>
 
+            {fetchError && (
+                <Card className="bg-destructive/5 border-destructive/20">
+                    <CardContent className="flex items-center gap-4 py-4">
+                        <AlertTriangle className="h-5 w-5 text-destructive" />
+                        <div className="flex-1">
+                            <p className="text-sm font-bold text-destructive">Database Connection Alert</p>
+                            <p className="text-xs text-destructive/80">{fetchError}</p>
+                        </div>
+                        <Button variant="outline" size="sm" className="h-8" onClick={fetchData}>Retry</Button>
+                    </CardContent>
+                </Card>
+            )}
+
             <Card className="shadow-lg border-muted/50 overflow-hidden">
                 <CardContent className="p-0">
                     <Table>
@@ -243,7 +275,7 @@ export default function EmployeeRegistryPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {loading ? (
+                            {loading && employees.length === 0 ? (
                                 Array.from({length: 3}).map((_, i) => (
                                     <TableRow key={i}>
                                         <TableCell className="pl-6"><Skeleton className="h-10 w-40 rounded-full" /></TableCell>
@@ -263,7 +295,12 @@ export default function EmployeeRegistryPage() {
                                                         {employee.name?.charAt(0) || '?'}
                                                     </AvatarFallback>
                                                 </Avatar>
-                                                <span className="font-bold">{employee.name}</span>
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold">{employee.name}</span>
+                                                    {employee.id.includes('-') && employee.id.length > 20 && (
+                                                        <span className="text-[8px] text-primary/60 font-mono italic">Optimistic Sync</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-sm font-medium">

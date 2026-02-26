@@ -5,7 +5,7 @@ import type { Booking, Business, Employee } from "@/lib/types";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw } from "lucide-react";
+import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,9 +20,11 @@ export default function BusinessDashboardPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [stats, setStats] = useState({ avgRating: 0, totalReviews: 0, latestReview: null as any });
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
+        setFetchError(null);
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
@@ -65,17 +67,21 @@ export default function BusinessDashboardPage() {
                     
                     setBookings(bookingData || []);
 
-                    // 4. Fetch Employees linked to this User UID (matching RLS policy)
-                    const { data: empData, error: empError } = await supabase
-                        .from('employees')
-                        .select('*')
-                        .eq('business_id', userId)
-                        .order('name');
-                    
-                    if (empError) {
-                        console.error("Dashboard staff fetch error:", empError);
+                    // 4. Fetch Employees with Error Detection
+                    try {
+                        const { data: empData, error: empError } = await supabase
+                            .from('employees')
+                            .select('*')
+                            .eq('business_id', userId)
+                            .order('name');
+                        
+                        if (empError) throw empError;
+                        setEmployees(empData || []);
+                    } catch (err: any) {
+                        const timestamp = new Date().toISOString();
+                        console.error(`[${timestamp}] Employee Fetch Detector:`, err);
+                        setFetchError("Unable to fetch employees. Please check database connection.");
                     }
-                    setEmployees(empData || []);
                 }
             }
         } catch (error) {
@@ -276,7 +282,15 @@ export default function BusinessDashboardPage() {
                             </Button>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {employees.length > 0 ? (
+                            {fetchError ? (
+                                <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20 text-center space-y-2">
+                                    <AlertTriangle className="h-6 w-6 text-destructive mx-auto" />
+                                    <p className="text-xs font-bold text-destructive">{fetchError}</p>
+                                    <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={fetchData}>
+                                        Retry Connection
+                                    </Button>
+                                </div>
+                            ) : employees.length > 0 ? (
                                 employees.slice(0, 5).map(emp => (
                                     <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
                                         <Avatar className="h-10 w-10 border shadow-sm">
