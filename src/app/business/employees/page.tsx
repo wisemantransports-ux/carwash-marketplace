@@ -48,9 +48,10 @@ export default function EmployeeRegistryPage() {
                 return;
             }
 
-            // Diagnostic: Explicit fetch for logging
-            console.log(`[${new Date().toISOString()}] Fetching staff for business_id: ${user.id}`);
+            // Diagnostic Log for Checklist #2 & #3
+            console.log(`[${new Date().toISOString()}] Checklist Check: Fetching staff for business_id: ${user.id}`);
 
+            // Fetch directly aligned with RLS: USING (business_id = auth.uid())
             const { data: empData, error: empError } = await supabase
                 .from('employees')
                 .select('*')
@@ -59,9 +60,15 @@ export default function EmployeeRegistryPage() {
             
             if (empError) throw empError;
             
+            // Checklist #6: Handle empty list
             setEmployees(empData || []);
         } catch (error: any) {
-            console.error(`[${new Date().toISOString()}] Registry Fetch Failure:`, error);
+            console.error(`[${new Date().toISOString()}] Checklist Error - Fetch Failure:`, {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                timestamp: new Date().toISOString()
+            });
             setFetchError("Unable to fetch employees. Please check database connection or RLS policies.");
             toast({ 
                 variant: 'destructive', 
@@ -108,7 +115,7 @@ export default function EmployeeRegistryPage() {
         setSubmitting(true);
         const tempId = crypto.randomUUID();
         
-        // Optimistic Update: Show entry immediately in UI
+        // Checklist #4: Optimistic Update - Show entry immediately
         const tempEmployee: Employee = {
             id: tempId,
             business_id: user.id,
@@ -123,9 +130,10 @@ export default function EmployeeRegistryPage() {
         try {
             let uploadedImageUrl = null;
 
+            // Checklist #5: Upload to business-assets/employees/{user.id}/
             if (imageFile) {
                 const fileExt = imageFile.name.split('.').pop();
-                const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+                const fileName = `${Date.now()}.${fileExt}`;
                 const { error: uploadError } = await supabase.storage
                     .from('business-assets')
                     .upload(`employees/${user.id}/${fileName}`, imageFile, {
@@ -142,6 +150,7 @@ export default function EmployeeRegistryPage() {
                 uploadedImageUrl = publicUrl;
             }
 
+            // Checklist #3 & #4: Insert row with business_id = user.id
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
@@ -155,21 +164,23 @@ export default function EmployeeRegistryPage() {
             
             if (insertError) throw insertError;
 
-            // Reset form and close dialog
+            // Reset form and close
             setName(''); setPhone(''); setIdReference('');
             setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
             
             toast({ title: "Employee Registered", description: "The record is now permanently stored." });
-            await fetchData(); // Final persistent sync from database
+            
+            // Checklist #4: Re-fetch to sync
+            await fetchData();
         } catch (error: any) {
-            console.error(`[${new Date().toISOString()}] Registry Insertion Failed:`, error);
+            console.error(`[${new Date().toISOString()}] Checklist Error - Insertion Failed:`, error);
             // Re-fetch to clear optimistic state if insert failed
             await fetchData();
             toast({
                 variant: 'destructive',
                 title: "Registration Error",
-                description: error.message || "Could not save to database.",
+                description: error.message || "Could not save to database. Check RLS policies.",
             });
         } finally {
             setSubmitting(false);
@@ -259,6 +270,7 @@ export default function EmployeeRegistryPage() {
                 </div>
             </div>
 
+            {/* Checklist #1 & #6: Supabase Connection Alerts */}
             {!isSupabaseConfigured && (
                 <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
@@ -316,6 +328,7 @@ export default function EmployeeRegistryPage() {
                                                 </Avatar>
                                                 <div className="flex flex-col">
                                                     <span className="font-bold">{employee.name}</span>
+                                                    {/* Optimistic State Hint */}
                                                     {employee.id.includes('-') && employee.id.length > 20 && (
                                                         <span className="text-[8px] text-primary/60 font-mono italic">Syncing...</span>
                                                     )}

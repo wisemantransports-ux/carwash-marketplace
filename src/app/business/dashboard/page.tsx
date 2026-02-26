@@ -72,7 +72,7 @@ export default function BusinessDashboardPage() {
                     
                     setBookings(bookingData || []);
 
-                    // 4. Fetch Employees (RLS compliant: business_id = user.id)
+                    // Checklist #2: Fetch Employees using user.id (Auth UID)
                     try {
                         const { data: empData, error: empError } = await supabase
                             .from('employees')
@@ -287,6 +287,7 @@ export default function BusinessDashboardPage() {
                 </div>
 
                 <div className="space-y-6">
+                    {/* Checklist integration: Team Overview */}
                     <Card className="shadow-md">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
