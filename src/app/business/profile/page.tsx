@@ -19,7 +19,7 @@ export default function BusinessProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Editable fields
+  // Editable fields managed as state
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
@@ -51,19 +51,20 @@ export default function BusinessProfilePage() {
             title: 'Load Error',
             description: 'Unable to load your profile. Please try again later.'
           });
-        } else if (!profileData) {
-          toast({
-            variant: 'info',
-            title: 'Profile Not Found',
-            description: 'No profile exists. Please create your profile first.'
-          });
-        } else {
+        } else if (profileData) {
           setProfile(profileData);
+          // Populate form fields with fetched data
           setName(profileData.name || '');
           setAddress(profileData.address || '');
           setCity(profileData.city || '');
           setType(profileData.type || 'station');
           setLogoUrl(profileData.logo_url || '');
+        } else {
+          toast({
+            variant: 'info',
+            title: 'Profile Not Found',
+            description: 'No profile exists. Please create your profile first.'
+          });
         }
       } catch (error) {
         console.error("Fatal fetch error:", error);
@@ -308,6 +309,12 @@ export default function BusinessProfilePage() {
         <div className="space-y-6">
           <ShareBusinessCard businessId={profile?.id} />
           
+          {!profile && !loading && (
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg text-orange-800 text-sm">
+              Please complete and save your profile to start using all business features.
+            </div>
+          )}
+
           <Card className="bg-muted/30 border-muted/50 overflow-hidden">
             <CardHeader className="bg-muted/50 border-b">
               <CardTitle className="text-lg">Account Status</CardTitle>
