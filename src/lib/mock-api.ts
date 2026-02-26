@@ -29,8 +29,8 @@ const services: Service[] = [
 ];
 
 const cars: Car[] = [
-    { id: 'car-1', owner_id: 'user-1', make: 'Toyota', model: 'Hilux', plate_number: 'B 123 ABC' },
-    { id: 'car-2', owner_id: 'user-1', make: 'Ford', model: 'Ranger', plate_number: 'B 789 XYZ' },
+    { id: 'car-1', owner_id: 'user-1', make: 'Toyota', model: 'Hilux' },
+    { id: 'car-2', owner_id: 'user-1', make: 'Ford', model: 'Ranger' },
 ];
 
 const employees: Employee[] = [

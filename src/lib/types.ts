@@ -24,7 +24,6 @@ export type Car = {
   owner_id: string;
   make: string;
   model: string;
-  plate_number?: string;
   make_model?: string;
 };
 

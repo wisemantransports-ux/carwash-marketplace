@@ -31,7 +31,7 @@ export default function MobileServiceTrackingPage({ params }: { params: Promise<
                 // 1. Fetch Booking
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
-                    .select('*, service:service_id(name), car:car_id(make, model, plate_number)')
+                    .select('*, service:service_id(name), car:car_id(make, model)')
                     .eq('id', bookingId)
                     .maybeSingle();
                 
@@ -196,7 +196,7 @@ export default function MobileServiceTrackingPage({ params }: { params: Promise<
                     <div className="space-y-1.5">
                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Vehicle Details</p>
                         <p className="text-sm font-bold">
-                            {booking.car?.make} {booking.car?.model} {booking.car?.plate_number ? `(${booking.car.plate_number})` : ''}
+                            {booking.car?.make} {booking.car?.model}
                         </p>
                     </div>
                     <div className="space-y-1.5">

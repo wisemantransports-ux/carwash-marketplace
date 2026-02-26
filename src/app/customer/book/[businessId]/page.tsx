@@ -248,7 +248,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                                 <SelectContent>
                                     {cars.map(car => (
                                         <SelectItem key={car.id} value={car.id}>
-                                            {car.make} {car.model}{car.plate_number ? ` (${car.plate_number})` : ''}
+                                            {car.make} {car.model}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
