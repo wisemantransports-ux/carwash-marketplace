@@ -1,19 +1,22 @@
 'use client';
 import { supabase } from "@/lib/supabase";
-import type { Booking, Business } from "@/lib/types";
+import type { Booking, Business, Employee } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck } from "lucide-react";
+import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShareBusinessCard } from "@/components/app/share-business-card";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import Link from "next/link";
 
 export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [business, setBusiness] = useState<Business | null>(null);
+    const [employees, setEmployees] = useState<Employee[]>([]);
     const [stats, setStats] = useState({ avgRating: 0, totalReviews: 0, latestReview: null as any });
     const [loading, setLoading] = useState(true);
 
@@ -35,6 +38,7 @@ export default function BusinessDashboardPage() {
                     setBusiness(biz);
                     const businessId = biz.id;
 
+                    // 1. Fetch Ratings
                     const { data: ratingsData } = await supabase
                         .from('ratings')
                         .select('*, customer:customer_id(name)')
@@ -50,6 +54,7 @@ export default function BusinessDashboardPage() {
                         });
                     }
 
+                    // 2. Fetch Bookings
                     const { data: bookingData } = await supabase
                         .from('bookings')
                         .select('*')
@@ -57,6 +62,16 @@ export default function BusinessDashboardPage() {
                         .order('booking_time', { ascending: true });
                     
                     setBookings(bookingData || []);
+
+                    // 3. Fetch Employees (Requested Section)
+                    const { data: empData } = await supabase
+                        .from('employees')
+                        .select('*')
+                        .eq('business_id', businessId)
+                        .order('name')
+                        .limit(5);
+                    
+                    setEmployees(empData || []);
                 }
             }
         } catch (error) {
@@ -98,7 +113,7 @@ export default function BusinessDashboardPage() {
     const now = new Date();
     const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
     const trialDays = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
-    const isPlanActive = business.subscription_status === 'active' || (trialDays > 0 && business.status === 'verified');
+    const isPlanActive = business.subscription_status?.toLowerCase() === 'active' || (trialDays > 0 && business.status?.toLowerCase() === 'verified');
 
     return (
         <div className="space-y-8">
@@ -168,77 +183,123 @@ export default function BusinessDashboardPage() {
                 )}
             </div>
 
-            <Tabs defaultValue="requests" className="w-full">
-                <TabsList className="mb-8">
-                    <TabsTrigger value="requests">New Requests ({requested.length})</TabsTrigger>
-                    <TabsTrigger value="active">In Progress ({active.length})</TabsTrigger>
-                </TabsList>
+            <div className="grid gap-8 lg:grid-cols-3">
+                <div className="lg:col-span-2 space-y-8">
+                    <Tabs defaultValue="requests" className="w-full">
+                        <TabsList className="mb-8">
+                            <TabsTrigger value="requests">New Requests ({requested.length})</TabsTrigger>
+                            <TabsTrigger value="active">In Progress ({active.length})</TabsTrigger>
+                        </TabsList>
 
-                <TabsContent value="requests" className="space-y-6">
-                    {requested.length > 0 ? (
-                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                            {requested.map(booking => (
-                                <Card key={booking.id}>
-                                    <CardHeader>
-                                        <CardTitle className="text-lg">#{booking.id.slice(-4)}</CardTitle>
-                                        <CardDescription className="flex items-center gap-2">
-                                            <Calendar className="h-3 w-3" /> {new Date(booking.booking_time).toLocaleDateString()}
-                                            <Clock className="h-3 w-3" /> {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="flex items-center gap-2 text-sm">
-                                            <Car className="h-4 w-4 text-muted-foreground" />
-                                            <span className="font-medium">Pula {booking.price} Wash</span>
-                                        </div>
-                                    </CardContent>
-                                    <CardFooter className="flex gap-2">
-                                        <Button className="flex-1" onClick={() => handleAction(booking.id, 'accepted')}>
-                                            <CheckCircle2 className="mr-2 h-4 w-4" /> Accept
-                                        </Button>
-                                        <Button variant="outline" className="flex-1 text-destructive" onClick={() => handleAction(booking.id, 'rejected')}>
-                                            <XCircle className="mr-2 h-4 w-4" /> Reject
-                                        </Button>
-                                    </CardFooter>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl bg-muted/20 space-y-6 text-center">
-                            <p className="text-muted-foreground font-medium italic">No new booking requests at this time.</p>
-                        </div>
-                    )}
-                </TabsContent>
+                        <TabsContent value="requests" className="space-y-6">
+                            {requested.length > 0 ? (
+                                <div className="grid gap-6 md:grid-cols-2">
+                                    {requested.map(booking => (
+                                        <Card key={booking.id}>
+                                            <CardHeader>
+                                                <CardTitle className="text-lg">#{booking.id.slice(-4)}</CardTitle>
+                                                <CardDescription className="flex items-center gap-2">
+                                                    <Calendar className="h-3 w-3" /> {new Date(booking.booking_time).toLocaleDateString()}
+                                                    <Clock className="h-3 w-3" /> {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <Car className="h-4 w-4 text-muted-foreground" />
+                                                    <span className="font-medium">Pula {booking.price} Wash</span>
+                                                </div>
+                                            </CardContent>
+                                            <CardFooter className="flex gap-2">
+                                                <Button className="flex-1" onClick={() => handleAction(booking.id, 'accepted')}>
+                                                    <CheckCircle2 className="mr-2 h-4 w-4" /> Accept
+                                                </Button>
+                                                <Button variant="outline" className="flex-1 text-destructive" onClick={() => handleAction(booking.id, 'rejected')}>
+                                                    <XCircle className="mr-2 h-4 w-4" /> Reject
+                                                </Button>
+                                            </CardFooter>
+                                        </Card>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl bg-muted/20 text-center">
+                                    <p className="text-muted-foreground font-medium italic">No new booking requests.</p>
+                                </div>
+                            )}
+                        </TabsContent>
 
-                <TabsContent value="active" className="space-y-6">
-                    {active.length > 0 ? (
-                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                            {active.map(booking => (
-                                <Card key={booking.id} className="border-primary/50">
-                                    <CardHeader>
-                                        <div className="flex justify-between items-start">
-                                            <CardTitle className="text-lg">#{booking.id.slice(-4)}</CardTitle>
-                                            <Badge>ACCEPTED</Badge>
+                        <TabsContent value="active" className="space-y-6">
+                            {active.length > 0 ? (
+                                <div className="grid gap-6 md:grid-cols-2">
+                                    {active.map(booking => (
+                                        <Card key={booking.id} className="border-primary/50">
+                                            <CardHeader>
+                                                <div className="flex justify-between items-start">
+                                                    <CardTitle className="text-lg">#{booking.id.slice(-4)}</CardTitle>
+                                                    <Badge>ACCEPTED</Badge>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                                <p className="text-sm font-bold text-primary italic">Invoice Issued</p>
+                                            </CardContent>
+                                            <CardFooter>
+                                                <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleAction(booking.id, 'completed')}>
+                                                    <PlayCircle className="mr-2 h-4 w-4" /> Mark Completed
+                                                </Button>
+                                            </CardFooter>
+                                        </Card>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20">
+                                    <p className="text-muted-foreground">No active wash operations.</p>
+                                </div>
+                            )}
+                        </TabsContent>
+                    </Tabs>
+                </div>
+
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                <Users className="h-5 w-5 text-primary" /> Your Team
+                            </CardTitle>
+                            <Button variant="ghost" size="sm" className="h-8 text-xs text-primary" asChild>
+                                <Link href="/business/employees">View All</Link>
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {employees.length > 0 ? (
+                                employees.map(emp => (
+                                    <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
+                                        <Avatar className="h-10 w-10 border shadow-sm">
+                                            <AvatarImage src={emp.image_url} alt={emp.name} className="object-cover" />
+                                            <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                                {emp.name.charAt(0)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 overflow-hidden">
+                                            <p className="text-sm font-bold truncate">{emp.name}</p>
+                                            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                                <Phone className="h-2.5 w-2.5" /> {emp.phone}
+                                            </p>
                                         </div>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <p className="text-sm font-bold text-primary italic">Invoice Issued</p>
-                                    </CardContent>
-                                    <CardFooter>
-                                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleAction(booking.id, 'completed')}>
-                                            <PlayCircle className="mr-2 h-4 w-4" /> Mark Completed
-                                        </Button>
-                                    </CardFooter>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20">
-                            <p className="text-muted-foreground">No active wash operations currently in progress.</p>
-                        </div>
-                    )}
-                </TabsContent>
-            </Tabs>
+                                        <Badge variant="outline" className="text-[8px] h-5 bg-green-50 text-green-700 border-green-200">VERIFIED</Badge>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-10 bg-muted/10 rounded-xl border border-dashed">
+                                    <Users className="h-8 w-8 mx-auto text-muted-foreground opacity-20 mb-2" />
+                                    <p className="text-xs text-muted-foreground italic">No staff registered yet.</p>
+                                    <Button variant="link" size="sm" asChild className="text-[10px] h-6">
+                                        <Link href="/business/employees">Register Now</Link>
+                                    </Button>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
         </div>
     );
 }

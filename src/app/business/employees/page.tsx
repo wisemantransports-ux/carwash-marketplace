@@ -50,6 +50,7 @@ export default function EmployeeRegistryPage() {
             }
             
             if (bizData) {
+                console.log("Registry: Fetching employees for Business ID:", bizData.id);
                 setBusiness(bizData);
                 
                 // 2. Fetch all employees for this business
@@ -63,14 +64,18 @@ export default function EmployeeRegistryPage() {
                     console.error("Fetch employees error:", empError);
                     throw empError;
                 }
+                
+                console.log("Registry: Found employees count:", empData?.length || 0);
                 setEmployees(empData || []);
+            } else {
+                console.warn("Registry: No business profile found for this user.");
             }
         } catch (error: any) {
             console.error("Registry load error detail:", error);
             toast({ 
                 variant: 'destructive', 
                 title: 'Load Error', 
-                description: 'Could not load your staff registry. Please refresh the page.' 
+                description: error.message || 'Could not load registry.' 
             });
         } finally {
             setLoading(false);
@@ -103,7 +108,6 @@ export default function EmployeeRegistryPage() {
             return;
         }
 
-        // Validation
         if (!name.trim() || !phone.trim() || !idReference.trim()) {
             toast({ variant: 'destructive', title: 'Missing Info', description: 'Full Name, Phone, and ID are required.' });
             return;
@@ -113,7 +117,6 @@ export default function EmployeeRegistryPage() {
         try {
             let uploadedImageUrl = null;
 
-            // 1. Upload Photo if selected
             if (imageFile) {
                 const fileExt = imageFile.name.split('.').pop();
                 const fileName = `${business.id}/${Date.now()}.${fileExt}`;
@@ -124,10 +127,7 @@ export default function EmployeeRegistryPage() {
                         upsert: true
                     });
                 
-                if (uploadError) {
-                    console.error("Photo upload error:", uploadError);
-                    throw new Error("Failed to upload staff photo.");
-                }
+                if (uploadError) throw uploadError;
 
                 const { data: { publicUrl } } = supabase.storage
                     .from('business-assets')
@@ -136,7 +136,6 @@ export default function EmployeeRegistryPage() {
                 uploadedImageUrl = publicUrl;
             }
 
-            // 2. Insert into database
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
@@ -153,7 +152,6 @@ export default function EmployeeRegistryPage() {
                 throw insertError;
             }
 
-            // 3. Reset form and immediately refetch
             setName('');
             setPhone('');
             setIdReference('');
@@ -161,18 +159,14 @@ export default function EmployeeRegistryPage() {
             setImagePreview(null);
             setIsAddOpen(false);
             
-            toast({
-                title: "Employee Registered",
-                description: `${name} has been added to your verified team.`,
-            });
-            
+            toast({ title: "Employee Registered", description: `${name} has been added.` });
             await fetchData();
         } catch (error: any) {
             console.error("Employee registration failed:", error);
             toast({
                 variant: 'destructive',
                 title: "Registration Failed",
-                description: error.message || "An unexpected error occurred. Please check your connection and try again.",
+                description: error.message || "Please check your connection.",
             });
         } finally {
             setSubmitting(false);
@@ -181,24 +175,12 @@ export default function EmployeeRegistryPage() {
 
     const handleDeleteEmployee = async (id: string, empName: string) => {
         try {
-            const { error } = await supabase
-                .from('employees')
-                .delete()
-                .eq('id', id);
-            
-            if (error) {
-                console.error("Delete error:", error);
-                throw error;
-            }
-            
-            toast({ title: 'Employee Removed', description: `${empName} has been removed from your registry.` });
+            const { error } = await supabase.from('employees').delete().eq('id', id);
+            if (error) throw error;
+            toast({ title: 'Employee Removed', description: `${empName} has been removed.` });
             await fetchData();
         } catch (error: any) {
-            toast({ 
-                variant: 'destructive', 
-                title: 'Removal Failed', 
-                description: 'Could not remove staff member. Please try again.' 
-            });
+            toast({ variant: 'destructive', title: 'Removal Failed', description: 'Could not remove staff member.' });
         }
     };
 
@@ -207,7 +189,7 @@ export default function EmployeeRegistryPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-primary">Employee Registry</h1>
-                    <p className="text-muted-foreground">Manage your verified team members for platform accountability.</p>
+                    <p className="text-muted-foreground">Manage your verified team members.</p>
                 </div>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                     <DialogTrigger asChild>
@@ -218,9 +200,7 @@ export default function EmployeeRegistryPage() {
                     <DialogContent className="max-w-md">
                         <DialogHeader>
                             <DialogTitle>Register New Staff</DialogTitle>
-                            <DialogDescription>
-                                Enter verified details. Omang/ID is required for safety and insurance.
-                            </DialogDescription>
+                            <DialogDescription>Omang/ID is required for safety and insurance.</DialogDescription>
                         </DialogHeader>
                         <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
                             <div className="flex justify-center mb-4">
@@ -337,7 +317,7 @@ export default function EmployeeRegistryPage() {
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="font-bold text-lg">No staff registered yet</p>
-                                                <p className="text-sm">Click "Add Employee" to start building your verified team.</p>
+                                                <p className="text-sm">Employees matching your Business ID will appear here.</p>
                                             </div>
                                         </div>
                                     </TableCell>
