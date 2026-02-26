@@ -7,10 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { PlusCircle, MoreHorizontal, Loader2, AlertCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
 
 export default function ServicesManagementPage() {
     const [services, setServices] = useState<Service[]>([]);
@@ -22,31 +22,51 @@ export default function ServicesManagementPage() {
             setLoading(true);
             try {
                 const { data: { session } } = await supabase.auth.getSession();
-                if (!session?.user) return;
+                if (!session?.user) {
+                    setLoading(false);
+                    return;
+                }
 
-                // 1. Fetch Business ID
-                const { data: biz } = await supabase
+                // 1. Fetch Business Profile using owner_id = auth.uid()
+                const { data: biz, error: bizError } = await supabase
                     .from('businesses')
                     .select('*')
                     .eq('owner_id', session.user.id)
                     .maybeSingle();
                 
+                if (bizError) {
+                    console.error("Business fetch error details:", bizError);
+                    throw bizError;
+                }
+
                 if (biz) {
                     setBusiness(biz as Business);
                     
-                    // 2. Fetch Services for this business
-                    const { data, error } = await supabase
+                    // 2. Fetch Services for this business using the correct foreign key business_id
+                    const { data, error: servicesError } = await supabase
                         .from('services')
                         .select('*')
                         .eq('business_id', biz.id)
                         .order('created_at', { ascending: false });
 
-                    if (error) throw error;
-                    if (data) setServices(data as Service[]);
+                    if (servicesError) {
+                        console.error("Services fetch error details:", servicesError);
+                        throw servicesError;
+                    }
+                    if (data) {
+                        setServices(data as Service[]);
+                    }
+                } else {
+                    console.warn("No business profile found for this authenticated user.");
                 }
             } catch (e: any) {
-                console.error("Error fetching services:", e);
-                toast({ variant: 'destructive', title: 'Fetch Error', description: 'Could not load your services catalog.' });
+                // Improved error logging to capture full context
+                console.error("Detailed Fetch Error:", e?.message || e, e);
+                toast({ 
+                    variant: 'destructive', 
+                    title: 'Fetch Error', 
+                    description: e?.message || 'Could not load your services catalog. Please ensure your profile is set up and verified.' 
+                });
             } finally {
                 setLoading(false);
             }
@@ -55,23 +75,32 @@ export default function ServicesManagementPage() {
     }, []);
 
     const handleDelete = async (id: string) => {
-        const { error } = await supabase
-            .from('services')
-            .delete()
-            .eq('id', id);
+        try {
+            const { error } = await supabase
+                .from('services')
+                .delete()
+                .eq('id', id);
 
-        if (error) {
-            toast({ variant: 'destructive', title: 'Delete Failed', description: error.message });
-        } else {
-            setServices(services.filter(s => (s as any).id !== id));
+            if (error) throw error;
+
+            setServices(services.filter(s => s.id !== id));
             toast({ title: 'Service Deleted', description: 'The service has been removed from your catalog.' });
+        } catch (e: any) {
+            console.error("Delete Error:", e);
+            toast({ variant: 'destructive', title: 'Delete Failed', description: e.message });
         }
     }
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
-    const isAccessLocked = business?.status !== 'verified' || 
-        (business?.subscriptionStatus !== 'active' && business?.subscriptionStatus !== 'payment_submitted' && new Date(business?.sub_end_date || '') < new Date());
+    // Access Logic: Check verified status and subscription/trial
+    const now = new Date();
+    const subEndDate = business?.sub_end_date ? new Date(business.sub_end_date) : null;
+    const isTrialActive = subEndDate ? subEndDate > now : false;
+    const isPaid = business?.subscriptionStatus === 'active';
+    const isVerified = business?.status === 'verified';
+    
+    const isAccessLocked = !isVerified || (!isPaid && !isTrialActive);
 
     return (
         <div className="space-y-6">
@@ -81,7 +110,7 @@ export default function ServicesManagementPage() {
                     <p className="text-muted-foreground">Manage your car wash packages and pricing.</p>
                 </div>
                 {!isAccessLocked && (
-                    <Button asChild shadow-md>
+                    <Button asChild className="shadow-md">
                         <Link href="/business/add-service">
                             <PlusCircle className="mr-2 h-4 w-4" /> Add Service
                         </Link>
@@ -90,23 +119,39 @@ export default function ServicesManagementPage() {
             </div>
 
             {isAccessLocked && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="bg-destructive/5 border-destructive/20 text-destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Action Required</AlertTitle>
-                    <AlertDescription className="flex items-center justify-between gap-4">
-                        <span>Your trial has ended or your account is not verified. Please submit payment to continue managing services.</span>
-                        <Button size="sm" variant="outline" asChild>
-                            <Link href="/business/subscription">Renew Now</Link>
-                        </Button>
+                    <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <span>
+                            {!isVerified 
+                                ? "Your account is awaiting admin verification. Access will be granted once verified." 
+                                : "Your trial has ended. Please submit payment to continue managing services."}
+                        </span>
+                        {isVerified && (
+                            <Button size="sm" variant="outline" asChild className="border-destructive/20 hover:bg-destructive/10">
+                                <Link href="/business/subscription">Renew Now</Link>
+                            </Button>
+                        )}
                     </AlertDescription>
                 </Alert>
             )}
 
-            <Card className={cn(isAccessLocked && "opacity-50 pointer-events-none")}>
+            {!business && !loading && (
+                <Alert className="bg-orange-50 border-orange-200 text-orange-800">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Profile Incomplete</AlertTitle>
+                    <AlertDescription>
+                        We couldn't find a business profile linked to your account. Please visit the Profile page to complete your registration.
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            <Card className={cn("overflow-hidden", isAccessLocked && "opacity-60 pointer-events-none")}>
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader>
-                            <TableRow>
+                            <TableRow className="bg-muted/50">
                                 <TableHead>Service Name</TableHead>
                                 <TableHead>Description</TableHead>
                                 <TableHead>Duration</TableHead>
@@ -117,8 +162,8 @@ export default function ServicesManagementPage() {
                         <TableBody>
                             {services.length > 0 ? (
                                 services.map(service => (
-                                    <TableRow key={(service as any).id}>
-                                        <TableCell className="font-medium">{service.name}</TableCell>
+                                    <TableRow key={service.id} className="hover:bg-muted/30 transition-colors">
+                                        <TableCell className="font-bold text-primary">{service.name}</TableCell>
                                         <TableCell className="text-muted-foreground max-w-xs truncate">{service.description}</TableCell>
                                         <TableCell>{service.duration} min</TableCell>
                                         <TableCell className="font-bold">{service.currency_code} {service.price.toFixed(2)}</TableCell>
@@ -129,8 +174,10 @@ export default function ServicesManagementPage() {
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleDelete((service as any).id)} className="text-destructive">Remove Service</DropdownMenuItem>
+                                                <DropdownMenuContent align="end" className="w-48 shadow-lg border-2">
+                                                    <DropdownMenuItem onClick={() => handleDelete(service.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                        Remove Service
+                                                    </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
@@ -138,8 +185,8 @@ export default function ServicesManagementPage() {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">
-                                        No services found. Click &quot;Add Service&quot; to get started.
+                                    <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
+                                        No services found. Click "Add Service" to get started.
                                     </TableCell>
                                 </TableRow>
                             )}
