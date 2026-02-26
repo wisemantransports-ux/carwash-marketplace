@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -39,6 +38,9 @@ export default function EmployeeRegistryPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
+            // Diagnostic Log: Verify which ID we are searching for
+            console.log(`[${new Date().toISOString()}] Fetching staff for business_id: ${user.id}`);
+
             const { data: empData, error: empError } = await supabase
                 .from('employees')
                 .select('*')
@@ -50,12 +52,12 @@ export default function EmployeeRegistryPage() {
             setEmployees(empData || []);
         } catch (error: any) {
             const timestamp = new Date().toISOString();
-            console.error(`[${timestamp}] Registry Detector Failure:`, error);
-            setFetchError("Unable to fetch employees. Please check database connection.");
+            console.error(`[${timestamp}] Registry Fetch Failure:`, error);
+            setFetchError("Unable to fetch employees. Please check database connection or RLS policies.");
             toast({ 
                 variant: 'destructive', 
-                title: 'Connection Issue', 
-                description: 'We had trouble reaching the database. Results may be outdated.' 
+                title: 'Database Alert', 
+                description: 'We had trouble reaching your staff list. Check browser console for details.' 
             });
         } finally {
             setLoading(false);
@@ -97,7 +99,7 @@ export default function EmployeeRegistryPage() {
         setSubmitting(true);
         const tempId = crypto.randomUUID();
         
-        // Optimistic Update: Add to UI immediately
+        // Optimistic Update: Show entry immediately in UI
         const tempEmployee: Employee = {
             id: tempId,
             business_id: user.id,
@@ -144,19 +146,15 @@ export default function EmployeeRegistryPage() {
             
             if (insertError) throw insertError;
 
-            // Reset form
+            // Reset form and close dialog
             setName(''); setPhone(''); setIdReference('');
             setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
             
-            toast({ title: "Employee Registered", description: "Team list updated successfully." });
-            await fetchData(); // Final sync
+            toast({ title: "Employee Registered", description: "Team list updated in database." });
+            await fetchData(); // Final persistent sync
         } catch (error: any) {
-            const ts = new Date().toISOString();
-            console.error(`[${ts}] Registry Insertion Failed:`, error);
-            
-            // Revert optimistic update if persistent fetch fails later, 
-            // but keep it for now so user sees their work
+            console.error(`[${new Date().toISOString()}] Registry Insertion Failed:`, error);
             toast({
                 variant: 'destructive',
                 title: "Registration Error",
@@ -258,7 +256,7 @@ export default function EmployeeRegistryPage() {
                             <p className="text-sm font-bold text-destructive">Database Connection Alert</p>
                             <p className="text-xs text-destructive/80">{fetchError}</p>
                         </div>
-                        <Button variant="outline" size="sm" className="h-8" onClick={fetchData}>Retry</Button>
+                        <Button variant="outline" size="sm" className="h-8" onClick={fetchData}>Retry Sync</Button>
                     </CardContent>
                 </Card>
             )}
@@ -298,7 +296,7 @@ export default function EmployeeRegistryPage() {
                                                 <div className="flex flex-col">
                                                     <span className="font-bold">{employee.name}</span>
                                                     {employee.id.includes('-') && employee.id.length > 20 && (
-                                                        <span className="text-[8px] text-primary/60 font-mono italic">Optimistic Sync</span>
+                                                        <span className="text-[8px] text-primary/60 font-mono italic">Syncing...</span>
                                                     )}
                                                 </div>
                                             </div>
@@ -336,8 +334,8 @@ export default function EmployeeRegistryPage() {
                                                 <ShieldCheck className="h-12 w-12 opacity-10" />
                                             </div>
                                             <div className="space-y-1">
-                                                <p className="font-bold text-lg">No staff registered yet</p>
-                                                <p className="text-sm">Verified employees linked to your business ID will appear here.</p>
+                                                <p className="font-bold text-lg">No staff found</p>
+                                                <p className="text-sm">Employees linked to your business ID ({employees.length === 0 ? 'Empty' : 'Checking...'}) will appear here.</p>
                                             </div>
                                         </div>
                                     </TableCell>

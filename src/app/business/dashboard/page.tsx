@@ -1,4 +1,3 @@
-
 'use client';
 import { supabase } from "@/lib/supabase";
 import type { Booking, Business, Employee } from "@/lib/types";
@@ -79,7 +78,7 @@ export default function BusinessDashboardPage() {
                         setEmployees(empData || []);
                     } catch (err: any) {
                         const timestamp = new Date().toISOString();
-                        console.error(`[${timestamp}] Employee Fetch Detector:`, err);
+                        console.error(`[${timestamp}] Dashboard Employee Fetch Error:`, err);
                         setFetchError("Unable to fetch employees. Please check database connection.");
                     }
                 }
