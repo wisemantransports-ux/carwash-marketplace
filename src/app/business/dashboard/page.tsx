@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShareBusinessCard } from "@/components/app/share-business-card";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 
 export default function BusinessDashboardPage() {
@@ -47,12 +48,13 @@ export default function BusinessDashboardPage() {
 
                     // 2. Fetch Team (Resilient Query)
                     // We check for both Auth UID and Business Profile ID to prevent vanishing rows
-                    const { data: empData } = await supabase
+                    const { data: empData, error: empError } = await supabase
                         .from('employees')
                         .select('*')
                         .or(`business_id.eq.${user.id},business_id.eq.${biz.id}`)
                         .order('name');
                     
+                    if (empError) throw empError;
                     setEmployees(empData || []);
 
                     // 3. Fetch Ratings
