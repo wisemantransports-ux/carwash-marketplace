@@ -65,15 +65,15 @@ export default function BusinessDashboardPage() {
                     
                     setBookings(bookingData || []);
 
-                    // 4. Fetch Employees (Resilient search using Business UUID and User UID)
+                    // 4. Fetch Employees linked to this User UID (matching RLS policy)
                     const { data: empData, error: empError } = await supabase
                         .from('employees')
                         .select('*')
-                        .or(`business_id.eq.${businessId},business_id.eq.${userId}`)
+                        .eq('business_id', userId)
                         .order('name');
                     
                     if (empError) {
-                        console.error("Dashboard: Staff fetch error:", empError);
+                        console.error("Dashboard staff fetch error:", empError);
                     }
                     setEmployees(empData || []);
                 }

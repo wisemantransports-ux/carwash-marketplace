@@ -19,7 +19,6 @@ import Image from "next/image";
 
 export default function EmployeeRegistryPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
-    const [business, setBusiness] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -38,38 +37,25 @@ export default function EmployeeRegistryPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            // 1. Fetch Business Profile
-            const { data: bizData, error: bizError } = await supabase
-                .from('businesses')
-                .select('id, name')
-                .eq('owner_id', user.id)
-                .maybeSingle();
+            // Fetch Employees using the User UID as the business_id (matching RLS policy)
+            const { data: empData, error: empError } = await supabase
+                .from('employees')
+                .select('*')
+                .eq('business_id', user.id)
+                .order('name');
             
-            if (bizError) throw bizError;
-            
-            if (bizData) {
-                setBusiness(bizData);
-                
-                // 2. Fetch Employees using Unified ID Strategy
-                const { data: empData, error: empError } = await supabase
-                    .from('employees')
-                    .select('*')
-                    .or(`business_id.eq.${bizData.id},business_id.eq.${user.id}`)
-                    .order('name');
-                
-                if (empError) {
-                    console.error("Registry: fetch error:", empError);
-                    throw empError;
-                }
-                
-                setEmployees(empData || []);
+            if (empError) {
+                console.error("Registry fetch error:", empError);
+                throw empError;
             }
+            
+            console.log(`Fetched ${empData?.length || 0} employees for user: ${user.id}`);
+            setEmployees(empData || []);
         } catch (error: any) {
-            console.error("Registry: load error:", error);
             toast({ 
                 variant: 'destructive', 
                 title: 'Load Error', 
-                description: error.message || 'Could not load registry.' 
+                description: 'Could not load your staff registry.' 
             });
         } finally {
             setLoading(false);
@@ -97,8 +83,9 @@ export default function EmployeeRegistryPage() {
     const handleAddEmployee = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!business) {
-            toast({ variant: 'destructive', title: 'Action Denied', description: 'Business profile not found.' });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'Session expired.' });
             return;
         }
 
@@ -113,7 +100,7 @@ export default function EmployeeRegistryPage() {
 
             if (imageFile) {
                 const fileExt = imageFile.name.split('.').pop();
-                const fileName = `${business.id}/${Date.now()}.${fileExt}`;
+                const fileName = `${user.id}/${Date.now()}.${fileExt}`;
                 const { error: uploadError } = await supabase.storage
                     .from('business-assets')
                     .upload(`employees/${fileName}`, imageFile, {
@@ -134,7 +121,7 @@ export default function EmployeeRegistryPage() {
                 .from('employees')
                 .insert({
                     id: crypto.randomUUID(),
-                    business_id: business.id,
+                    business_id: user.id, // Use User UID to match RLS business_id = auth.uid()
                     name: name.trim(),
                     phone: phone.trim(),
                     id_reference: idReference.trim(),
@@ -142,7 +129,7 @@ export default function EmployeeRegistryPage() {
                 });
             
             if (insertError) {
-                console.error("Registry: insert error details:", insertError);
+                console.error("Employee insertion error:", insertError);
                 throw insertError;
             }
 
@@ -164,7 +151,7 @@ export default function EmployeeRegistryPage() {
         }
     };
 
-    const handleDeleteEmployee = async (id: string, empName: string) => {
+    const handleDeleteEmployee = async (id: string) => {
         try {
             const { error } = await supabase.from('employees').delete().eq('id', id);
             if (error) throw error;
@@ -296,7 +283,7 @@ export default function EmployeeRegistryPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48 shadow-xl border-2">
-                                                    <DropdownMenuItem onClick={() => handleDeleteEmployee(employee.id, employee.name)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                    <DropdownMenuItem onClick={() => handleDeleteEmployee(employee.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                         <Trash2 className="mr-2 h-4 w-4" /> Remove from Team
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -313,7 +300,7 @@ export default function EmployeeRegistryPage() {
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="font-bold text-lg">No staff registered yet</p>
-                                                <p className="text-sm">Verified employees linked to your business will appear here.</p>
+                                                <p className="text-sm">Verified employees linked to your business ID will appear here.</p>
                                             </div>
                                         </div>
                                     </TableCell>
