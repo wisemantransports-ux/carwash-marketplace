@@ -1,10 +1,9 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, MapPin, Star, ShieldCheck, UserCheck, TrendingUp, XCircle } from "lucide-react";
+import { CheckCircle2, MapPin, Star, ShieldCheck, UserCheck, TrendingUp, XCircle, Store } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -16,13 +15,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 function BusinessCard({ business }: { business: Business }) {
   return (
     <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50">
-      <div className="relative h-48 w-full group overflow-hidden">
-        <Image
-          src={business.imageUrl}
-          alt={business.name}
-          fill
-          className="object-cover transition-transform duration-500 group-hover:scale-110"
-        />
+      <div className="relative h-48 w-full group overflow-hidden bg-muted">
+        {business.logo_url ? (
+          <Image
+            src={business.logo_url}
+            alt={business.name}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-110"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center text-muted-foreground opacity-20">
+            <Store className="h-12 w-12" />
+          </div>
+        )}
         <div className="absolute top-2 right-2">
             <Badge variant={business.type === 'station' ? 'secondary' : 'default'} className="backdrop-blur-md bg-white/80 text-black">
                 {business.type.charAt(0).toUpperCase() + business.type.slice(1)}
@@ -44,7 +49,7 @@ function BusinessCard({ business }: { business: Business }) {
             ))}
           </div>
           <span className="text-xs font-bold">{business.rating}</span>
-          <span className="text-[10px] text-muted-foreground">({business.reviewCount} reviews)</span>
+          <span className="text-[10px] text-muted-foreground">({business.review_count} reviews)</span>
         </div>
       </CardContent>
       <CardFooter className="pt-0">
@@ -124,7 +129,7 @@ export default function Home() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
              <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">CWM</div>
-            <span className="text-xl font-bold text-primary tracking-tight text-nowrap">Carwash Marketplace</span>
+            <span className="font-bold text-primary tracking-tight text-nowrap">Carwash Marketplace</span>
           </div>
           <div className="hidden md:flex items-center gap-6">
             <Link href="#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">How it Works</Link>

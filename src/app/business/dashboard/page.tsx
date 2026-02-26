@@ -48,7 +48,7 @@ export default function BusinessDashboardPage() {
                     const biz = bizData as Business;
                     setBusiness(biz);
 
-                    // 2. Fetch Team (Strict RLS filtering)
+                    // 2. Fetch Team (Strict RLS filtering using Auth UID as business_id)
                     const { data: empData, error: empError } = await supabase
                         .from('employees')
                         .select('*')
@@ -87,7 +87,7 @@ export default function BusinessDashboardPage() {
             }
         } catch (error: any) {
             console.error("Dashboard Sync Error:", error);
-            setFetchError("Unable to fetch data. Please check database connection.");
+            setFetchError("Unable to fetch employees. Please check database connection.");
         } finally {
             setLoading(false);
         }
@@ -134,7 +134,7 @@ export default function BusinessDashboardPage() {
             {fetchError && (
                 <Alert variant="destructive" className="border-destructive/20 bg-destructive/5">
                     <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>Sync Issue</AlertTitle>
+                    <AlertTitle>Connection Alert</AlertTitle>
                     <AlertDescription>{fetchError}</AlertDescription>
                 </Alert>
             )}

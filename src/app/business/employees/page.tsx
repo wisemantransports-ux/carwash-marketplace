@@ -50,7 +50,7 @@ export default function EmployeeRegistryPage() {
 
             console.log('Logged-in UID:', user.id);
 
-            // Strict RLS-compliant fetch
+            // Strict RLS-compliant fetch using Auth UID as business_id
             const { data, error } = await supabase
                 .from('employees')
                 .select('*')
@@ -109,7 +109,7 @@ export default function EmployeeRegistryPage() {
 
         setSubmitting(true);
         
-        // 1. Optimistic Update: Add to UI immediately
+        // 1. Optimistic Update: Add to UI immediately to prevent "vanishing" UI
         const tempId = crypto.randomUUID();
         const optimisticEmployee: Employee = {
             id: tempId,
@@ -161,7 +161,7 @@ export default function EmployeeRegistryPage() {
             
             toast({ title: "Employee Registered", description: "Staff added to team successfully." });
             
-            // 3. Persistent Sync: Re-fetch to confirm server state
+            // 3. Persistent Sync: Re-fetch to confirm server state and overwrite optimistic state correctly
             await fetchData();
         } catch (error: any) {
             console.error(`[ERROR] Registration Failed:`, error);
