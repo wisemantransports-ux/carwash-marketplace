@@ -19,7 +19,7 @@ export default function CarManagementPage() {
     const [isAdding, setIsAdding] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    // Form state: Only Make and Model are required
+    // Form state: Map directly to schema columns
     const [make, setMake] = useState('');
     const [model, setModel] = useState('');
 
@@ -54,13 +54,11 @@ export default function CarManagementPage() {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             
-            // Inserting with only make and model
+            // Map directly to DB columns: make and model. Omit 'year'.
             const { error } = await supabase.from('cars').insert({
                 owner_id: session?.user.id,
                 make: make.trim(),
-                model: model.trim(),
-                year: null,
-                plate_number: null
+                model: model.trim()
             });
             
             if (error) throw error;

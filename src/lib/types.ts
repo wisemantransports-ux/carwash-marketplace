@@ -21,11 +21,11 @@ export type User = {
 
 export type Car = {
   id: string;
-  userId: string;
+  owner_id: string;
   make: string;
   model: string;
-  year: number;
-  licensePlate: string;
+  plate_number?: string;
+  make_model?: string;
 };
 
 export type Service = {
