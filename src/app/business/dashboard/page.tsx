@@ -2,23 +2,20 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import type { Booking, Business, Employee } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw, AlertTriangle, AlertCircle } from "lucide-react";
+import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, Star, MessageCircle, ShieldCheck, RefreshCw, AlertTriangle, AlertCircle, User, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShareBusinessCard } from "@/components/app/share-business-card";
-import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 export default function BusinessDashboardPage() {
-    const [bookings, setBookings] = useState<Booking[]>([]);
-    const [business, setBusiness] = useState<Business | null>(null);
-    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [bookings, setBookings] = useState<any[]>([]);
+    const [business, setBusiness] = useState<any>(null);
     const [stats, setStats] = useState({ avgRating: 0, totalReviews: 0, latestReview: null as any });
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
@@ -34,60 +31,65 @@ export default function BusinessDashboardPage() {
         setFetchError(null);
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                console.log('Logged-in UID:', user.id);
+            if (!user) {
+                setLoading(false);
+                return;
+            }
 
-                // 1. Fetch Business Profile
-                const { data: bizData } = await supabase
-                    .from('businesses')
-                    .select('id, owner_id, name, type, status, subscription_status, subscription_plan, sub_end_date')
-                    .eq('owner_id', user.id)
-                    .maybeSingle();
+            // 1. Fetch Business Profile to get business_id
+            const { data: bizData, error: bizError } = await supabase
+                .from('businesses')
+                .select('*')
+                .eq('owner_id', user.id)
+                .maybeSingle();
+            
+            if (bizError) throw bizError;
+            if (bizData) {
+                setBusiness(bizData);
+
+                // 2. Fetch Bookings with requested schema and joins
+                const { data: bookingData, error: bookingError } = await supabase
+                    .from('bookings')
+                    .select(`
+                        id,
+                        customer_id,
+                        service_id,
+                        car_id,
+                        staff_id,
+                        booking_time,
+                        status,
+                        mobile_status,
+                        customer:customer_id ( name ),
+                        service:service_id ( name ),
+                        car:car_id ( make, model ),
+                        staff:staff_id ( name )
+                    `)
+                    .eq('business_id', bizData.id)
+                    .order('booking_time', { ascending: true });
                 
-                if (bizData) {
-                    const biz = bizData as Business;
-                    setBusiness(biz);
+                if (bookingError) throw bookingError;
+                setBookings(bookingData || []);
 
-                    // 2. Resilient Team Fetch (User UID or Business UUID)
-                    const { data: empData, error: empError } = await supabase
-                        .from('employees')
-                        .select('*')
-                        .or(`business_id.eq.${user.id},business_id.eq.${biz.id}`)
-                        .order('name');
-                    
-                    if (empError) throw empError;
-                    console.log('Number of employees fetched:', empData?.length ?? 0);
-                    setEmployees(empData || []);
+                // 3. Fetch Ratings for summary
+                const { data: ratingsData } = await supabase
+                    .from('ratings')
+                    .select('*, customer:customer_id(name)')
+                    .eq('business_id', bizData.id)
+                    .order('created_at', { ascending: false });
 
-                    // 3. Fetch Ratings
-                    const { data: ratingsData } = await supabase
-                        .from('ratings')
-                        .select('*, customer:customer_id(name)')
-                        .eq('business_id', biz.id)
-                        .order('created_at', { ascending: false });
-
-                    if (ratingsData && ratingsData.length > 0) {
-                        const avg = ratingsData.reduce((acc, curr) => acc + curr.rating, 0) / ratingsData.length;
-                        setStats({
-                            avgRating: avg,
-                            totalReviews: ratingsData.length,
-                            latestReview: ratingsData[0]
-                        });
-                    }
-
-                    // 4. Fetch Bookings
-                    const { data: bookingData } = await supabase
-                        .from('bookings')
-                        .select('*')
-                        .eq('business_id', biz.id)
-                        .order('booking_time', { ascending: true });
-                    
-                    setBookings(bookingData || []);
+                if (ratingsData && ratingsData.length > 0) {
+                    const avg = ratingsData.reduce((acc, curr) => acc + curr.rating, 0) / ratingsData.length;
+                    setStats({
+                        avgRating: avg,
+                        totalReviews: ratingsData.length,
+                        latestReview: ratingsData[0]
+                    });
                 }
             }
         } catch (error: any) {
-            console.error("Unable to fetch employees:", error);
-            setFetchError("Unable to fetch employees. Please check database connection.");
+            console.error("Fetch error:", error);
+            setFetchError("Unable to fetch bookings. Check database connection.");
+            toast({ variant: 'destructive', title: 'Data Error', description: 'Unable to fetch bookings. Check database connection.' });
         } finally {
             setLoading(false);
         }
@@ -97,14 +99,29 @@ export default function BusinessDashboardPage() {
         fetchData();
     }, [fetchData]);
 
-    const handleAction = async (id: string, status: 'accepted' | 'rejected' | 'completed') => {
+    const handleCancelBooking = async (id: string) => {
         try {
-            const { error } = await supabase.from('bookings').update({ status }).eq('id', id);
-            if (error) throw error;
-            toast({ title: `Booking Updated` });
-            fetchData();
+            // Optimistic update: filter out the booking immediately
+            const previousBookings = [...bookings];
+            setBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b));
+
+            const { data, error } = await supabase
+                .from('bookings')
+                .update({ status: 'cancelled' })
+                .eq('id', id)
+                .select();
+
+            if (error) {
+                setBookings(previousBookings); // Rollback on error
+                throw error;
+            }
+
+            toast({ title: "Booking Cancelled", description: "The request status has been updated to cancelled." });
+            
+            // Refresh the full list to ensure UI is in sync with DB
+            await fetchData();
         } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
+            toast({ variant: 'destructive', title: 'Cancellation Failed', description: e.message });
         }
     };
 
@@ -112,8 +129,8 @@ export default function BusinessDashboardPage() {
     
     if (!business) return <div className="text-center py-20">Business profile not found. Please complete your profile.</div>;
 
-    const requested = bookings.filter(b => b.status === 'requested');
-    const active = bookings.filter(b => b.status === 'accepted' || b.status === 'in-progress');
+    const pendingBookings = bookings.filter(b => b.status === 'pending');
+    const cancelledHistory = bookings.filter(b => b.status === 'cancelled');
 
     return (
         <div className="space-y-8">
@@ -121,8 +138,8 @@ export default function BusinessDashboardPage() {
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-3">
                         <h1 className="text-4xl font-bold tracking-tight text-primary">{business.name}</h1>
-                        <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
-                            {(business.type || 'station').toUpperCase()}
+                        <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 uppercase">
+                            {business.type}
                         </Badge>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={fetchData}><RefreshCw className="h-4 w-4" /></Button>
                     </div>
@@ -133,7 +150,7 @@ export default function BusinessDashboardPage() {
 
             {fetchError && (
                 <Alert variant="destructive" className="border-destructive/20 bg-destructive/5">
-                    <AlertTriangle className="h-4 w-4" />
+                    <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Connection Alert</AlertTitle>
                     <AlertDescription>{fetchError}</AlertDescription>
                 </Alert>
@@ -160,7 +177,7 @@ export default function BusinessDashboardPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl font-bold">{business.subscription_plan || 'Starter'}</div>
-                        <p className="text-xs text-blue-600 mt-1 font-medium">{business.subscription_status.toUpperCase()}</p>
+                        <p className="text-xs text-blue-600 mt-1 font-medium">{(business.subscription_status || 'active').toUpperCase()}</p>
                     </CardContent>
                 </Card>
 
@@ -186,104 +203,127 @@ export default function BusinessDashboardPage() {
                 )}
             </div>
 
-            <div className="grid gap-8 lg:grid-cols-3">
-                <div className="lg:col-span-2 space-y-8">
-                    <Tabs defaultValue="requests" className="w-full">
-                        <TabsList className="mb-8">
-                            <TabsTrigger value="requests">New Requests ({requested.length})</TabsTrigger>
-                            <TabsTrigger value="active">In Progress ({active.length})</TabsTrigger>
-                        </TabsList>
+            <Tabs defaultValue="pending" className="w-full">
+                <TabsList className="mb-8">
+                    <TabsTrigger value="pending">Pending Requests ({pendingBookings.length})</TabsTrigger>
+                    <TabsTrigger value="history">Activity History ({cancelledHistory.length})</TabsTrigger>
+                </TabsList>
 
-                        <TabsContent value="requests" className="space-y-6">
-                            {requested.length > 0 ? (
-                                <div className="grid gap-6 md:grid-cols-2">
-                                    {requested.map(booking => (
-                                        <Card key={booking.id}>
-                                            <CardHeader>
-                                                <CardTitle className="text-lg">#{booking.id.slice(-4)}</CardTitle>
-                                                <CardDescription className="flex items-center gap-2">
-                                                    <Calendar className="h-3 w-3" /> {new Date(booking.booking_time).toLocaleDateString()}
-                                                    <Clock className="h-3 w-3" /> {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </CardDescription>
-                                            </CardHeader>
-                                            <CardFooter className="flex gap-2">
-                                                <Button className="flex-1" onClick={() => handleAction(booking.id, 'accepted')}>Accept</Button>
-                                                <Button variant="outline" className="flex-1 text-destructive" onClick={() => handleAction(booking.id, 'rejected')}>Reject</Button>
-                                            </CardFooter>
-                                        </Card>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20 italic text-muted-foreground">
-                                    No new requests.
-                                </div>
-                            )}
-                        </TabsContent>
-
-                        <TabsContent value="active" className="space-y-6">
-                            {active.length > 0 ? (
-                                <div className="grid gap-6 md:grid-cols-2">
-                                    {active.map(booking => (
-                                        <Card key={booking.id} className="border-primary/50">
-                                            <CardHeader>
-                                                <div className="flex justify-between items-start">
-                                                    <CardTitle className="text-lg">#{booking.id.slice(-4)}</CardTitle>
-                                                    <Badge>ACCEPTED</Badge>
-                                                </div>
-                                            </CardHeader>
-                                            <CardFooter>
-                                                <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleAction(booking.id, 'completed')}>Mark Completed</Button>
-                                            </CardFooter>
-                                        </Card>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20 italic text-muted-foreground">
-                                    No active washes.
-                                </div>
-                            )}
-                        </TabsContent>
-                    </Tabs>
-                </div>
-
-                <div className="space-y-6">
-                    <Card className="shadow-md">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <Users className="h-5 w-5 text-primary" /> Your Team
-                            </CardTitle>
-                            <Button variant="ghost" size="sm" className="h-8 text-xs text-primary" asChild>
-                                <Link href="/business/employees">Manage All</Link>
-                            </Button>
+                <TabsContent value="pending">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Upcoming Washes</CardTitle>
+                            <CardDescription>Review and manage scheduled customer requests.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            {employees.length > 0 ? (
-                                employees.slice(0, 5).map(emp => (
-                                    <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg border border-transparent hover:bg-muted/50 transition-colors">
-                                        <Avatar className="h-10 w-10 border shadow-sm">
-                                            <AvatarImage src={emp.image_url} alt={emp.name} className="object-cover" />
-                                            <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                                {emp.name?.charAt(0) || '?'}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="flex-1 overflow-hidden">
-                                            <p className="text-sm font-bold truncate">{emp.name}</p>
-                                            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                                <Phone className="h-2.5 w-2.5" /> {emp.phone}
-                                            </p>
-                                        </div>
-                                        <Badge variant="outline" className="text-[8px] h-5 bg-green-50 text-green-700 border-green-200">VERIFIED</Badge>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-center py-10 bg-muted/10 rounded-xl border border-dashed text-xs text-muted-foreground italic">
-                                    No staff registered.
-                                </div>
-                            )}
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Customer</TableHead>
+                                        <TableHead>Service</TableHead>
+                                        <TableHead>Car Details</TableHead>
+                                        <TableHead>Booking Time</TableHead>
+                                        <TableHead>Staff</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {pendingBookings.length > 0 ? pendingBookings.map((booking) => (
+                                        <TableRow key={booking.id}>
+                                            <TableCell className="font-medium">
+                                                <div className="flex items-center gap-2">
+                                                    <User className="h-4 w-4 text-muted-foreground" />
+                                                    {booking.customer?.name || 'Unknown'}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{booking.service?.name || 'Wash'}</TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Car className="h-4 w-4 text-muted-foreground" />
+                                                    {booking.car ? `${booking.car.make} ${booking.car.model}` : 'Generic Vehicle'}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="text-xs">
+                                                    <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString()}</div>
+                                                    <div className="text-muted-foreground">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {booking.staff?.name ? (
+                                                    <Badge variant="secondary">{booking.staff.name}</Badge>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="ghost" 
+                                                    className="text-destructive hover:bg-destructive/10"
+                                                    onClick={() => handleCancelBooking(booking.id)}
+                                                >
+                                                    <XCircle className="h-4 w-4 mr-2" />
+                                                    Cancel
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    )) : (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="h-24 text-center text-muted-foreground italic">
+                                                No pending booking requests.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
                         </CardContent>
                     </Card>
-                </div>
-            </div>
+                </TabsContent>
+
+                <TabsContent value="history">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Cancelled Bookings</CardTitle>
+                            <CardDescription>Record of all requests that were cancelled or rejected.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Customer</TableHead>
+                                        <TableHead>Service</TableHead>
+                                        <TableHead>Car</TableHead>
+                                        <TableHead>Scheduled For</TableHead>
+                                        <TableHead>Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {cancelledHistory.length > 0 ? cancelledHistory.map((booking) => (
+                                        <TableRow key={booking.id} className="opacity-60 bg-muted/10">
+                                            <TableCell className="font-medium">{booking.customer?.name || 'Unknown'}</TableCell>
+                                            <TableCell>{booking.service?.name || 'Wash'}</TableCell>
+                                            <TableCell>{booking.car ? `${booking.car.make} ${booking.car.model}` : 'Generic'}</TableCell>
+                                            <TableCell className="text-xs">
+                                                {new Date(booking.booking_time).toLocaleDateString()}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="destructive" className="text-[10px]">CANCELLED</Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    )) : (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="h-24 text-center text-muted-foreground italic">
+                                                No cancellation history found.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }
