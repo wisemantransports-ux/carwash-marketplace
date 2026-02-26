@@ -37,6 +37,7 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Use maybeSingle to avoid error if row doesn't exist yet
       const { data: profileData, error: profileError } = await supabase
         .from('businesses')
         .select(`
@@ -44,10 +45,10 @@ export default function BusinessProfilePage() {
           status, subscription_plan, subscription_status, sub_end_date, logo_url
         `)
         .eq('owner_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) {
-        console.error("Profile fetch error detail:", profileError);
+        console.error("Profile fetch error detail:", profileError.message || profileError);
         toast({
           variant: 'destructive',
           title: 'Load Error',
@@ -177,12 +178,22 @@ export default function BusinessProfilePage() {
         <p className="text-muted-foreground">Manage your public presence and account status.</p>
       </div>
 
-      {!isStatusActive && (
+      {!isStatusActive && profile && (
         <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Plan Inactive</AlertTitle>
           <AlertDescription>
             Your plan is inactive or trial has expired. Please complete payment to access full features.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!profile && (
+        <Alert className="bg-blue-50 border-blue-200">
+          <AlertCircle className="h-4 w-4 text-blue-600" />
+          <AlertTitle>Profile Setup Required</AlertTitle>
+          <AlertDescription>
+            Please create your business profile below to get started.
           </AlertDescription>
         </Alert>
       )}
