@@ -55,6 +55,7 @@ export type Business = {
   subscription_status: SubscriptionStatus;
   sub_end_date?: string;
   imageUrl?: string;
+  logo_url?: string;
 };
 
 export type Employee = {
