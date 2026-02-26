@@ -17,20 +17,27 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (session?.user?.id) {
-      const { data: biz } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('owner_id', session.user.id)
-        .maybeSingle();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (biz) {
-        setBusiness(biz as Business);
+      if (session?.user?.id) {
+        const { data: biz, error } = await supabase
+          .from('businesses')
+          .select('*')
+          .eq('owner_id', session.user.id)
+          .maybeSingle();
+        
+        if (error) {
+          console.error("Layout business fetch error:", error);
+        } else if (biz) {
+          setBusiness(biz as Business);
+        }
       }
+    } catch (e) {
+      console.error("Layout session check error:", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {

@@ -24,7 +24,7 @@ export default function BusinessDashboardPage() {
             if (session?.user) {
                 const userId = session.user.id;
                 
-                // Fetch Business from businesses table
+                // Fetch Business from businesses table using correct snake_case fields
                 const { data: bizData } = await supabase
                     .from('businesses')
                     .select('*')
@@ -139,7 +139,7 @@ export default function BusinessDashboardPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-xl font-bold">{business.subscriptionPlan || 'No Plan'}</div>
+                        <div className="text-xl font-bold">{business.subscription_plan || 'No Plan'}</div>
                         <p className={cn("text-xs mt-1 font-medium", trialDays > 0 ? "text-blue-600" : "text-destructive")}>
                             {trialDays > 0 ? `${trialDays} Days Trial Left` : "Subscription Expired"}
                         </p>
@@ -184,8 +184,8 @@ export default function BusinessDashboardPage() {
                                     <CardHeader>
                                         <CardTitle className="text-lg">#{booking.id.slice(-4)}</CardTitle>
                                         <CardDescription className="flex items-center gap-2">
-                                            <Calendar className="h-3 w-3" /> {new Date(booking.bookingTime).toLocaleDateString()}
-                                            <Clock className="h-3 w-3" /> {new Date(booking.bookingTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            <Calendar className="h-3 w-3" /> {new Date(booking.booking_time).toLocaleDateString()}
+                                            <Clock className="h-3 w-3" /> {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4">

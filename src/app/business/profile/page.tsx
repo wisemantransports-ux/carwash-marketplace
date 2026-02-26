@@ -45,11 +45,16 @@ export default function BusinessProfilePage() {
         .maybeSingle();
 
       if (profileError) {
-        console.error("Profile fetch error:", profileError);
+        console.error("Profile fetch error details:", {
+          message: profileError.message,
+          code: profileError.code,
+          details: profileError.details,
+          hint: profileError.hint
+        });
         toast({
           variant: 'destructive',
           title: 'Load Error',
-          description: 'Unable to load your profile. Please try again later.'
+          description: 'Unable to load your profile. Please check your connection or contact support.'
         });
       } else if (profileData) {
         setProfile(profileData);
@@ -61,11 +66,11 @@ export default function BusinessProfilePage() {
         setLogoUrl(profileData.logo_url || '');
       } else {
         toast({
-          title: 'Profile Not Found',
-          description: 'No business profile exists. Please create your profile below.'
+          title: 'Setup Required',
+          description: 'No business profile found. Please fill in your details below.'
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Fatal fetch error:", error);
     } finally {
       setLoading(false);
@@ -144,7 +149,7 @@ export default function BusinessProfilePage() {
         description: 'Your business profile has been updated successfully.'
       });
       
-      // Re-fetch fresh data after save
+      // Re-fetch fresh data after save to update layout and other components
       await fetchProfile();
     } catch (error: any) {
       console.error("Profile save error:", error);
@@ -186,7 +191,7 @@ export default function BusinessProfilePage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Plan Inactive</AlertTitle>
           <AlertDescription>
-            Your plan is inactive. Please complete payment to access features.
+            Your plan is inactive. Please complete payment to access full features.
           </AlertDescription>
         </Alert>
       )}
@@ -322,7 +327,7 @@ export default function BusinessProfilePage() {
           <ShareBusinessCard businessId={profile?.id} />
           
           <Card className="bg-muted/30 border-muted/50 overflow-hidden">
-            <CardHeader className="bg-muted/50 border-b">
+            <CardHeader className="bg-muted/5 border-b">
               <CardTitle className="text-lg">Account Status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
