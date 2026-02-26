@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -37,8 +38,6 @@ export default function EmployeeRegistryPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            console.log("Registry: Current User UID:", user.id);
-
             // 1. Fetch Business Profile
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
@@ -50,28 +49,23 @@ export default function EmployeeRegistryPage() {
             
             if (bizData) {
                 setBusiness(bizData);
-                console.log("Registry: Found Business ID (UUID):", bizData.id);
                 
-                // 2. Fetch Employees with Resilient Search
-                // We check both the Business UUID and the User UID in case of manual data entry mismatch
+                // 2. Fetch Employees using Unified ID Strategy
                 const { data: empData, error: empError } = await supabase
                     .from('employees')
-                    .select('id, business_id, name, phone, image_url, id_reference')
+                    .select('*')
                     .or(`business_id.eq.${bizData.id},business_id.eq.${user.id}`)
                     .order('name');
                 
                 if (empError) {
-                    console.error("Registry: Employee Fetch Error:", empError);
+                    console.error("Registry: fetch error:", empError);
                     throw empError;
                 }
                 
-                console.log("Registry: Employees found:", empData?.length || 0, empData);
                 setEmployees(empData || []);
-            } else {
-                console.warn("Registry: No business profile found. Staff can only be assigned to a business profile.");
             }
         } catch (error: any) {
-            console.error("Registry: Load error detail:", error);
+            console.error("Registry: load error:", error);
             toast({ 
                 variant: 'destructive', 
                 title: 'Load Error', 
@@ -104,12 +98,12 @@ export default function EmployeeRegistryPage() {
         e.preventDefault();
         
         if (!business) {
-            toast({ variant: 'destructive', title: 'Action Denied', description: 'Please set up your business profile first.' });
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'Business profile not found.' });
             return;
         }
 
         if (!name.trim() || !phone.trim() || !idReference.trim()) {
-            toast({ variant: 'destructive', title: 'Missing Info', description: 'Full Name, Phone, and ID are required.' });
+            toast({ variant: 'destructive', title: 'Missing Info', description: 'Name, Phone, and ID are required.' });
             return;
         }
 
@@ -140,7 +134,7 @@ export default function EmployeeRegistryPage() {
                 .from('employees')
                 .insert({
                     id: crypto.randomUUID(),
-                    business_id: business.id, // Using Business UUID
+                    business_id: business.id,
                     name: name.trim(),
                     phone: phone.trim(),
                     id_reference: idReference.trim(),
@@ -148,24 +142,22 @@ export default function EmployeeRegistryPage() {
                 });
             
             if (insertError) {
-                console.error("Employee Registration Error:", insertError);
+                console.error("Registry: insert error details:", insertError);
                 throw insertError;
             }
 
-            setName('');
-            setPhone('');
-            setIdReference('');
-            setImageFile(null);
-            setImagePreview(null);
+            // Reset form
+            setName(''); setPhone(''); setIdReference('');
+            setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
             
-            toast({ title: "Employee Registered", description: `${name} has been added successfully.` });
+            toast({ title: "Employee Registered", description: "Team list updated successfully." });
             await fetchData();
         } catch (error: any) {
             toast({
                 variant: 'destructive',
                 title: "Registration Failed",
-                description: error.message || "Please check your database constraints.",
+                description: error.message || "Could not save employee details.",
             });
         } finally {
             setSubmitting(false);
@@ -176,10 +168,10 @@ export default function EmployeeRegistryPage() {
         try {
             const { error } = await supabase.from('employees').delete().eq('id', id);
             if (error) throw error;
-            toast({ title: 'Employee Removed', description: `${empName} has been removed from the team.` });
+            toast({ title: 'Employee Removed' });
             await fetchData();
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Removal Failed', description: 'Could not remove staff member.' });
+            toast({ variant: 'destructive', title: 'Removal Failed' });
         }
     };
 
@@ -321,7 +313,7 @@ export default function EmployeeRegistryPage() {
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="font-bold text-lg">No staff registered yet</p>
-                                                <p className="text-sm">Verified employees linked to your account will appear here.</p>
+                                                <p className="text-sm">Verified employees linked to your business will appear here.</p>
                                             </div>
                                         </div>
                                     </TableCell>

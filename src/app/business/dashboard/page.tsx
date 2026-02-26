@@ -1,7 +1,8 @@
+
 'use client';
 import { supabase } from "@/lib/supabase";
 import type { Booking, Business, Employee } from "@/lib/types";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw } from "lucide-react";
@@ -20,7 +21,7 @@ export default function BusinessDashboardPage() {
     const [stats, setStats] = useState({ avgRating: 0, totalReviews: 0, latestReview: null as any });
     const [loading, setLoading] = useState(true);
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         setLoading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -64,27 +65,29 @@ export default function BusinessDashboardPage() {
                     
                     setBookings(bookingData || []);
 
-                    // 4. Fetch Employees (Resilient search by Business UUID and User UID)
-                    const { data: empData } = await supabase
+                    // 4. Fetch Employees (Resilient search using Business UUID and User UID)
+                    const { data: empData, error: empError } = await supabase
                         .from('employees')
-                        .select('id, business_id, name, phone, image_url, id_reference')
+                        .select('*')
                         .or(`business_id.eq.${businessId},business_id.eq.${userId}`)
-                        .order('name')
-                        .limit(5);
+                        .order('name');
                     
+                    if (empError) {
+                        console.error("Dashboard: Staff fetch error:", empError);
+                    }
                     setEmployees(empData || []);
                 }
             }
         } catch (error) {
-            console.error("Dashboard: Fetch error:", error);
+            console.error("Dashboard: General fetch error:", error);
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [fetchData]);
 
     const handleAction = async (id: string, status: 'accepted' | 'rejected' | 'completed') => {
         try {
@@ -274,7 +277,7 @@ export default function BusinessDashboardPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {employees.length > 0 ? (
-                                employees.map(emp => (
+                                employees.slice(0, 5).map(emp => (
                                     <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
                                         <Avatar className="h-10 w-10 border shadow-sm">
                                             <AvatarImage src={emp.image_url} alt={emp.name} className="object-cover" />
