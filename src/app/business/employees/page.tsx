@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import type { Employee, Business } from "@/lib/types";
+import type { Employee } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,6 @@ import Image from "next/image";
 
 export default function EmployeeRegistryPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
-    const [business, setBusiness] = useState<Business | null>(null);
     const [loading, setLoading] = useState(true);
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -49,39 +48,28 @@ export default function EmployeeRegistryPage() {
                 return;
             }
 
-            // 1. Fetch Business Profile to get the Business UUID
-            const { data: bizData } = await supabase
-                .from('businesses')
-                .select('id')
-                .eq('owner_id', user.id)
-                .maybeSingle();
-            
-            const bizId = bizData?.id;
-            if (bizData) setBusiness(bizData as Business);
+            console.log('Logged-in UID:', user.id);
 
-            console.log(`[DEBUG] Fetching staff. Auth UID: ${user.id}, Business UUID: ${bizId || 'Not Found'}`);
-
-            // 2. Resilient Query: Check for staff linked to either the Auth UID or the Business UUID
-            // This prevents "vanishing" if the DB uses a different ID convention than the frontend
-            let query = supabase.from('employees').select('*');
+            // Strict RLS-compliant fetch
+            const { data, error } = await supabase
+                .from('employees')
+                .select('*')
+                .eq('business_id', user.id)
+                .order('name');
             
-            if (bizId) {
-                query = query.or(`business_id.eq.${user.id},business_id.eq.${bizId}`);
-            } else {
-                query = query.eq('business_id', user.id);
-            }
-
-            const { data: empData, error: empError } = await query.order('name');
+            if (error) throw error;
             
-            if (empError) throw empError;
-            
-            console.log(`[DEBUG] Sync Complete. Staff found: ${empData?.length || 0}`);
-            setEmployees(empData || []);
+            console.log('Employees fetched:', data?.length || 0);
+            setEmployees(data || []);
 
         } catch (error: any) {
             console.error(`[CRITICAL] Employee Fetch Failure:`, error);
-            setFetchError("Unable to reach the staff registry.");
-            toast({ variant: 'destructive', title: 'Fetch Failed', description: error.message });
+            setFetchError("Unable to fetch employees. Please check database connection.");
+            toast({ 
+                variant: 'destructive', 
+                title: 'Fetch Error', 
+                description: error.message 
+            });
         } finally {
             setLoading(false);
         }
@@ -120,10 +108,10 @@ export default function EmployeeRegistryPage() {
         }
 
         setSubmitting(true);
-        const tempId = crypto.randomUUID();
         
-        // Optimistic Update: Add to UI immediately so it doesn't "wait" for the network
-        const tempEmployee: Employee = {
+        // 1. Optimistic Update: Add to UI immediately
+        const tempId = crypto.randomUUID();
+        const optimisticEmployee: Employee = {
             id: tempId,
             business_id: user.id,
             name: name.trim(),
@@ -132,7 +120,7 @@ export default function EmployeeRegistryPage() {
             image_url: imagePreview || ''
         };
         
-        setEmployees(prev => [tempEmployee, ...prev]);
+        setEmployees(prev => [optimisticEmployee, ...prev]);
 
         try {
             let uploadedImageUrl = null;
@@ -153,11 +141,10 @@ export default function EmployeeRegistryPage() {
                 uploadedImageUrl = publicUrl;
             }
 
-            // Persistence: Using the Auth UID as business_id to match RLS policies
+            // 2. Persistent Insert: Using User UID as business_id for RLS compliance
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
-                    id: tempId,
                     business_id: user.id,
                     name: name.trim(),
                     phone: phone.trim(),
@@ -167,17 +154,19 @@ export default function EmployeeRegistryPage() {
             
             if (insertError) throw insertError;
 
+            // Reset form
             setName(''); setPhone(''); setIdReference('');
             setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
             
             toast({ title: "Employee Registered", description: "Staff added to team successfully." });
             
-            // Re-fetch from source of truth to replace optimistic record with server record
+            // 3. Persistent Sync: Re-fetch to confirm server state
             await fetchData();
         } catch (error: any) {
             console.error(`[ERROR] Registration Failed:`, error);
-            await fetchData(); // Clear optimistic entry if real insert failed
+            // Re-fetch to clear optimistic entry if insert failed
+            await fetchData();
             toast({
                 variant: 'destructive',
                 title: "Registration Error",
@@ -273,8 +262,8 @@ export default function EmployeeRegistryPage() {
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Connection Alert</AlertTitle>
                     <AlertDescription className="flex items-center justify-between">
-                        <span>{fetchError} Records exist but could not be synced.</span>
-                        <Button variant="outline" size="sm" onClick={fetchData}>Retry</Button>
+                        <span>{fetchError}</span>
+                        <Button variant="outline" size="sm" onClick={fetchData}>Retry Sync</Button>
                     </AlertDescription>
                 </Alert>
             )}
@@ -314,7 +303,7 @@ export default function EmployeeRegistryPage() {
                                                 <div className="flex flex-col">
                                                     <span className="font-bold">{employee.name}</span>
                                                     {employee.id.includes('-') && employee.id.length > 20 && (
-                                                        <span className="text-[8px] text-primary/60 font-mono italic">Verifying...</span>
+                                                        <span className="text-[8px] text-primary/60 font-mono italic">Syncing...</span>
                                                     )}
                                                 </div>
                                             </div>
@@ -345,7 +334,7 @@ export default function EmployeeRegistryPage() {
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={4} className="h-64 text-center text-muted-foreground italic">
-                                        No employees registered yet.
+                                        No staff members registered.
                                     </TableCell>
                                 </TableRow>
                             )}
