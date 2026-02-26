@@ -4,7 +4,7 @@ import type { Booking, Business, Employee } from "@/lib/types";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw, AlertTriangle, AlertCircle } from "lucide-center";
+import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw, AlertTriangle, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,9 +34,7 @@ export default function BusinessDashboardPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 const userId = user.id;
-                console.log('[DEBUG DASHBOARD] Fetching data for user ID:', userId);
                 
-                // 1. Fetch Business Profile
                 const { data: bizData } = await supabase
                     .from('businesses')
                     .select('id, owner_id, name, type, status, subscription_status, subscription_plan, sub_end_date')
@@ -48,7 +46,6 @@ export default function BusinessDashboardPage() {
                     setBusiness(biz);
                     const businessId = biz.id;
 
-                    // 2. Fetch Ratings
                     const { data: ratingsData } = await supabase
                         .from('ratings')
                         .select('*, customer:customer_id(name)')
@@ -64,7 +61,6 @@ export default function BusinessDashboardPage() {
                         });
                     }
 
-                    // 3. Fetch Bookings
                     const { data: bookingData } = await supabase
                         .from('bookings')
                         .select('*')
@@ -73,7 +69,6 @@ export default function BusinessDashboardPage() {
                     
                     setBookings(bookingData || []);
 
-                    // 4. Fetch Employees using user.id (Auth UID) - Correct RLS Alignment
                     const { data: empData, error: empError } = await supabase
                         .from('employees')
                         .select('*')
@@ -84,7 +79,6 @@ export default function BusinessDashboardPage() {
                         console.error('[DEBUG DASHBOARD] Employee fetch error:', empError);
                     } else {
                         setEmployees(empData || []);
-                        console.log(`[DEBUG DASHBOARD] Successfully loaded ${empData?.length || 0} staff members.`);
                     }
                 }
             }
@@ -287,7 +281,6 @@ export default function BusinessDashboardPage() {
                 </div>
 
                 <div className="space-y-6">
-                    {/* Team Overview Section */}
                     <Card className="shadow-md">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
