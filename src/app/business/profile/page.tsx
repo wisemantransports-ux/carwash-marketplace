@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
@@ -37,7 +38,7 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Use maybeSingle to avoid error if row doesn't exist yet
+      // Query businesses directly as requested
       const { data: profileData, error: profileError } = await supabase
         .from('businesses')
         .select(`
@@ -64,7 +65,7 @@ export default function BusinessProfilePage() {
         setLogoUrl(biz.logo_url || '');
       }
     } catch (error: any) {
-      console.error("Fatal fetch error:", error);
+      console.error("Fatal fetch error:", error.message || error);
     } finally {
       setLoading(false);
     }
@@ -124,18 +125,35 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Prepare payload for upsert
+      const payload: any = {
+        owner_id: user.id,
+        name,
+        address,
+        city,
+        type,
+        logo_url: logoUrl
+      };
+
+      // If we already have an ID, include it to ensure we update the specific record
+      if (profile?.id) {
+        payload.id = profile.id;
+      }
+
       const { error: saveError } = await supabase
         .from('businesses')
-        .upsert({
-          owner_id: user.id,
-          name,
-          address,
-          city,
-          type,
-          logo_url: logoUrl
-        }, { onConflict: 'owner_id' });
+        .upsert(payload, { onConflict: 'owner_id' });
 
-      if (saveError) throw saveError;
+      if (saveError) {
+        // Log the detailed error object to console for debugging
+        console.error("Profile save error detail:", {
+          message: saveError.message,
+          code: saveError.code,
+          details: saveError.details,
+          hint: saveError.hint
+        });
+        throw saveError;
+      }
 
       toast({
         title: 'Profile Saved',
@@ -144,11 +162,10 @@ export default function BusinessProfilePage() {
       
       await fetchProfile();
     } catch (error: any) {
-      console.error("Profile save error:", error);
       toast({
         variant: 'destructive',
         title: 'Save Failed',
-        description: error.message || 'Could not save profile.'
+        description: error.message || 'Could not save profile. Please check console for details.'
       });
     } finally {
       setSaving(false);
@@ -166,11 +183,13 @@ export default function BusinessProfilePage() {
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
   const now = Date.now();
-  const trialRemaining = profile?.sub_end_date 
-    ? Math.max(0, Math.ceil((new Date(profile.sub_end_date).getTime() - now) / (1000 * 60 * 60 * 24)))
+  const subEndDate = profile?.sub_end_date ? new Date(profile.sub_end_date) : null;
+  const trialRemaining = subEndDate 
+    ? Math.max(0, Math.ceil((subEndDate.getTime() - now) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  const isStatusActive = profile?.subscription_status === 'active' || (trialRemaining > 0 && profile?.status === 'verified');
+  // Derive status active strictly from backend data columns
+  const isStatusActive = profile?.subscription_status?.toLowerCase() === 'active' || (trialRemaining > 0 && profile?.status?.toLowerCase() === 'verified');
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
@@ -345,7 +364,7 @@ export default function BusinessProfilePage() {
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Payment Status</p>
                 <div className="flex items-center gap-2">
-                  <Badge variant={profile?.subscription_status === 'active' ? 'secondary' : 'outline'} className={profile?.subscription_status === 'active' ? "bg-green-100 text-green-800" : ""}>
+                  <Badge variant={profile?.subscription_status?.toLowerCase() === 'active' ? 'secondary' : 'outline'} className={profile?.subscription_status?.toLowerCase() === 'active' ? "bg-green-100 text-green-800" : ""}>
                     {(profile?.subscription_status || 'INACTIVE').toUpperCase()}
                   </Badge>
                 </div>
@@ -354,7 +373,7 @@ export default function BusinessProfilePage() {
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Verification</p>
                 <div className="flex items-center gap-2">
-                  {profile?.status === 'verified' ? (
+                  {profile?.status?.toLowerCase() === 'verified' ? (
                     <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">
                       <ShieldCheck className="h-3 w-3 mr-1" /> Verified
                     </Badge>
