@@ -5,7 +5,7 @@ import type { User as ProfileUser } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Clock } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Clock, Package, ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -121,27 +121,52 @@ export default function CustomerHomePage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="space-y-4">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
-          <ShieldCheck className="h-3 w-3" />
-          <span>Active Trust Seals Only</span>
-        </div>
-        <h1 className="text-4xl font-extrabold tracking-tight text-primary">Discover Top Washes</h1>
-        <p className="text-muted-foreground text-lg max-w-2xl">
-          Browse professional mobile detailers and stations verified for quality. Only businesses with active trust seals are shown.
-        </p>
-        
-        <div className="flex gap-4 max-w-2xl pt-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search by business name or city..." 
-              className="pl-10 h-12 bg-card shadow-sm"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
+        <div className="flex-1 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
+            <ShieldCheck className="h-3 w-3" />
+            <span>Active Trust Seals Only</span>
+          </div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Discover Top Washes</h1>
+          <p className="text-muted-foreground text-lg max-w-2xl">
+            Browse professional mobile detailers and stations verified for quality. Only businesses with active trust seals are shown.
+          </p>
+          
+          <div className="flex gap-4 max-w-2xl pt-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search by business name or city..." 
+                className="pl-10 h-12 bg-card shadow-sm"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
           </div>
         </div>
+
+        {/* Spare Shop Awareness Card */}
+        <Card className="w-full lg:w-80 bg-muted/30 border-dashed shrink-0">
+          <CardHeader className="pb-3">
+            <div className="flex justify-between items-start">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Package className="h-5 w-5 text-primary" />
+              </div>
+              <Badge variant="secondary" className="text-[10px]">COMING SOON</Badge>
+            </div>
+            <CardTitle className="text-lg pt-2">Spare Shop</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Buy car accessories directly from businesses while booking your wash. Launching soon for all verified locations.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button variant="ghost" size="sm" className="w-full text-[10px] h-8 text-muted-foreground cursor-not-allowed group">
+              Preview Catalog <ArrowRight className="ml-2 h-3 w-3 transition-transform group-hover:translate-x-1" />
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

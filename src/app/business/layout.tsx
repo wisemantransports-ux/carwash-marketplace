@@ -1,6 +1,6 @@
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt } from "lucide-react";
+import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt, Package } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { mockGetBusinessById } from "@/lib/mock-api";
 import { Business, User as ProfileUser } from "@/lib/types";
@@ -54,6 +54,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   const navItems = [
     { href: "/business/dashboard", label: "Operations", icon: LayoutDashboard },
     { href: "/business/services", label: "Services", icon: Car },
+    { href: "/business/spare-shop", label: "Spare Shop", icon: Package },
     { href: "/business/invoices", label: "Invoices", icon: Receipt },
     { href: "/business/employees", label: "Employees", icon: Users },
     { href: "/business/earnings", label: "Earnings", icon: DollarSign },

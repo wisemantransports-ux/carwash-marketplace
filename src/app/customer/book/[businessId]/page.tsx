@@ -11,10 +11,17 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { User as ProfileUser, Service, Car } from '@/lib/types';
-import { Clock, Banknote, Loader2, Store, Calendar as CalendarIcon, MapPin, ShieldCheck } from 'lucide-react';
+import { Clock, Banknote, Loader2, Store, Calendar as CalendarIcon, MapPin, ShieldCheck, Package, Info } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/hooks/use-toast';
+
+const SPARE_SHOP_PREVIEW = [
+  { name: 'Car Shampoo', price: 'P85', hint: 'car shampoo' },
+  { name: 'Air Freshener', price: 'P25', hint: 'air freshener' },
+  { name: 'Dashboard Polish', price: 'P60', hint: 'dashboard polish' },
+  { name: 'Wiper Fluid', price: 'P45', hint: 'wiper fluid' },
+];
 
 export default function BookingPage({ params }: { params: Promise<{ businessId: string }> }) {
     const { businessId } = React.use(params);
@@ -114,7 +121,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
 
     return (
         <div className="grid lg:grid-cols-3 gap-8 pb-12">
-            <div className="lg:col-span-2 space-y-8">
+            <div className="lg:col-span-2 space-y-12">
                 <div className="flex flex-col sm:flex-row items-center gap-6 bg-card border rounded-2xl p-6 shadow-sm">
                     <div className="relative h-32 w-32 rounded-2xl overflow-hidden border shadow-inner shrink-0">
                         {business.avatarUrl ? (
@@ -163,6 +170,44 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                                 <p className="text-muted-foreground font-medium italic">No services are currently listed for this partner.</p>
                             </div>
                         )}
+                    </div>
+                </div>
+
+                {/* Spare Shop Preview Section */}
+                <div className="space-y-6 border-t pt-8">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <Package className="h-6 w-6" />
+                        <h2 className="text-2xl font-bold">Spare Shop <span className="text-sm font-normal">(Coming Soon)</span></h2>
+                    </div>
+                    <p className="text-muted-foreground">Soon you&apos;ll be able to add car accessories and spare parts to your booking.</p>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {SPARE_SHOP_PREVIEW.map((product) => (
+                            <Card key={product.name} className="opacity-60 grayscale hover:grayscale-0 transition-all">
+                                <div className="aspect-square bg-muted relative rounded-t-lg overflow-hidden">
+                                    <Image 
+                                        src={`https://picsum.photos/seed/${product.name}/300/300`} 
+                                        alt={product.name} 
+                                        fill 
+                                        className="object-cover"
+                                        data-ai-hint={product.hint}
+                                    />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                        <Badge variant="secondary" className="bg-white/90 text-black text-[10px]">COMING SOON</Badge>
+                                    </div>
+                                </div>
+                                <CardContent className="p-3">
+                                    <p className="text-xs font-bold truncate">{product.name}</p>
+                                    <p className="text-[10px] text-muted-foreground">From {product.price}</p>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2 p-4 bg-muted/30 rounded-xl border border-dashed">
+                        <Info className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <p className="text-[10px] text-muted-foreground italic">
+                            These products will be provided by the business you&apos;re booking with. Feature launching soon.
+                        </p>
                     </div>
                 </div>
             </div>
