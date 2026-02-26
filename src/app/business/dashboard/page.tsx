@@ -31,8 +31,9 @@ export default function BusinessDashboardPage() {
                     .single();
                 
                 if (bizData) {
-                    setBusiness(bizData as Business);
-                    const businessId = bizData.id;
+                    const biz = bizData as Business;
+                    setBusiness(biz);
+                    const businessId = biz.id;
 
                     const { data: ratingsData } = await supabase
                         .from('ratings')
@@ -97,7 +98,7 @@ export default function BusinessDashboardPage() {
     const now = new Date();
     const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
     const trialDays = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
-    const isPlanActive = business.subscription_status === 'active' || trialDays > 0;
+    const isPlanActive = business.subscription_status === 'active' || (trialDays > 0 && business.status === 'verified');
 
     return (
         <div className="space-y-8">
@@ -106,7 +107,7 @@ export default function BusinessDashboardPage() {
                     <div className="flex items-center gap-3">
                         <h1 className="text-4xl font-bold tracking-tight text-primary">{business.name}</h1>
                         <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
-                            {business.type.toUpperCase()}
+                            {(business.type || 'station').toUpperCase()}
                         </Badge>
                     </div>
                     <p className="text-muted-foreground text-lg">Manage incoming requests and track operations.</p>

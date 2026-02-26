@@ -10,7 +10,7 @@ export type User = {
   address?: string;
   city?: string;
   description?: string;
-  // Fields from users_with_access view
+  // Fields from users_with_access view (for customers/admin)
   trial_start?: string;
   trial_expiry?: string;
   paid?: boolean;
@@ -54,7 +54,6 @@ export type Business = {
   subscription_plan: SubscriptionPlan;
   subscription_status: SubscriptionStatus;
   sub_end_date?: string;
-  imageUrl?: string;
   logo_url?: string;
 };
 

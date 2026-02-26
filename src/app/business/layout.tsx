@@ -1,6 +1,6 @@
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt, Package } from "lucide-react";
+import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt, Package, Loader2 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { Business } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -8,7 +8,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
-import { Loader2 } from "lucide-react";
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -44,7 +43,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     fetchData();
   }, [fetchData]);
 
-  // Access Gating Logic
+  // Access Gating Logic derived strictly from businesses table
   const now = new Date();
   const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
   const isVerified = business?.status === 'verified';
@@ -87,8 +86,8 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           </Alert>
         )}
 
-        {/* Trial Status Banner */}
-        {isVerified && !isPaid && trialRemaining > 0 && (
+        {/* Trial Status Banner - Only show if not paid but trial is active */}
+        {isVerified && !isPaid && isTrialActive && (
           <Alert variant="default" className="bg-blue-50 border-blue-200">
             <Clock className="h-4 w-4 text-blue-600" />
             <AlertTitle>Free Trial Active</AlertTitle>

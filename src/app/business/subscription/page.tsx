@@ -1,6 +1,6 @@
 'use client';
 import { mockGetBusinessById, mockSubmitPayment } from "@/lib/mock-api";
-import { Business, SubscriptionPlan, User as ProfileUser } from "@/lib/types";
+import { Business, SubscriptionPlan } from "@/lib/types";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,7 +56,6 @@ const PLANS = [
 
 export default function SubscriptionPage() {
     const [business, setBusiness] = useState<Business | null>(null);
-    const [userProfile, setUserProfile] = useState<ProfileUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[0] | null>(null);
     const [step, setStep] = useState<'browse' | 'pay'>('browse');
@@ -68,21 +67,24 @@ export default function SubscriptionPage() {
 
     const fetch = useCallback(async () => {
         setLoading(true);
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user?.id) {
-            // Use users_with_access view
-            const { data: profile } = await supabase
-                .from('users_with_access')
-                .select('*')
-                .eq('id', session.user.id)
-                .maybeSingle();
-            setUserProfile(profile as ProfileUser);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+                const { data: bizData } = await supabase
+                    .from('businesses')
+                    .select('*')
+                    .eq('owner_id', session.user.id)
+                    .single();
+                
+                if (bizData) {
+                    setBusiness(bizData as Business);
+                }
+            }
+        } catch (e) {
+            console.error("Subscription fetch error:", e);
+        } finally {
+            setLoading(false);
         }
-
-        const { data } = await mockGetBusinessById('biz-2'); 
-        setBusiness(data);
-        setLoading(false);
     }, []);
 
     useEffect(() => {
@@ -120,7 +122,9 @@ export default function SubscriptionPage() {
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
-    const trialRemaining = userProfile?.trial_remaining ?? 0;
+    const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
+    const trialRemaining = expiry ? Math.max(0, Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
+    const isPaid = business?.subscription_status === 'active';
 
     return (
         <div className="max-w-5xl mx-auto space-y-8 pb-12">
@@ -129,10 +133,10 @@ export default function SubscriptionPage() {
                 <p className="text-muted-foreground">Manage your platform access and monthly billing.</p>
                 
                 <div className="flex flex-wrap gap-3 mt-2">
-                    {userProfile?.paid ? (
+                    {isPaid ? (
                         <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
                             <ShieldCheck className="h-3.5 w-3.5 mr-2" />
-                            Premium Access Active ({userProfile.plan})
+                            Premium Access Active ({business?.subscription_plan})
                         </Badge>
                     ) : (
                         <Badge variant={trialRemaining > 0 ? "secondary" : "destructive"} className="flex gap-2 py-1 px-3">
@@ -145,12 +149,12 @@ export default function SubscriptionPage() {
                 </div>
             </div>
 
-            {business?.subscriptionStatus === 'payment_submitted' && (
+            {business?.subscription_status === 'payment_submitted' && (
                 <Alert className="bg-blue-50 border-blue-200">
                     <Info className="h-4 w-4 text-blue-600" />
                     <AlertTitle>Payment Verification Pending</AlertTitle>
                     <AlertDescription>
-                        We've received your proof of payment for the <strong>{business.subscriptionPlan}</strong> plan. Verification usually takes 2-4 hours.
+                        We've received your proof of payment for the <strong>{business.subscription_plan}</strong> plan. Verification usually takes 2-4 hours.
                     </AlertDescription>
                 </Alert>
             )}
@@ -158,7 +162,7 @@ export default function SubscriptionPage() {
             {step === 'browse' ? (
                 <div className="grid gap-6 md:grid-cols-3">
                     {PLANS.map((plan) => {
-                        const isCurrent = (userProfile?.plan === plan.name || business?.subscriptionPlan === plan.name) && userProfile?.paid;
+                        const isCurrent = business?.subscription_plan === plan.name && isPaid;
                         return (
                             <Card key={plan.name} className={`relative flex flex-col ${isCurrent ? 'border-primary ring-1 ring-primary shadow-lg' : ''}`}>
                                 {isCurrent && (
@@ -192,7 +196,7 @@ export default function SubscriptionPage() {
                                     <Button 
                                         className="w-full" 
                                         variant={isCurrent ? 'outline' : 'default'} 
-                                        disabled={isCurrent || business?.subscriptionStatus === 'payment_submitted'}
+                                        disabled={isCurrent || business?.subscription_status === 'payment_submitted'}
                                         onClick={() => handleSelectPlan(plan)}
                                     >
                                         {isCurrent ? 'Active' : 'Subscribe Now'}

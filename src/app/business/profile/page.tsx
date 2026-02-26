@@ -13,9 +13,10 @@ import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import { ShareBusinessCard } from '@/components/app/share-business-card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Business } from '@/lib/types';
 
 export default function BusinessProfilePage() {
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -45,19 +46,20 @@ export default function BusinessProfilePage() {
         .single();
 
       if (profileError) {
-        console.error("Profile fetch error:", profileError);
+        console.error("Profile fetch error detail:", profileError);
         toast({
           variant: 'destructive',
           title: 'Load Error',
-          description: 'Unable to load your profile. Please try again later.'
+          description: profileError.message || 'Unable to load your profile.'
         });
       } else if (profileData) {
-        setProfile(profileData);
-        setName(profileData.name || '');
-        setAddress(profileData.address || '');
-        setCity(profileData.city || '');
-        setType(profileData.type || 'station');
-        setLogoUrl(profileData.logo_url || '');
+        const biz = profileData as Business;
+        setProfile(biz);
+        setName(biz.name || '');
+        setAddress(biz.address || '');
+        setCity(biz.city || '');
+        setType(biz.type || 'station');
+        setLogoUrl(biz.logo_url || '');
       }
     } catch (error: any) {
       console.error("Fatal fetch error:", error);
@@ -101,7 +103,7 @@ export default function BusinessProfilePage() {
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
-        description: error.message || 'Could not upload logo. Please try again.'
+        description: error.message || 'Could not upload logo.'
       });
     } finally {
       setUploading(false);
@@ -144,7 +146,7 @@ export default function BusinessProfilePage() {
       toast({
         variant: 'destructive',
         title: 'Save Failed',
-        description: error.message || 'Could not save profile. Please try again.'
+        description: error.message || 'Could not save profile.'
       });
     } finally {
       setSaving(false);
@@ -165,7 +167,7 @@ export default function BusinessProfilePage() {
     ? Math.max(0, Math.ceil((new Date(profile.sub_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  const isActive = profile?.subscription_status === 'active' || trialRemaining > 0;
+  const isStatusActive = profile?.subscription_status === 'active' || (trialRemaining > 0 && profile?.status === 'verified');
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
@@ -174,12 +176,12 @@ export default function BusinessProfilePage() {
         <p className="text-muted-foreground">Manage your public presence and account status.</p>
       </div>
 
-      {!isActive && (
+      {!isStatusActive && (
         <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Plan Inactive</AlertTitle>
           <AlertDescription>
-            Your plan is inactive. Please complete payment to access full features.
+            Your plan is inactive or trial has expired. Please complete payment to access full features.
           </AlertDescription>
         </Alert>
       )}
@@ -312,7 +314,7 @@ export default function BusinessProfilePage() {
         </div>
 
         <div className="space-y-6">
-          <ShareBusinessCard businessId={profile?.id} />
+          <ShareBusinessCard businessId={profile?.id || ''} />
           
           <Card className="bg-muted/30 border-muted/50 overflow-hidden">
             <CardHeader className="bg-muted/5 border-b">
@@ -331,7 +333,7 @@ export default function BusinessProfilePage() {
                 <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Payment Status</p>
                 <div className="flex items-center gap-2">
                   <Badge variant={profile?.subscription_status === 'active' ? 'secondary' : 'outline'} className={profile?.subscription_status === 'active' ? "bg-green-100 text-green-800" : ""}>
-                    {profile?.subscription_status?.toUpperCase() || 'INACTIVE'}
+                    {(profile?.subscription_status || 'INACTIVE').toUpperCase()}
                   </Badge>
                 </div>
               </div>
@@ -344,7 +346,7 @@ export default function BusinessProfilePage() {
                       <ShieldCheck className="h-3 w-3 mr-1" /> Verified
                     </Badge>
                   ) : (
-                    <Badge variant="outline">{profile?.status?.toUpperCase() || 'PENDING'}</Badge>
+                    <Badge variant="outline">{(profile?.status || 'PENDING').toUpperCase()}</Badge>
                   )}
                 </div>
               </div>
@@ -361,7 +363,7 @@ export default function BusinessProfilePage() {
             </CardContent>
             <CardFooter className="bg-muted/50 border-t pt-4">
                <Button variant="outline" className="w-full bg-white" asChild>
-                 <a href="/business/subscription">Update Subscription</a>
+                 <Link href="/business/subscription">Update Subscription</Link>
                </Button>
             </CardFooter>
           </Card>
