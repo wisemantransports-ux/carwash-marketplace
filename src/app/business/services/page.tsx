@@ -1,3 +1,4 @@
+
 'use client';
 import { supabase } from "@/lib/supabase";
 import type { Service } from "@/lib/types";
@@ -18,17 +19,25 @@ export default function ServicesManagementPage() {
     useEffect(() => {
         const fetchServices = async () => {
             setLoading(true);
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) return;
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user) return;
 
-            const { data, error } = await supabase
-                .from('services')
-                .select('*')
-                .eq('business_id', session.user.id);
+                // Explicitly filter by business_id to respect RLS and logical scoping
+                const { data, error } = await supabase
+                    .from('services')
+                    .select('*')
+                    .eq('business_id', session.user.id)
+                    .order('created_at', { ascending: false });
 
-            if (data) setServices(data as Service[]);
-            if (error) console.error("Error fetching services:", error);
-            setLoading(false);
+                if (error) throw error;
+                if (data) setServices(data as Service[]);
+            } catch (e: any) {
+                console.error("Error fetching services:", e);
+                toast({ variant: 'destructive', title: 'Fetch Error', description: 'Could not load your services catalog.' });
+            } finally {
+                setLoading(false);
+            }
         };
         fetchServices();
     }, []);
@@ -74,7 +83,7 @@ export default function ServicesManagementPage() {
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                Array.from({length: 2}).map((_, i) => (
+                                Array.from({length: 3}).map((_, i) => (
                                     <TableRow key={i}>
                                         <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-64" /></TableCell>

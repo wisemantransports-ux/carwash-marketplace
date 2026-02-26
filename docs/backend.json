@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -46,7 +47,7 @@
       "type": "object",
       "properties": {
         "business_id": { "type": "string" },
-        "service_name": { "type": "string" },
+        "name": { "type": "string" },
         "description": { "type": "string" },
         "price": { "type": "number" },
         "duration": { "type": "number", "description": "Duration in minutes." },

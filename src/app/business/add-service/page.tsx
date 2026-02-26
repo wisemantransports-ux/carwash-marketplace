@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -76,25 +77,28 @@ export default function AddServicePage() {
     }
 
     setSubmitting(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    const { error } = await supabase
-      .from('services')
-      .insert({
-        business_id: session?.user.id,
-        name: serviceName,
-        description,
-        price: parseFloat(price),
-        duration: parseInt(duration),
-      });
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        const { error } = await supabase
+          .from('services')
+          .insert({
+            business_id: session?.user.id,
+            name: serviceName,
+            description,
+            price: parseFloat(price),
+            duration: parseInt(duration),
+          });
 
-    if (error) {
-      toast({ variant: 'destructive', title: 'Creation Failed', description: error.message });
-    } else {
-      toast({ title: 'Service Added', description: `${serviceName} is now in your catalog.` });
-      router.push('/business/services');
+        if (error) throw error;
+
+        toast({ title: 'Service Added', description: `${serviceName} is now in your catalog.` });
+        router.push('/business/services');
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Creation Failed', description: error.message });
+    } finally {
+        setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
