@@ -59,10 +59,11 @@ export type Business = {
 
 export type Employee = {
   id: string;
-  businessId: string;
+  business_id: string;
   name: string;
   phone: string;
-  imageUrl: string;
+  image_url: string;
+  id_reference: string;
 };
 
 export type BookingStatus = 'requested' | 'accepted' | 'completed' | 'rejected' | 'cancelled';

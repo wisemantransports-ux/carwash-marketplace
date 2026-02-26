@@ -15,17 +15,17 @@ const users: User[] = [
 ];
 
 const businesses: Business[] = [
-    { id: 'biz-1', ownerId: 'user-2', name: 'Sparkle Clean Station', address: '123 Main St', city: 'Gaborone', type: 'station', rating: 4.8, reviewCount: 150, imageUrl: findImage('car-wash-1'), access_active: true, subscriptionPlan: 'Pro', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) },
-    { id: 'biz-2', ownerId: 'user-2', name: 'Pula Mobile Wash', address: 'Mobile Service', city: 'Gaborone', type: 'mobile', rating: 4.9, reviewCount: 210, imageUrl: findImage('car-wash-2'), access_active: true, subscriptionPlan: 'Starter', subscriptionStatus: 'active', subscriptionStartDate: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000), subscriptionEndDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) },
-    { id: 'biz-3', ownerId: 'user-4', name: 'Elite Auto Spa', address: 'Plot 45, G-West', city: 'Gaborone', type: 'station', rating: 0, reviewCount: 0, imageUrl: findImage('car-wash-3'), access_active: false, subscriptionPlan: 'None', subscriptionStatus: 'inactive' },
+    { id: 'biz-1', owner_id: 'user-2', name: 'Sparkle Clean Station', address: '123 Main St', city: 'Gaborone', type: 'station', rating: 4.8, review_count: 150, logo_url: findImage('car-wash-1'), subscription_plan: 'Pro', subscription_status: 'active', sub_end_date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(), status: 'verified' },
+    { id: 'biz-2', owner_id: 'user-2', name: 'Pula Mobile Wash', address: 'Mobile Service', city: 'Gaborone', type: 'mobile', rating: 4.9, review_count: 210, logo_url: findImage('car-wash-2'), subscription_plan: 'Starter', subscription_status: 'active', sub_end_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), status: 'verified' },
+    { id: 'biz-3', owner_id: 'user-4', name: 'Elite Auto Spa', address: 'Plot 45, G-West', city: 'Gaborone', type: 'station', rating: 0, review_count: 0, logo_url: findImage('car-wash-3'), subscription_plan: 'None', subscription_status: 'inactive', status: 'pending' },
 ];
 
 let paymentSubmissions: PaymentSubmission[] = [];
 
 const services: Service[] = [
-    { id: 'svc-1', businessId: 'biz-1', name: 'Express Exterior', description: 'Quick and efficient exterior wash using high-pressure jets.', price: 25, duration: 15 },
-    { id: 'svc-2', businessId: 'biz-1', name: 'Premium Detail', description: 'Full interior vacuum, steam cleaning, and exterior wax.', price: 150, duration: 120 },
-    { id: 'svc-3', businessId: 'biz-2', name: 'Mobile Eco Wash', description: 'Environmentally friendly waterless wash at your doorstep.', price: 45, duration: 45 },
+    { id: 'svc-1', business_id: 'biz-1', name: 'Express Exterior', description: 'Quick and efficient exterior wash using high-pressure jets.', price: 25, duration: 15, currency_code: 'BWP' },
+    { id: 'svc-2', business_id: 'biz-1', name: 'Premium Detail', description: 'Full interior vacuum, steam cleaning, and exterior wax.', price: 150, duration: 120, currency_code: 'BWP' },
+    { id: 'svc-3', business_id: 'biz-2', name: 'Mobile Eco Wash', description: 'Environmentally friendly waterless wash at your doorstep.', price: 45, duration: 45, currency_code: 'BWP' },
 ];
 
 const cars: Car[] = [
@@ -34,7 +34,7 @@ const cars: Car[] = [
 ];
 
 const employees: Employee[] = [
-    { id: 'emp-1', businessId: 'biz-2', name: 'Mike Mokgosi', phone: '71000001', imageUrl: findImage('employee-1') },
+    { id: 'emp-1', business_id: 'biz-2', name: 'Mike Mokgosi', phone: '71000001', image_url: findImage('employee-1'), id_reference: '123456789' },
 ];
 
 let bookings: Booking[] = [
@@ -60,13 +60,7 @@ export const mockGetBusinesses = async (): Promise<{ data: Business[]; error: nu
 
 export const mockGetVerifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
     await delay(400);
-    const filtered = businesses.filter(b => b.access_active && b.subscriptionStatus === 'active');
-    return { data: filtered, error: null };
-}
-
-export const mockGetUnverifiedBusinesses = async (): Promise<{ data: Business[]; error: null }> => {
-    await delay(400);
-    const filtered = businesses.filter(b => !b.access_active);
+    const filtered = businesses.filter(b => b.status === 'verified' && b.subscription_status === 'active');
     return { data: filtered, error: null };
 }
 
@@ -78,7 +72,7 @@ export const mockGetBusinessById = async (id: string): Promise<{ data: Business 
 
 export const mockGetServicesForBusiness = async (businessId: string): Promise<{ data: Service[]; error: null }> => {
     await delay(300);
-    return { data: services.filter(s => s.businessId === businessId), error: null };
+    return { data: services.filter(s => s.business_id === businessId), error: null };
 }
 
 export const mockGetBookingsForCustomer = async (customerId: string): Promise<{ data: Booking[]; error: null }> => {
@@ -91,37 +85,6 @@ export const mockGetBookingsForBusiness = async (businessId: string): Promise<{ 
     await delay(500);
     const businessBookings = [...bookings].filter(b => b.businessId === businessId).sort((a,b) => a.bookingTime.getTime() - b.bookingTime.getTime());
     return { data: businessBookings, error: null };
-}
-
-export const mockAcceptBooking = async (bookingId: string): Promise<void> => {
-    await delay(400);
-    const booking = bookings.find(b => b.id === bookingId);
-    if (booking) {
-        booking.status = 'accepted';
-        // Auto-create invoice
-        const newInvoice: Invoice = {
-            id: `inv-${Date.now()}`,
-            bookingId: booking.id,
-            customerId: booking.customerId,
-            businessId: booking.businessId,
-            amount: booking.price,
-            status: 'issued',
-            issuedAt: new Date(),
-        };
-        invoices.push(newInvoice);
-    }
-}
-
-export const mockRejectBooking = async (bookingId: string): Promise<void> => {
-    await delay(300);
-    const booking = bookings.find(b => b.id === bookingId);
-    if (booking) booking.status = 'rejected';
-}
-
-export const mockCompleteBooking = async (bookingId: string): Promise<void> => {
-    await delay(300);
-    const booking = businesses.find(b => b.id === bookingId); // Fixed reference
-    // note: the logic here is mocked and simple
 }
 
 export const mockMarkInvoicePaid = async (invoiceId: string, paymentMethod: any, reference: string): Promise<void> => {
@@ -155,19 +118,6 @@ export const mockGetPendingPayments = async (): Promise<{ data: PaymentSubmissio
     return { data: paymentSubmissions.filter(p => p.status === 'pending'), error: null };
 }
 
-export const mockVerifyPayment = async (paymentId: string, action: 'approve' | 'reject'): Promise<void> => {
-    await delay(500);
-    const submission = paymentSubmissions.find(p => p.id === paymentId);
-    if (submission) {
-        submission.status = action === 'approve' ? 'approved' : 'rejected';
-        const biz = businesses.find(b => b.id === submission.businessId);
-        if (biz && action === 'approve') {
-            biz.subscriptionStatus = 'active';
-            biz.subscriptionEndDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        }
-    }
-}
-
 export const mockGetCarsForUser = async (userId: string): Promise<{ data: Car[]; error: null }> => {
     await delay(300);
     return { data: cars.filter(c => c.userId === userId), error: null };
@@ -175,11 +125,5 @@ export const mockGetCarsForUser = async (userId: string): Promise<{ data: Car[];
 
 export const mockGetEmployeesForBusiness = async (businessId: string): Promise<{ data: Employee[]; error: null }> => {
     await delay(300);
-    return { data: employees.filter(e => e.businessId === businessId), error: null };
-}
-
-export const mockUpdateBusinessAccess = async (id: string, active: boolean): Promise<void> => {
-    await delay(300);
-    const biz = businesses.find(b => b.id === id);
-    if (biz) biz.access_active = active;
+    return { data: employees.filter(e => e.business_id === businessId), error: null };
 }
