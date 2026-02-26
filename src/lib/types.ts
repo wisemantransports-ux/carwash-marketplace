@@ -36,7 +36,6 @@ export type Service = {
   price: number;
   duration: number; // in minutes
   currency_code: string;
-  created_at?: string;
 };
 
 export type SubscriptionPlan = 'Starter' | 'Pro' | 'Enterprise' | 'None';

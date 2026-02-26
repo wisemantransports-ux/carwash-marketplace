@@ -1,7 +1,7 @@
 'use client';
 import { supabase } from "@/lib/supabase";
 import type { Service, Business } from "@/lib/types";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -17,62 +17,52 @@ export default function ServicesManagementPage() {
     const [business, setBusiness] = useState<Business | null>(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session?.user) {
-                    setLoading(false);
-                    return;
-                }
-
-                // 1. Fetch Business Profile using owner_id = auth.uid()
-                const { data: biz, error: bizError } = await supabase
-                    .from('businesses')
-                    .select('*')
-                    .eq('owner_id', session.user.id)
-                    .maybeSingle();
-                
-                if (bizError) {
-                    console.error("Business fetch error details:", bizError);
-                    throw bizError;
-                }
-
-                if (biz) {
-                    setBusiness(biz as Business);
-                    
-                    // 2. Fetch Services for this business using the correct foreign key business_id
-                    const { data, error: servicesError } = await supabase
-                        .from('services')
-                        .select('*')
-                        .eq('business_id', biz.id)
-                        .order('created_at', { ascending: false });
-
-                    if (servicesError) {
-                        console.error("Services fetch error details:", servicesError);
-                        throw servicesError;
-                    }
-                    if (data) {
-                        setServices(data as Service[]);
-                    }
-                } else {
-                    console.warn("No business profile found for this authenticated user.");
-                }
-            } catch (e: any) {
-                // Improved error logging to capture full context
-                console.error("Detailed Fetch Error:", e?.message || e, e);
-                toast({ 
-                    variant: 'destructive', 
-                    title: 'Fetch Error', 
-                    description: e?.message || 'Could not load your services catalog. Please ensure your profile is set up and verified.' 
-                });
-            } finally {
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) {
                 setLoading(false);
+                return;
             }
-        };
-        fetchData();
+
+            // 1. Fetch Business Profile using owner_id = auth.uid()
+            const { data: biz, error: bizError } = await supabase
+                .from('businesses')
+                .select('id, status, subscriptionStatus, sub_end_date')
+                .eq('owner_id', session.user.id)
+                .maybeSingle();
+            
+            if (bizError) throw bizError;
+
+            if (biz) {
+                setBusiness(biz as Business);
+                
+                // 2. Fetch Services using verified columns only
+                // Schema: id, business_id, name, description, price, duration, currency_code
+                const { data, error: servicesError } = await supabase
+                    .from('services')
+                    .select('id, name, description, price, duration, currency_code')
+                    .eq('business_id', biz.id);
+
+                if (servicesError) throw servicesError;
+                setServices(data || []);
+            }
+        } catch (e: any) {
+            console.error("Fetch Error Detail:", e);
+            toast({ 
+                variant: 'destructive', 
+                title: 'Load Error', 
+                description: e?.message || 'Could not load your services catalog.' 
+            });
+        } finally {
+            setLoading(false);
+        }
     }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const handleDelete = async (id: string) => {
         try {
@@ -86,7 +76,6 @@ export default function ServicesManagementPage() {
             setServices(services.filter(s => s.id !== id));
             toast({ title: 'Service Deleted', description: 'The service has been removed from your catalog.' });
         } catch (e: any) {
-            console.error("Delete Error:", e);
             toast({ variant: 'destructive', title: 'Delete Failed', description: e.message });
         }
     }
@@ -133,16 +122,6 @@ export default function ServicesManagementPage() {
                                 <Link href="/business/subscription">Renew Now</Link>
                             </Button>
                         )}
-                    </AlertDescription>
-                </Alert>
-            )}
-
-            {!business && !loading && (
-                <Alert className="bg-orange-50 border-orange-200 text-orange-800">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Profile Incomplete</AlertTitle>
-                    <AlertDescription>
-                        We couldn't find a business profile linked to your account. Please visit the Profile page to complete your registration.
                     </AlertDescription>
                 </Alert>
             )}
