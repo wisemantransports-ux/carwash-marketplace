@@ -6,7 +6,7 @@ import type { Employee } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle, RefreshCw } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,41 +37,41 @@ export default function EmployeeRegistryPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            // 1. Fetch Business associated with current user
+            console.log("Registry: Current User UID:", user.id);
+
+            // 1. Fetch Business Profile
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('id, name')
                 .eq('owner_id', user.id)
                 .maybeSingle();
             
-            if (bizError) {
-                console.error("Fetch business error:", bizError);
-                throw bizError;
-            }
+            if (bizError) throw bizError;
             
             if (bizData) {
-                console.log("Registry: Fetching employees for Business ID:", bizData.id);
                 setBusiness(bizData);
+                console.log("Registry: Found Business ID (UUID):", bizData.id);
                 
-                // 2. Fetch all employees for this business
+                // 2. Fetch Employees with Resilient Search
+                // We check both the Business UUID and the User UID in case of manual data entry mismatch
                 const { data: empData, error: empError } = await supabase
                     .from('employees')
                     .select('id, business_id, name, phone, image_url, id_reference')
-                    .eq('business_id', bizData.id)
+                    .or(`business_id.eq.${bizData.id},business_id.eq.${user.id}`)
                     .order('name');
                 
                 if (empError) {
-                    console.error("Fetch employees error:", empError);
+                    console.error("Registry: Employee Fetch Error:", empError);
                     throw empError;
                 }
                 
-                console.log("Registry: Found employees count:", empData?.length || 0);
+                console.log("Registry: Employees found:", empData?.length || 0, empData);
                 setEmployees(empData || []);
             } else {
-                console.warn("Registry: No business profile found for this user.");
+                console.warn("Registry: No business profile found. Staff can only be assigned to a business profile.");
             }
         } catch (error: any) {
-            console.error("Registry load error detail:", error);
+            console.error("Registry: Load error detail:", error);
             toast({ 
                 variant: 'destructive', 
                 title: 'Load Error', 
@@ -104,7 +104,7 @@ export default function EmployeeRegistryPage() {
         e.preventDefault();
         
         if (!business) {
-            toast({ variant: 'destructive', title: 'Access Denied', description: 'Business profile not found.' });
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'Please set up your business profile first.' });
             return;
         }
 
@@ -140,7 +140,7 @@ export default function EmployeeRegistryPage() {
                 .from('employees')
                 .insert({
                     id: crypto.randomUUID(),
-                    business_id: business.id,
+                    business_id: business.id, // Using Business UUID
                     name: name.trim(),
                     phone: phone.trim(),
                     id_reference: idReference.trim(),
@@ -148,7 +148,7 @@ export default function EmployeeRegistryPage() {
                 });
             
             if (insertError) {
-                console.error("Employee insertion error detail:", insertError);
+                console.error("Employee Registration Error:", insertError);
                 throw insertError;
             }
 
@@ -159,14 +159,13 @@ export default function EmployeeRegistryPage() {
             setImagePreview(null);
             setIsAddOpen(false);
             
-            toast({ title: "Employee Registered", description: `${name} has been added.` });
+            toast({ title: "Employee Registered", description: `${name} has been added successfully.` });
             await fetchData();
         } catch (error: any) {
-            console.error("Employee registration failed:", error);
             toast({
                 variant: 'destructive',
                 title: "Registration Failed",
-                description: error.message || "Please check your connection.",
+                description: error.message || "Please check your database constraints.",
             });
         } finally {
             setSubmitting(false);
@@ -177,7 +176,7 @@ export default function EmployeeRegistryPage() {
         try {
             const { error } = await supabase.from('employees').delete().eq('id', id);
             if (error) throw error;
-            toast({ title: 'Employee Removed', description: `${empName} has been removed.` });
+            toast({ title: 'Employee Removed', description: `${empName} has been removed from the team.` });
             await fetchData();
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Removal Failed', description: 'Could not remove staff member.' });
@@ -189,63 +188,68 @@ export default function EmployeeRegistryPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-primary">Employee Registry</h1>
-                    <p className="text-muted-foreground">Manage your verified team members.</p>
+                    <p className="text-muted-foreground">Manage your verified team members and their identification.</p>
                 </div>
-                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="shadow-lg px-6">
-                            <PlusCircle className="mr-2 h-4 w-4" /> Add Employee
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-md">
-                        <DialogHeader>
-                            <DialogTitle>Register New Staff</DialogTitle>
-                            <DialogDescription>Omang/ID is required for safety and insurance.</DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
-                            <div className="flex justify-center mb-4">
-                                <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group cursor-pointer shadow-inner">
-                                    {imagePreview ? (
-                                        <Image src={imagePreview} alt="Preview" fill className="object-cover" />
-                                    ) : (
-                                        <div className="h-full w-full flex items-center justify-center">
-                                            <User className="h-10 w-10 text-muted-foreground opacity-40" />
-                                        </div>
-                                    )}
-                                    <button 
-                                        type="button"
-                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                                        onClick={() => fileInputRef.current?.click()}
-                                    >
-                                        <Upload className="h-5 w-5" />
-                                    </button>
+                <div className="flex gap-2">
+                    <Button variant="outline" size="icon" onClick={() => fetchData()} disabled={loading}>
+                        <RefreshCw className={loading ? "animate-spin h-4 w-4" : "h-4 w-4"} />
+                    </Button>
+                    <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                        <DialogTrigger asChild>
+                            <Button className="shadow-lg">
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add Employee
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Register New Staff</DialogTitle>
+                                <DialogDescription>Omang/ID is mandatory for safety and insurance verification.</DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
+                                <div className="flex justify-center mb-4">
+                                    <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group cursor-pointer shadow-inner">
+                                        {imagePreview ? (
+                                            <Image src={imagePreview} alt="Preview" fill className="object-cover" />
+                                        ) : (
+                                            <div className="h-full w-full flex items-center justify-center">
+                                                <User className="h-10 w-10 text-muted-foreground opacity-40" />
+                                            </div>
+                                        )}
+                                        <button 
+                                            type="button"
+                                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                                            onClick={() => fileInputRef.current?.click()}
+                                        >
+                                            <Upload className="h-5 w-5" />
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+                                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
 
-                            <div className="space-y-2">
-                                <Label htmlFor="name">Full Name (as per ID)</Label>
-                                <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Enter full name" required />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="phone">Phone Number</Label>
-                                    <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+267 7XXXXXXX" required />
+                                    <Label htmlFor="name">Full Name (as per ID)</Label>
+                                    <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Enter full name" required />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="idref">ID Number (Omang)</Label>
-                                    <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="Enter ID number" required />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="phone">Phone Number</Label>
+                                        <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+267 7XXXXXXX" required />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="idref">ID Number (Omang)</Label>
+                                        <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="Enter ID number" required />
+                                    </div>
                                 </div>
-                            </div>
-                            <DialogFooter className="pt-4">
-                                <Button type="submit" className="w-full h-12 text-lg" disabled={submitting}>
-                                    {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
-                                    Complete Registration
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
+                                <DialogFooter className="pt-4">
+                                    <Button type="submit" className="w-full h-12 text-lg" disabled={submitting}>
+                                        {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
+                                        Complete Registration
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </div>
 
             <Card className="shadow-lg border-muted/50 overflow-hidden">
@@ -277,7 +281,7 @@ export default function EmployeeRegistryPage() {
                                                 <Avatar className="h-10 w-10 border shadow-sm">
                                                     <AvatarImage src={employee.image_url} alt={employee.name} className="object-cover" />
                                                     <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                                        {employee.name.charAt(0)}
+                                                        {employee.name?.charAt(0) || '?'}
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 <span className="font-bold">{employee.name}</span>
@@ -317,7 +321,7 @@ export default function EmployeeRegistryPage() {
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="font-bold text-lg">No staff registered yet</p>
-                                                <p className="text-sm">Employees matching your Business ID will appear here.</p>
+                                                <p className="text-sm">Verified employees linked to your account will appear here.</p>
                                             </div>
                                         </div>
                                     </TableCell>

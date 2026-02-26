@@ -4,7 +4,7 @@ import type { Booking, Business, Employee } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone } from "lucide-react";
+import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,10 +23,11 @@ export default function BusinessDashboardPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                const userId = session.user.id;
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const userId = user.id;
                 
+                // 1. Fetch Business Profile
                 const { data: bizData } = await supabase
                     .from('businesses')
                     .select('id, owner_id, name, type, status, subscription_status, subscription_plan, sub_end_date')
@@ -38,7 +39,7 @@ export default function BusinessDashboardPage() {
                     setBusiness(biz);
                     const businessId = biz.id;
 
-                    // 1. Fetch Ratings
+                    // 2. Fetch Ratings
                     const { data: ratingsData } = await supabase
                         .from('ratings')
                         .select('*, customer:customer_id(name)')
@@ -54,7 +55,7 @@ export default function BusinessDashboardPage() {
                         });
                     }
 
-                    // 2. Fetch Bookings
+                    // 3. Fetch Bookings
                     const { data: bookingData } = await supabase
                         .from('bookings')
                         .select('*')
@@ -63,11 +64,11 @@ export default function BusinessDashboardPage() {
                     
                     setBookings(bookingData || []);
 
-                    // 3. Fetch Employees (Requested Section)
+                    // 4. Fetch Employees (Resilient search by Business UUID and User UID)
                     const { data: empData } = await supabase
                         .from('employees')
-                        .select('*')
-                        .eq('business_id', businessId)
+                        .select('id, business_id, name, phone, image_url, id_reference')
+                        .or(`business_id.eq.${businessId},business_id.eq.${userId}`)
                         .order('name')
                         .limit(5);
                     
@@ -75,7 +76,7 @@ export default function BusinessDashboardPage() {
                 }
             }
         } catch (error) {
-            console.error("Dashboard fetch error:", error);
+            console.error("Dashboard: Fetch error:", error);
         } finally {
             setLoading(false);
         }
@@ -105,7 +106,7 @@ export default function BusinessDashboardPage() {
     };
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
-    if (!business) return <div className="text-center py-20">Business profile not found.</div>;
+    if (!business) return <div className="text-center py-20">Business profile not found. Please complete your profile.</div>;
 
     const requested = bookings.filter(b => b.status === 'requested');
     const active = bookings.filter(b => b.status === 'accepted' || b.status === 'in-progress');
@@ -113,7 +114,7 @@ export default function BusinessDashboardPage() {
     const now = new Date();
     const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
     const trialDays = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
-    const isPlanActive = business.subscription_status?.toLowerCase() === 'active' || (trialDays > 0 && business.status?.toLowerCase() === 'verified');
+    const isPlanActive = business.subscription_status?.toLowerCase() === 'active' || (trialDays > 0 && (business.status?.toLowerCase() === 'verified' || business.status?.toLowerCase() === 'pending'));
 
     return (
         <div className="space-y-8">
@@ -124,8 +125,11 @@ export default function BusinessDashboardPage() {
                         <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
                             {(business.type || 'station').toUpperCase()}
                         </Badge>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={fetchData}>
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
                     </div>
-                    <p className="text-muted-foreground text-lg">Manage incoming requests and track operations.</p>
+                    <p className="text-muted-foreground text-lg">Operations center for your car wash.</p>
                 </div>
                 <div className="w-full md:w-80 shrink-0">
                     <ShareBusinessCard businessId={business.id} />
@@ -259,13 +263,13 @@ export default function BusinessDashboardPage() {
                 </div>
 
                 <div className="space-y-6">
-                    <Card>
+                    <Card className="shadow-md">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <Users className="h-5 w-5 text-primary" /> Your Team
+                                <Users className="h-5 w-5 text-primary" /> Team Overview
                             </CardTitle>
                             <Button variant="ghost" size="sm" className="h-8 text-xs text-primary" asChild>
-                                <Link href="/business/employees">View All</Link>
+                                <Link href="/business/employees">Manage All</Link>
                             </Button>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -275,7 +279,7 @@ export default function BusinessDashboardPage() {
                                         <Avatar className="h-10 w-10 border shadow-sm">
                                             <AvatarImage src={emp.image_url} alt={emp.name} className="object-cover" />
                                             <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                                {emp.name.charAt(0)}
+                                                {emp.name?.charAt(0) || '?'}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div className="flex-1 overflow-hidden">
@@ -290,9 +294,9 @@ export default function BusinessDashboardPage() {
                             ) : (
                                 <div className="text-center py-10 bg-muted/10 rounded-xl border border-dashed">
                                     <Users className="h-8 w-8 mx-auto text-muted-foreground opacity-20 mb-2" />
-                                    <p className="text-xs text-muted-foreground italic">No staff registered yet.</p>
+                                    <p className="text-xs text-muted-foreground italic">No staff found.</p>
                                     <Button variant="link" size="sm" asChild className="text-[10px] h-6">
-                                        <Link href="/business/employees">Register Now</Link>
+                                        <Link href="/business/employees">Register Team</Link>
                                     </Button>
                                 </div>
                             )}
