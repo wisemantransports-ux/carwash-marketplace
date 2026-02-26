@@ -23,23 +23,33 @@ import {
 
 function BookingCard({ booking, onCancel }: { booking: any, onCancel: (id: string) => void }) {
   const isUpcoming = !['completed', 'cancelled', 'rejected'].includes(booking.status);
-  const canCancel = booking.status === 'requested' || booking.status === 'pending';
+  const canCancel = booking.status === 'requested' || booking.status === 'pending' || booking.status === 'accepted';
   const [cancelling, setCancelling] = useState(false);
 
   const handleCancel = async () => {
     setCancelling(true);
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status: 'cancelled' })
-      .eq('id', booking.booking_id);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'cancelled' })
+        .eq('id', booking.booking_id);
 
-    if (error) {
-      toast({ variant: 'destructive', title: 'Cancellation Failed', description: error.message });
-    } else {
-      toast({ title: 'Booking Cancelled', description: 'Your request has been cancelled successfully.' });
+      if (error) throw error;
+
+      toast({ 
+        title: 'Booking Cancelled', 
+        description: 'Your booking has been successfully cancelled.' 
+      });
       onCancel(booking.booking_id);
+    } catch (error: any) {
+      toast({ 
+        variant: 'destructive', 
+        title: 'Cancellation Failed', 
+        description: error.message || 'Could not cancel the booking. Please try again.' 
+      });
+    } finally {
+      setCancelling(false);
     }
-    setCancelling(false);
   };
 
   return (
