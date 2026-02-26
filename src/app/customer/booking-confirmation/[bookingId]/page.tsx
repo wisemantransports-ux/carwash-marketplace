@@ -65,18 +65,18 @@ export default function BookingConfirmationPage({ params }: { params: Promise<{ 
                             <div className="grid grid-cols-2 gap-4 text-left">
                                 <div className="flex items-center gap-2">
                                     <Calendar className="h-4 w-4 text-primary" />
-                                    <span className="text-sm font-medium">{booking ? new Date(booking.booking_time).toLocaleDateString() : '...'}</span>
+                                    <span className="text-sm font-medium">{booking?.booking_time ? new Date(booking.booking_time).toLocaleDateString() : '...'}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Clock className="h-4 w-4 text-primary" />
-                                    <span className="text-sm font-medium">{booking ? new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</span>
+                                    <span className="text-sm font-medium">{booking?.booking_time ? new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</span>
                                 </div>
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <Badge variant="outline" className="text-primary font-bold px-4 py-1">
-                                {booking?.service?.name} • P{booking?.price.toFixed(2)}
+                                {booking?.service?.name || 'Service'} • P{booking?.price ? Number(booking.price).toFixed(2) : '0.00'}
                             </Badge>
                             <p className="text-[10px] text-muted-foreground italic">
                                 Once accepted, an invoice will be automatically generated and visible in your dashboard.

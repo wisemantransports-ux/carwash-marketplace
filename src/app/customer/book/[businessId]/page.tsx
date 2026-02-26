@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -107,14 +106,15 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error('Not authenticated');
 
-            // 1. Insert Booking strictly mapping valid columns
+            // 1. Insert Booking strictly mapping valid columns (including price for display)
             const { data: newBooking, error } = await supabase.from('bookings').insert({
                 customer_id: session.user.id,
                 business_id: businessId,
                 service_id: selectedService.id,
                 car_id: selectedCarId,
                 booking_time: new Date(bookingTime).toISOString(),
-                status: 'pending'
+                status: 'pending',
+                price: selectedService.price
             }).select().single();
 
             if (error) throw error;
