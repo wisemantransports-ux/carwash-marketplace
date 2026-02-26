@@ -24,7 +24,7 @@ export default function BusinessDashboardPage() {
 
     const fetchData = useCallback(async () => {
         if (!isSupabaseConfigured) {
-            setFetchError("Unable to connect to Supabase. Check environment variables.");
+            setFetchError("Supabase Configuration Missing");
             setLoading(false);
             return;
         }
@@ -34,8 +34,7 @@ export default function BusinessDashboardPage() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                console.log(`[DEBUG DASHBOARD] UID: ${user.id}`);
-                
+                // 1. Fetch Business Profile
                 const { data: bizData } = await supabase
                     .from('businesses')
                     .select('id, owner_id, name, type, status, subscription_status, subscription_plan, sub_end_date')
@@ -46,16 +45,17 @@ export default function BusinessDashboardPage() {
                     const biz = bizData as Business;
                     setBusiness(biz);
 
-                    // Fetch Team (RLS Compliant)
+                    // 2. Fetch Team (Resilient Query)
+                    // We check for both Auth UID and Business Profile ID to prevent vanishing rows
                     const { data: empData } = await supabase
                         .from('employees')
                         .select('*')
-                        .eq('business_id', user.id)
+                        .or(`business_id.eq.${user.id},business_id.eq.${biz.id}`)
                         .order('name');
                     
                     setEmployees(empData || []);
 
-                    // Fetch Ratings
+                    // 3. Fetch Ratings
                     const { data: ratingsData } = await supabase
                         .from('ratings')
                         .select('*, customer:customer_id(name)')
@@ -71,7 +71,7 @@ export default function BusinessDashboardPage() {
                         });
                     }
 
-                    // Fetch Bookings
+                    // 4. Fetch Bookings
                     const { data: bookingData } = await supabase
                         .from('bookings')
                         .select('*')
@@ -82,8 +82,8 @@ export default function BusinessDashboardPage() {
                 }
             }
         } catch (error: any) {
-            console.error("Dashboard Fetch Error:", error);
-            setFetchError("Partial data load failure.");
+            console.error("Dashboard Sync Error:", error);
+            setFetchError("Some data could not be synchronized.");
         } finally {
             setLoading(false);
         }
@@ -97,7 +97,7 @@ export default function BusinessDashboardPage() {
         try {
             const { error } = await supabase.from('bookings').update({ status }).eq('id', id);
             if (error) throw error;
-            toast({ title: `Booking Updated`, description: "Status synchronized successfully." });
+            toast({ title: `Booking Updated` });
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -106,16 +106,6 @@ export default function BusinessDashboardPage() {
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
     
-    if (!isSupabaseConfigured) {
-        return (
-            <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <AlertCircle className="h-12 w-12 text-destructive" />
-                <h2 className="text-2xl font-bold">Configuration Error</h2>
-                <p className="text-muted-foreground">Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.</p>
-            </div>
-        );
-    }
-
     if (!business) return <div className="text-center py-20">Business profile not found. Please complete your profile.</div>;
 
     const requested = bookings.filter(b => b.status === 'requested');
@@ -136,6 +126,14 @@ export default function BusinessDashboardPage() {
                 </div>
                 <div className="w-full md:w-80 shrink-0"><ShareBusinessCard businessId={business.id} /></div>
             </div>
+
+            {fetchError && (
+                <Alert variant="destructive" className="border-destructive/20 bg-destructive/5">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Sync Issue</AlertTitle>
+                    <AlertDescription>{fetchError}</AlertDescription>
+                </Alert>
+            )}
 
             <div className="grid gap-6 md:grid-cols-4">
                 <Card className="bg-primary/5 border-primary/20">

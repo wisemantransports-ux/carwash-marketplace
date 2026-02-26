@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import type { Employee } from "@/lib/types";
+import type { Employee, Business } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import Image from "next/image";
 
 export default function EmployeeRegistryPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [business, setBusiness] = useState<Business | null>(null);
     const [loading, setLoading] = useState(true);
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -34,7 +35,7 @@ export default function EmployeeRegistryPage() {
 
     const fetchData = useCallback(async () => {
         if (!isSupabaseConfigured) {
-            setFetchError("Unable to connect to Supabase. Please check environment variables (URL/Anon Key).");
+            setFetchError("Supabase connection not configured.");
             setLoading(false);
             return;
         }
@@ -48,36 +49,39 @@ export default function EmployeeRegistryPage() {
                 return;
             }
 
-            console.log(`[DEBUG] Fetching staff for UID: ${user.id}`);
+            // 1. Fetch Business Profile to get the Business UUID
+            const { data: bizData } = await supabase
+                .from('businesses')
+                .select('id')
+                .eq('owner_id', user.id)
+                .maybeSingle();
+            
+            const bizId = bizData?.id;
+            if (bizData) setBusiness(bizData as Business);
 
-            // TEMPORARY DEBUG PROBE: Log total row count in table to find ID mismatches
-            const { count: globalCount } = await supabase.from('employees').select('*', { count: 'exact', head: true });
-            console.log(`[DEBUG PROBE] Total staff rows in DB (all businesses): ${globalCount}`);
+            console.log(`[DEBUG] Fetching staff. Auth UID: ${user.id}, Business UUID: ${bizId || 'Not Found'}`);
 
-            // RLS Compliant Fetch: business_id = auth.uid()
-            const { data: empData, error: empError } = await supabase
-                .from('employees')
-                .select('*')
-                .eq('business_id', user.id)
-                .order('name');
+            // 2. Resilient Query: Check for staff linked to either the Auth UID or the Business UUID
+            // This prevents "vanishing" if the DB uses a different ID convention than the frontend
+            let query = supabase.from('employees').select('*');
+            
+            if (bizId) {
+                query = query.or(`business_id.eq.${user.id},business_id.eq.${bizId}`);
+            } else {
+                query = query.eq('business_id', user.id);
+            }
+
+            const { data: empData, error: empError } = await query.order('name');
             
             if (empError) throw empError;
             
+            console.log(`[DEBUG] Sync Complete. Staff found: ${empData?.length || 0}`);
             setEmployees(empData || []);
-            console.log(`[DEBUG] Staff found for this business: ${empData?.length || 0}`);
 
         } catch (error: any) {
-            console.error(`[CRITICAL] Employee Fetch Failure:`, {
-                message: error.message,
-                code: error.code,
-                details: error.details
-            });
-            setFetchError("Unable to fetch employees. Please check database connection or RLS policies.");
-            toast({ 
-                variant: 'destructive', 
-                title: 'Database Alert', 
-                description: 'We had trouble reaching your staff list.' 
-            });
+            console.error(`[CRITICAL] Employee Fetch Failure:`, error);
+            setFetchError("Unable to reach the staff registry.");
+            toast({ variant: 'destructive', title: 'Fetch Failed', description: error.message });
         } finally {
             setLoading(false);
         }
@@ -106,7 +110,7 @@ export default function EmployeeRegistryPage() {
         
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-            toast({ variant: 'destructive', title: 'Action Denied', description: 'Session expired.' });
+            toast({ variant: 'destructive', title: 'Session Expired' });
             return;
         }
 
@@ -118,7 +122,7 @@ export default function EmployeeRegistryPage() {
         setSubmitting(true);
         const tempId = crypto.randomUUID();
         
-        // Optimistic Update
+        // Optimistic Update: Add to UI immediately so it doesn't "wait" for the network
         const tempEmployee: Employee = {
             id: tempId,
             business_id: user.id,
@@ -133,16 +137,12 @@ export default function EmployeeRegistryPage() {
         try {
             let uploadedImageUrl = null;
 
-            // 1. Storage Upload
             if (imageFile) {
                 const fileExt = imageFile.name.split('.').pop();
                 const fileName = `${Date.now()}.${fileExt}`;
                 const { error: uploadError } = await supabase.storage
                     .from('business-assets')
-                    .upload(`employees/${user.id}/${fileName}`, imageFile, {
-                        cacheControl: '3600',
-                        upsert: true
-                    });
+                    .upload(`employees/${user.id}/${fileName}`, imageFile);
                 
                 if (uploadError) throw uploadError;
 
@@ -153,7 +153,7 @@ export default function EmployeeRegistryPage() {
                 uploadedImageUrl = publicUrl;
             }
 
-            // 2. Database Insert
+            // Persistence: Using the Auth UID as business_id to match RLS policies
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
@@ -167,20 +167,21 @@ export default function EmployeeRegistryPage() {
             
             if (insertError) throw insertError;
 
-            // Reset and Re-fetch
             setName(''); setPhone(''); setIdReference('');
             setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
             
-            toast({ title: "Employee Registered", description: "Record persisted successfully." });
+            toast({ title: "Employee Registered", description: "Staff added to team successfully." });
+            
+            // Re-fetch from source of truth to replace optimistic record with server record
             await fetchData();
         } catch (error: any) {
             console.error(`[ERROR] Registration Failed:`, error);
-            await fetchData(); // Clear optimistic entry on error
+            await fetchData(); // Clear optimistic entry if real insert failed
             toast({
                 variant: 'destructive',
                 title: "Registration Error",
-                description: error.message || "Could not save to database.",
+                description: error.message,
             });
         } finally {
             setSubmitting(false);
@@ -267,27 +268,15 @@ export default function EmployeeRegistryPage() {
                 </div>
             </div>
 
-            {!isSupabaseConfigured && (
-                <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Configuration Error</AlertTitle>
-                    <AlertDescription>
-                        Unable to connect to Supabase. Please check environment variables.
+            {fetchError && (
+                <Alert variant="destructive" className="bg-destructive/5 border-destructive/20">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Connection Alert</AlertTitle>
+                    <AlertDescription className="flex items-center justify-between">
+                        <span>{fetchError} Records exist but could not be synced.</span>
+                        <Button variant="outline" size="sm" onClick={fetchData}>Retry</Button>
                     </AlertDescription>
                 </Alert>
-            )}
-
-            {fetchError && isSupabaseConfigured && (
-                <Card className="bg-destructive/5 border-destructive/20">
-                    <CardContent className="flex items-center gap-4 py-4">
-                        <AlertTriangle className="h-5 w-5 text-destructive" />
-                        <div className="flex-1">
-                            <p className="text-sm font-bold text-destructive">Connection Alert</p>
-                            <p className="text-xs text-destructive/80">{fetchError}</p>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={fetchData}>Retry Sync</Button>
-                    </CardContent>
-                </Card>
             )}
 
             <Card className="shadow-lg border-muted/50 overflow-hidden">
@@ -325,7 +314,7 @@ export default function EmployeeRegistryPage() {
                                                 <div className="flex flex-col">
                                                     <span className="font-bold">{employee.name}</span>
                                                     {employee.id.includes('-') && employee.id.length > 20 && (
-                                                        <span className="text-[8px] text-primary/60 font-mono italic">Syncing...</span>
+                                                        <span className="text-[8px] text-primary/60 font-mono italic">Verifying...</span>
                                                     )}
                                                 </div>
                                             </div>
