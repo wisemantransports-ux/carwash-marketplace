@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, MapPin, Globe, ShieldCheck, Clock, CreditCard, Upload, X, AlertCircle } from 'lucide-react';
+import { Loader2, Store, MapPin, Globe, ShieldCheck, Clock, CreditCard, Upload, X, AlertCircle, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -28,6 +28,7 @@ export default function BusinessProfilePage() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [type, setType] = useState('station');
+  const [whatsapp, setWhatsapp] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,12 +39,12 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Query businesses directly as requested
+      // Query businesses directly
       const { data: profileData, error: profileError } = await supabase
         .from('businesses')
         .select(`
           id, owner_id, name, address, city, type, rating, review_count,
-          status, subscription_plan, subscription_status, sub_end_date, logo_url
+          status, subscription_plan, subscription_status, sub_end_date, logo_url, whatsapp_number
         `)
         .eq('owner_id', user.id)
         .maybeSingle();
@@ -62,6 +63,7 @@ export default function BusinessProfilePage() {
         setAddress(biz.address || '');
         setCity(biz.city || '');
         setType(biz.type || 'station');
+        setWhatsapp(biz.whatsapp_number || '');
         setLogoUrl(biz.logo_url || '');
       }
     } catch (error: any) {
@@ -132,6 +134,7 @@ export default function BusinessProfilePage() {
         address,
         city,
         type,
+        whatsapp_number: whatsapp,
         logo_url: logoUrl
       };
 
@@ -145,13 +148,7 @@ export default function BusinessProfilePage() {
         .upsert(payload, { onConflict: 'owner_id' });
 
       if (saveError) {
-        // Log the detailed error object to console for debugging
-        console.error("Profile save error detail:", {
-          message: saveError.message,
-          code: saveError.code,
-          details: saveError.details,
-          hint: saveError.hint
-        });
+        console.error("Profile save error detail:", saveError);
         throw saveError;
       }
 
@@ -165,7 +162,7 @@ export default function BusinessProfilePage() {
       toast({
         variant: 'destructive',
         title: 'Save Failed',
-        description: error.message || 'Could not save profile. Please check console for details.'
+        description: error.message || 'Could not save profile.'
       });
     } finally {
       setSaving(false);
@@ -177,6 +174,7 @@ export default function BusinessProfilePage() {
       address !== (profile.address || '') || 
       city !== (profile.city || '') || 
       type !== (profile.type || 'station') || 
+      whatsapp !== (profile.whatsapp_number || '') ||
       logoUrl !== (profile.logo_url || '')
     : true;
 
@@ -188,7 +186,6 @@ export default function BusinessProfilePage() {
     ? Math.max(0, Math.ceil((subEndDate.getTime() - now) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  // Derive status active strictly from backend data columns
   const isStatusActive = profile?.subscription_status?.toLowerCase() === 'active' || (trialRemaining > 0 && profile?.status?.toLowerCase() === 'verified');
 
   return (
@@ -204,16 +201,6 @@ export default function BusinessProfilePage() {
           <AlertTitle>Plan Inactive</AlertTitle>
           <AlertDescription>
             Your plan is inactive or trial has expired. Please complete payment to access full features.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {!profile && (
-        <Alert className="bg-blue-50 border-blue-200">
-          <AlertCircle className="h-4 w-4 text-blue-600" />
-          <AlertTitle>Profile Setup Required</AlertTitle>
-          <AlertDescription>
-            Please create your business profile below to get started.
           </AlertDescription>
         </Alert>
       )}
@@ -270,9 +257,6 @@ export default function BusinessProfilePage() {
                         </Button>
                       )}
                     </div>
-                    <p className="text-[10px] text-muted-foreground italic">
-                      Recommended: Square image, PNG or JPG (max 2MB).
-                    </p>
                     <input 
                       type="file" 
                       ref={fileInputRef} 
@@ -321,6 +305,21 @@ export default function BusinessProfilePage() {
                       />
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp">WhatsApp Number (Optional)</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      id="whatsapp" 
+                      className="pl-9"
+                      value={whatsapp} 
+                      onChange={(e) => setWhatsapp(e.target.value)} 
+                      placeholder="e.g. 26771234567"
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground italic">Required for automatic WhatsApp redirection on mobile bookings.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -380,16 +379,6 @@ export default function BusinessProfilePage() {
                   ) : (
                     <Badge variant="outline">{(profile?.status || 'PENDING').toUpperCase()}</Badge>
                   )}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Trial Status</p>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm font-medium">
-                    {trialRemaining > 0 ? `${trialRemaining} days left` : 'Trial Expired'}
-                  </span>
                 </div>
               </div>
             </CardContent>

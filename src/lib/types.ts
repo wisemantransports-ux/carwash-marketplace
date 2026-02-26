@@ -1,3 +1,4 @@
+
 // src/lib/types.ts
 export type UserRole = 'customer' | 'admin' | 'business-owner';
 
@@ -17,6 +18,7 @@ export type User = {
   trial_remaining?: number;
   access_active?: boolean;
   plan?: SubscriptionPlan;
+  whatsapp_number?: string;
 };
 
 export type Car = {
@@ -47,6 +49,7 @@ export type Business = {
   address: string;
   city: string;
   type: 'station' | 'mobile';
+  whatsapp_number?: string;
   rating: number;
   review_count: number;
   status: 'pending' | 'verified' | 'suspended';
@@ -80,10 +83,6 @@ export type Booking = {
   mobileBookingStatus?: MobileBookingStatus;
   assignedEmployeeId?: string;
   price: number;
-  payment: {
-    escrowStatus: EscrowStatus;
-    commission: number;
-  };
 };
 
 export type PaymentMethod = 'cash' | 'mobile_money' | 'card';

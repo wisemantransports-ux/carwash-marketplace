@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { User as ProfileUser, Service, Car } from '@/lib/types';
+import type { User as ProfileUser, Service, Car, Business } from '@/lib/types';
 import { Clock, Banknote, Loader2, Store, Calendar as CalendarIcon, MapPin, ShieldCheck, Package, Info } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -26,6 +27,7 @@ const SPARE_SHOP_PREVIEW = [
 export default function BookingPage({ params }: { params: Promise<{ businessId: string }> }) {
     const { businessId } = React.use(params);
     const [business, setBusiness] = useState<ProfileUser | null>(null);
+    const [bizRecord, setBizRecord] = useState<Business | null>(null);
     const [services, setServices] = useState<Service[]>([]);
     const [cars, setCars] = useState<Car[]>([]);
     const [loading, setLoading] = useState(true);
@@ -45,18 +47,22 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 
-                // Fetch Business Owner Profile
+                // Fetch Business Owner Profile (using ID as owner_id reference)
                 const { data: userProfile } = await supabase.from('users').select('*').eq('id', businessId).maybeSingle();
                 
-                // Fetch Business Plan and other info
-                const { data: bizRecord } = await supabase.from('businesses').select('*').eq('owner_id', businessId).maybeSingle();
+                // Fetch Business Details
+                const { data: bizData } = await supabase.from('businesses').select('*').eq('owner_id', businessId).maybeSingle();
 
                 if (userProfile) {
                   setBusiness({ 
                     ...userProfile, 
                     avatarUrl: userProfile.avatar_url,
-                    plan: bizRecord?.subscription_plan || 'None'
+                    plan: bizData?.subscription_plan || 'None'
                   } as ProfileUser);
+                }
+
+                if (bizData) {
+                    setBizRecord(bizData as Business);
                 }
 
                 // Fetch Services
@@ -91,7 +97,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
     };
 
     const confirmBooking = async () => {
-        if (!selectedCarId || !bookingTime || !selectedService || !business) {
+        if (!selectedCarId || !bookingTime || !selectedService || !business || !bizRecord) {
             toast({ variant: 'destructive', title: 'Details Required', description: 'Please pick a car and a valid time.' });
             return;
         }
@@ -101,7 +107,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error('Not authenticated');
 
-            // 1. Insert Booking strictly mapping columns
+            // 1. Insert Booking strictly mapping valid columns
             const { data: newBooking, error } = await supabase.from('bookings').insert({
                 customer_id: session.user.id,
                 business_id: businessId,
@@ -113,22 +119,25 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
 
             if (error) throw error;
 
-            toast({ title: 'Booking Successful', description: 'Your request has been registered.' });
-
             // 2. Conditional WhatsApp Redirect
-            // Only for Pro or Enterprise plans which allow mobile services
-            const allowsMobile = business.plan === 'Pro' || business.plan === 'Enterprise';
+            const allowsMobile = bizRecord.subscription_plan === 'Pro' || bizRecord.subscription_plan === 'Enterprise';
+            const hasWhatsapp = !!bizRecord.whatsapp_number;
             
-            if (allowsMobile) {
+            if (allowsMobile && hasWhatsapp) {
                 const selectedCar = cars.find(c => c.id === selectedCarId);
-                const message = `Hello! I've just booked a *${selectedService.name}* for my *${selectedCar?.make} ${selectedCar?.model}* via HydroFlow Pro.\n\n*Time:* ${new Date(bookingTime).toLocaleString()}\n*Ref:* ${newBooking.id.slice(-8).toUpperCase()}`;
+                const timeStr = new Date(bookingTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+                const message = `Hello! I've just booked a *${selectedService.name}* for my *${selectedCar?.make} ${selectedCar?.model}* via HydroFlow Marketplace.\n\n*Scheduled Time:* ${timeStr}\n*Ref:* ${newBooking.id.slice(-8).toUpperCase()}`;
                 
-                // Using a placeholder number as business phone isn't explicitly in schema, but we'll use a valid Mascom/Orange format
-                const businessPhone = "26777491261"; 
-                const whatsappUrl = `https://wa.me/${businessPhone}?text=${encodeURIComponent(message)}`;
+                const whatsappUrl = `https://wa.me/${bizRecord.whatsapp_number?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
                 
-                window.location.href = whatsappUrl;
+                toast({ title: 'Booking Saved', description: 'Opening WhatsApp to coordinate with the business...' });
+                
+                // Allow user to see the success toast briefly before redirect
+                setTimeout(() => {
+                    window.location.href = whatsappUrl;
+                }, 1000);
             } else {
+                toast({ title: 'Booking Successful', description: 'Your request has been registered.' });
                 setBookingOpen(false);
                 router.push(`/customer/booking-confirmation/${newBooking.id}`);
             }
@@ -224,12 +233,6 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                                 </CardContent>
                             </Card>
                         ))}
-                    </div>
-                    <div className="flex items-center gap-2 p-4 bg-muted/30 rounded-xl border border-dashed">
-                        <Info className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <p className="text-[10px] text-muted-foreground italic">
-                            These products will be provided by the business you&apos;re booking with. Feature launching soon.
-                        </p>
                     </div>
                 </div>
             </div>

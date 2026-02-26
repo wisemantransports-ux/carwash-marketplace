@@ -30,6 +30,7 @@
         "address": { "type": "string", "description": "Physical address." },
         "city": { "type": "string", "description": "City of operation." },
         "type": { "type": "string", "enum": ["station", "mobile"], "description": "Service delivery model." },
+        "whatsapp_number": { "type": "string", "description": "Business contact for mobile service coordination." },
         "rating": { "type": "number", "description": "Average user rating." },
         "reviewCount": { "type": "number", "description": "Total number of reviews." },
         "imageUrl": { "type": "string", "description": "Branding image URL." },
@@ -91,14 +92,7 @@
         "status": { "type": "string", "enum": ["pending", "confirmed", "in-progress", "completed", "cancelled"] },
         "mobileBookingStatus": { "type": "string", "enum": ["en-route", "arrived", "service-started", "service-finished"] },
         "assignedEmployeeId": { "type": "string" },
-        "price": { "type": "number" },
-        "payment": {
-          "type": "object",
-          "properties": {
-            "escrowStatus": { "type": "string", "enum": ["funded", "released", "refunded"] },
-            "commission": { "type": "number" }
-          }
-        }
+        "price": { "type": "number" }
       }
     },
     "PaymentSubmission": {
