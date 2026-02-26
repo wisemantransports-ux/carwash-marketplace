@@ -20,7 +20,6 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.user?.id) {
-      // Fetch Business Profile exactly as requested
       const { data: biz } = await supabase
         .from('businesses')
         .select('*')
@@ -42,16 +41,12 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   const now = new Date();
   const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
   const isVerified = business?.status === 'verified';
-  const isPaid = business?.subscriptionStatus === 'active';
+  const isPaid = business?.subscription_status === 'active';
   const isTrialActive = expiry ? expiry >= now : false;
   
-  // Access decision: Only allow if verified AND (paid OR trial active)
   const hasAccess = isVerified && (isPaid || isTrialActive);
-  
-  // Restricted routes
   const isBlocked = !hasAccess && pathname !== "/business/subscription" && pathname !== "/business/profile";
   
-  // Calculate trial remaining
   const trialRemaining = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
   const navItems = [
@@ -127,7 +122,6 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           </div>
         ) : (
           <>
-            {/* Expiry Warning */}
             {isVerified && !isPaid && !isTrialActive && !isBlocked && pathname === "/business/subscription" && (
               <Alert variant="destructive" className="border-red-200 bg-red-50 mb-6">
                 <AlertCircle className="h-4 w-4" />

@@ -37,7 +37,15 @@ export default function AddServicePage() {
 
       const { data, error } = await supabase
         .from('businesses')
-        .select('id, status, subscriptionStatus')
+        .select(`
+            id,
+            owner_id,
+            name,
+            status,
+            subscription_status,
+            subscription_plan,
+            sub_end_date
+        `)
         .eq('owner_id', session.user.id)
         .maybeSingle();
 
@@ -53,11 +61,12 @@ export default function AddServicePage() {
         if (data.status !== 'verified') {
             toast({ title: 'Verification Pending', description: 'Your account is waiting for admin verification. Access will be granted once verified.' });
             router.push('/business/services');
-        } else if (data.subscriptionStatus !== 'active') {
+        } else if (data.subscription_status !== 'active') {
             toast({ title: 'Subscription Inactive', description: 'Your subscription is inactive. Please complete payment to continue.' });
             router.push('/business/services');
         }
       } else {
+        toast({ variant: 'destructive', title: 'Profile Not Found', description: 'Please set up your business profile first.' });
         router.push('/business/profile');
       }
       setLoading(false);
@@ -91,7 +100,7 @@ export default function AddServicePage() {
       return;
     }
 
-    if (business.status !== 'verified' || business.subscriptionStatus !== 'active') {
+    if (business.status !== 'verified' || business.subscription_status !== 'active') {
         toast({ variant: 'destructive', title: 'Access Denied', description: 'Your account must be verified and have an active subscription to add services.' });
         return;
     }
@@ -99,7 +108,7 @@ export default function AddServicePage() {
     const priceVal = parseFloat(price);
     const durationVal = parseInt(duration);
 
-    if (priceVal <= 0 || durationVal <= 0) {
+    if (isNaN(priceVal) || priceVal <= 0 || isNaN(durationVal) || durationVal <= 0) {
       toast({ variant: 'destructive', title: 'Invalid Input', description: 'Values must be greater than zero.' });
       return;
     }
@@ -118,11 +127,11 @@ export default function AddServicePage() {
           });
 
         if (error) {
-            console.error("Insert error:", error);
+            console.error("Add service error:", error);
             throw error;
         }
 
-        toast({ title: 'Service Added', description: `${serviceName} created.` });
+        toast({ title: 'Service Added', description: `${serviceName} created successfully.` });
         router.push('/business/services');
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Creation Failed', description: 'Unable to add service. Please try again.' });

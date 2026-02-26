@@ -26,10 +26,23 @@ export default function ServicesManagementPage() {
                 return;
             }
 
-            // 1. Fetch Business Profile
+            // 1. Fetch Business Profile Safely
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
-                .select('id, status, subscriptionStatus')
+                .select(`
+                    id,
+                    owner_id,
+                    name,
+                    address,
+                    city,
+                    type,
+                    rating,
+                    review_count,
+                    status,
+                    subscription_plan,
+                    subscription_status,
+                    sub_end_date
+                `)
                 .eq('owner_id', session.user.id)
                 .maybeSingle();
             
@@ -38,34 +51,58 @@ export default function ServicesManagementPage() {
                 throw bizError;
             }
 
-            if (biz) {
-                setBusiness(biz as Business);
-
-                // Verification and Subscription Checks
-                if (biz.status !== 'verified') {
-                    toast({
-                        title: 'Verification Pending',
-                        description: 'Your account is waiting for admin verification. Access will be granted once verified.'
-                    });
-                } else if (biz.subscriptionStatus !== 'active') {
-                    toast({
-                        title: 'Subscription Inactive',
-                        description: 'Your subscription is inactive. Please complete payment to continue.'
-                    });
-                } else {
-                    // 2. Fetch Services From Supabase
-                    const { data, error: servicesError } = await supabase
-                        .from('services')
-                        .select('id, name, description, price, duration, currency_code')
-                        .eq('business_id', biz.id);
-
-                    if (servicesError) {
-                        console.error("Services fetch error:", servicesError);
-                        throw servicesError;
-                    }
-                    setServices(data || []);
-                }
+            if (!biz) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Business Not Found',
+                    description: 'You do not have a registered business profile.'
+                });
+                setLoading(false);
+                return;
             }
+
+            setBusiness(biz as Business);
+
+            // 2. Check Verification Status
+            if (biz.status !== 'verified') {
+                toast({
+                    title: 'Account Pending Verification',
+                    description: 'Your account is waiting for admin verification. Access will be granted once verified.'
+                });
+                setLoading(false);
+                return;
+            }
+
+            // 3. Check Subscription Status
+            if (biz.subscription_status !== 'active') {
+                toast({
+                    title: 'Subscription Inactive',
+                    description: 'Your subscription is inactive. Please complete payment to manage services.'
+                });
+                setLoading(false);
+                return;
+            }
+
+            // 4. Fetch Services for Verified Business
+            const { data: svcs, error: servicesError } = await supabase
+                .from('services')
+                .select('id, name, description, price, duration, currency_code')
+                .eq('business_id', biz.id);
+
+            if (servicesError) {
+                console.error("Services fetch error:", servicesError);
+                throw servicesError;
+            }
+
+            setServices(svcs || []);
+            
+            if (!svcs || svcs.length === 0) {
+                toast({
+                    title: 'No Services',
+                    description: 'You have not added any service packages yet.'
+                });
+            }
+
         } catch (e: any) {
             console.error("General fetch error:", e);
             toast({ 
@@ -91,17 +128,18 @@ export default function ServicesManagementPage() {
 
             if (error) throw error;
 
-            setServices(services.filter(s => s.id !== id));
+            setServices(prev => prev.filter(s => s.id !== id));
             toast({ title: 'Service Deleted', description: 'The service has been removed from your catalog.' });
         } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Delete Failed', description: e.message });
+            console.error("Delete service error:", e);
+            toast({ variant: 'destructive', title: 'Delete Failed', description: 'Could not remove the service.' });
         }
-    }
+    };
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
     const isVerified = business?.status === 'verified';
-    const isActive = business?.subscriptionStatus === 'active';
+    const isActive = business?.subscription_status === 'active';
     const isAccessLocked = !isVerified || !isActive;
 
     return (
@@ -158,7 +196,7 @@ export default function ServicesManagementPage() {
                                         <TableCell className="font-bold text-primary">{service.name}</TableCell>
                                         <TableCell className="text-muted-foreground max-w-xs truncate">{service.description}</TableCell>
                                         <TableCell>{service.duration} min</TableCell>
-                                        <TableCell className="font-bold">{service.currency_code} {service.price.toFixed(2)}</TableCell>
+                                        <TableCell className="font-bold">{service.currency_code} {Number(service.price).toFixed(2)}</TableCell>
                                         <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -178,7 +216,7 @@ export default function ServicesManagementPage() {
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
-                                        No services yet. Add your first service above.
+                                        {isAccessLocked ? "Service management is locked." : "No services yet. Add your first service package above."}
                                     </TableCell>
                                 </TableRow>
                             )}

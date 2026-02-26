@@ -43,18 +43,18 @@ export type SubscriptionStatus = 'inactive' | 'awaiting_payment' | 'payment_subm
 
 export type Business = {
   id: string;
-  ownerId: string;
+  owner_id: string;
   name: string;
   address: string;
   city: string;
   type: 'station' | 'mobile';
   rating: number;
-  reviewCount: number;
-  imageUrl: string;
+  review_count: number;
   status: 'pending' | 'verified' | 'suspended';
-  subscriptionPlan: SubscriptionPlan;
-  subscriptionStatus: SubscriptionStatus;
+  subscription_plan: SubscriptionPlan;
+  subscription_status: SubscriptionStatus;
   sub_end_date?: string;
+  imageUrl?: string;
 };
 
 export type Employee = {
