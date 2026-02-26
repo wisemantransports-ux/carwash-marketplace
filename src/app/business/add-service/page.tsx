@@ -10,9 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Plus, Sparkles, Clock, Banknote, Store } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Clock, Banknote } from 'lucide-react';
 import { generateServiceDescription } from '@/ai/flows/business-owner-service-description-flow';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 export default function AddServicePage() {
@@ -38,27 +37,25 @@ export default function AddServicePage() {
 
       const { data, error } = await supabase
         .from('businesses')
-        .select('*')
+        .select('id, status, subscriptionStatus')
         .eq('owner_id', session.user.id)
         .maybeSingle();
 
       if (error) {
+        console.error("Business fetch error:", error);
         toast({ variant: 'destructive', title: 'Load Error', description: 'Could not fetch your business details.' });
       }
 
       if (data) {
         setBusiness(data as Business);
         
-        // Access Check
-        const now = new Date();
-        const expiry = data.sub_end_date ? new Date(data.sub_end_date) : null;
-        const isVerified = data.status === 'verified';
-        const isPaid = data.subscriptionStatus === 'active';
-        const isTrialActive = expiry ? expiry > now : false;
-
-        if (!isVerified || (!isPaid && !isTrialActive)) {
-            toast({ variant: 'destructive', title: 'Access Denied', description: 'Active subscription required.' });
-            router.push('/business/subscription');
+        // Verification and Subscription Checks
+        if (data.status !== 'verified') {
+            toast({ title: 'Verification Pending', description: 'Your account is waiting for admin verification. Access will be granted once verified.' });
+            router.push('/business/services');
+        } else if (data.subscriptionStatus !== 'active') {
+            toast({ title: 'Subscription Inactive', description: 'Your subscription is inactive. Please complete payment to continue.' });
+            router.push('/business/services');
         }
       } else {
         router.push('/business/profile');
@@ -94,6 +91,11 @@ export default function AddServicePage() {
       return;
     }
 
+    if (business.status !== 'verified' || business.subscriptionStatus !== 'active') {
+        toast({ variant: 'destructive', title: 'Access Denied', description: 'Your account must be verified and have an active subscription to add services.' });
+        return;
+    }
+
     const priceVal = parseFloat(price);
     const durationVal = parseInt(duration);
 
@@ -115,12 +117,15 @@ export default function AddServicePage() {
             currency_code: currency
           });
 
-        if (error) throw error;
+        if (error) {
+            console.error("Insert error:", error);
+            throw error;
+        }
 
         toast({ title: 'Service Added', description: `${serviceName} created.` });
         router.push('/business/services');
     } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Creation Failed', description: error.message });
+        toast({ variant: 'destructive', title: 'Creation Failed', description: 'Unable to add service. Please try again.' });
     } finally {
         setSubmitting(false);
     }
@@ -144,7 +149,7 @@ export default function AddServicePage() {
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="sname">Service Name *</Label>
+              <Label htmlFor="sname">Name *</Label>
               <Input 
                 id="sname" 
                 value={serviceName} 

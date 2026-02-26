@@ -26,34 +26,52 @@ export default function ServicesManagementPage() {
                 return;
             }
 
-            // 1. Fetch Business Profile using owner_id = auth.uid()
+            // 1. Fetch Business Profile
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
-                .select('id, status, subscriptionStatus, sub_end_date')
+                .select('id, status, subscriptionStatus')
                 .eq('owner_id', session.user.id)
                 .maybeSingle();
             
-            if (bizError) throw bizError;
+            if (bizError) {
+                console.error("Business fetch error:", bizError);
+                throw bizError;
+            }
 
             if (biz) {
                 setBusiness(biz as Business);
-                
-                // 2. Fetch Services using verified columns only
-                // Schema: id, business_id, name, description, price, duration, currency_code
-                const { data, error: servicesError } = await supabase
-                    .from('services')
-                    .select('id, name, description, price, duration, currency_code')
-                    .eq('business_id', biz.id);
 
-                if (servicesError) throw servicesError;
-                setServices(data || []);
+                // Verification and Subscription Checks
+                if (biz.status !== 'verified') {
+                    toast({
+                        title: 'Verification Pending',
+                        description: 'Your account is waiting for admin verification. Access will be granted once verified.'
+                    });
+                } else if (biz.subscriptionStatus !== 'active') {
+                    toast({
+                        title: 'Subscription Inactive',
+                        description: 'Your subscription is inactive. Please complete payment to continue.'
+                    });
+                } else {
+                    // 2. Fetch Services From Supabase
+                    const { data, error: servicesError } = await supabase
+                        .from('services')
+                        .select('id, name, description, price, duration, currency_code')
+                        .eq('business_id', biz.id);
+
+                    if (servicesError) {
+                        console.error("Services fetch error:", servicesError);
+                        throw servicesError;
+                    }
+                    setServices(data || []);
+                }
             }
         } catch (e: any) {
-            console.error("Fetch Error Detail:", e);
+            console.error("General fetch error:", e);
             toast({ 
                 variant: 'destructive', 
                 title: 'Load Error', 
-                description: e?.message || 'Could not load your services catalog.' 
+                description: 'Unable to load services. Please try again later.' 
             });
         } finally {
             setLoading(false);
@@ -82,14 +100,9 @@ export default function ServicesManagementPage() {
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
-    // Access Logic: Check verified status and subscription/trial
-    const now = new Date();
-    const subEndDate = business?.sub_end_date ? new Date(business.sub_end_date) : null;
-    const isTrialActive = subEndDate ? subEndDate > now : false;
-    const isPaid = business?.subscriptionStatus === 'active';
     const isVerified = business?.status === 'verified';
-    
-    const isAccessLocked = !isVerified || (!isPaid && !isTrialActive);
+    const isActive = business?.subscriptionStatus === 'active';
+    const isAccessLocked = !isVerified || !isActive;
 
     return (
         <div className="space-y-6">
@@ -114,10 +127,10 @@ export default function ServicesManagementPage() {
                     <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <span>
                             {!isVerified 
-                                ? "Your account is awaiting admin verification. Access will be granted once verified." 
-                                : "Your trial has ended. Please submit payment to continue managing services."}
+                                ? "Your account is waiting for admin verification. Access will be granted once verified." 
+                                : "Your subscription is inactive. Please complete payment to continue."}
                         </span>
-                        {isVerified && (
+                        {isVerified && !isActive && (
                             <Button size="sm" variant="outline" asChild className="border-destructive/20 hover:bg-destructive/10">
                                 <Link href="/business/subscription">Renew Now</Link>
                             </Button>
@@ -165,7 +178,7 @@ export default function ServicesManagementPage() {
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
-                                        No services found. Click "Add Service" to get started.
+                                        No services yet. Add your first service above.
                                     </TableCell>
                                 </TableRow>
                             )}
