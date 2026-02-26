@@ -30,11 +30,12 @@ export type Car = {
 
 export type Service = {
   id: string;
-  businessId: string;
+  business_id: string;
   name: string;
   description: string;
   price: number;
   duration: number; // in minutes
+  currency_code: string;
   created_at?: string;
 };
 
@@ -51,12 +52,10 @@ export type Business = {
   rating: number;
   reviewCount: number;
   imageUrl: string;
-  access_active: boolean;
-  // Subscription fields
+  status: 'pending' | 'verified' | 'suspended';
   subscriptionPlan: SubscriptionPlan;
   subscriptionStatus: SubscriptionStatus;
-  subscriptionStartDate?: Date;
-  subscriptionEndDate?: Date;
+  sub_end_date?: string;
 };
 
 export type Employee = {

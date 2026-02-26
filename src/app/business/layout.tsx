@@ -2,8 +2,7 @@
 import SharedLayout from "@/components/app/shared-layout";
 import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt, Package } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
-import { mockGetBusinessById } from "@/lib/mock-api";
-import { Business, User as ProfileUser } from "@/lib/types";
+import { Business } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,6 @@ import { Loader2 } from "lucide-react";
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [business, setBusiness] = useState<Business | null>(null);
-  const [userProfile, setUserProfile] = useState<ProfileUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -22,15 +20,16 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.user?.id) {
-      const { data: profile } = await supabase
-        .from('users_with_access')
+      // Fetch Business Profile exactly as requested
+      const { data: biz } = await supabase
+        .from('businesses')
         .select('*')
-        .eq('id', session.user.id)
+        .eq('owner_id', session.user.id)
         .maybeSingle();
       
-      setUserProfile(profile as ProfileUser);
-      const { data } = await mockGetBusinessById('biz-2'); 
-      setBusiness(data);
+      if (biz) {
+        setBusiness(biz as Business);
+      }
     }
     setLoading(false);
   }, []);
@@ -41,15 +40,19 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
 
   // Access Gating Logic
   const now = new Date();
-  const expiry = userProfile?.trial_expiry ? new Date(userProfile.trial_expiry) : null;
-  const isPaid = userProfile?.paid === true;
+  const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
+  const isVerified = business?.status === 'verified';
+  const isPaid = business?.subscriptionStatus === 'active';
   const isTrialActive = expiry ? expiry >= now : false;
   
-  // If trial_expiry is null and paid is false -> treat as expired
-  const hasAccess = isPaid || isTrialActive;
+  // Access decision: Only allow if verified AND (paid OR trial active)
+  const hasAccess = isVerified && (isPaid || isTrialActive);
   
+  // Restricted routes
   const isBlocked = !hasAccess && pathname !== "/business/subscription" && pathname !== "/business/profile";
-  const trialRemaining = userProfile?.trial_remaining ?? 0;
+  
+  // Calculate trial remaining
+  const trialRemaining = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
   const navItems = [
     { href: "/business/dashboard", label: "Operations", icon: LayoutDashboard },
@@ -62,7 +65,6 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     { href: "/business/profile", label: "Profile", icon: UserCircle },
   ];
 
-  // Filter nav items if blocked: only Subscription and Profile allowed
   const filteredNavItems = hasAccess 
     ? navItems 
     : navItems.filter(item => ["/business/subscription", "/business/profile"].includes(item.href));
@@ -72,11 +74,22 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   return (
     <SharedLayout navItems={filteredNavItems} role="business-owner">
       <div className="space-y-6">
+        {/* Verification Alert */}
+        {business && !isVerified && (
+          <Alert variant="destructive" className="bg-orange-50 border-orange-200 text-orange-800">
+            <AlertCircle className="h-4 w-4 text-orange-600" />
+            <AlertTitle>Verification Pending</AlertTitle>
+            <AlertDescription>
+              Your business profile is currently under review by our administrators. Some features will be available once verified.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Trial Status Banner */}
-        {!isPaid && trialRemaining > 0 && (
+        {isVerified && !isPaid && trialRemaining > 0 && (
           <Alert variant="default" className="bg-blue-50 border-blue-200">
             <Clock className="h-4 w-4 text-blue-600" />
-            <AlertTitle>14-Day Free Trial Active</AlertTitle>
+            <AlertTitle>Free Trial Active</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-4">
               <span>Your trial ends in {trialRemaining} days. Subscribe anytime to avoid account interruption.</span>
               <Button size="sm" asChild>
@@ -93,21 +106,29 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
               <Lock className="h-12 w-12 text-destructive" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-3xl font-bold">Subscription Required</h2>
+              <h2 className="text-3xl font-bold">Access Restricted</h2>
               <p className="text-muted-foreground max-w-md mx-auto">
-                Your 14-day free trial has expired. To continue managing your business, please subscribe to one of our professional plans.
+                {!isVerified 
+                  ? "Your account is awaiting admin verification. Please check back later."
+                  : "Your trial has ended. Please submit payment to continue managing your services."}
               </p>
             </div>
             <div className="flex gap-4">
-              <Button size="lg" asChild>
-                <Link href="/business/subscription">View Pricing Plans</Link>
-              </Button>
+              {isVerified ? (
+                <Button size="lg" asChild>
+                  <Link href="/business/subscription">View Pricing Plans</Link>
+                </Button>
+              ) : (
+                <Button size="lg" variant="outline" asChild>
+                  <Link href="/business/profile">Review Profile</Link>
+                </Button>
+              )}
             </div>
           </div>
         ) : (
           <>
-            {/* Expiry Warning (if not explicitly blocked yet but expired) */}
-            {!isPaid && !isTrialActive && !isBlocked && pathname === "/business/subscription" && (
+            {/* Expiry Warning */}
+            {isVerified && !isPaid && !isTrialActive && !isBlocked && pathname === "/business/subscription" && (
               <Alert variant="destructive" className="border-red-200 bg-red-50 mb-6">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Trial Expired</AlertTitle>

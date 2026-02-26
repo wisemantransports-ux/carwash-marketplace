@@ -1,37 +1,49 @@
-
 'use client';
 import { supabase } from "@/lib/supabase";
-import type { Service } from "@/lib/types";
+import type { Service, Business } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Loader2 } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Loader2, AlertCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import Link from "next/link";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function ServicesManagementPage() {
     const [services, setServices] = useState<Service[]>([]);
+    const [business, setBusiness] = useState<Business | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchServices = async () => {
+        const fetchData = async () => {
             setLoading(true);
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session?.user) return;
 
-                // Explicitly filter by business_id to respect RLS and logical scoping
-                const { data, error } = await supabase
-                    .from('services')
+                // 1. Fetch Business ID
+                const { data: biz } = await supabase
+                    .from('businesses')
                     .select('*')
-                    .eq('business_id', session.user.id)
-                    .order('created_at', { ascending: false });
+                    .eq('owner_id', session.user.id)
+                    .maybeSingle();
+                
+                if (biz) {
+                    setBusiness(biz as Business);
+                    
+                    // 2. Fetch Services for this business
+                    const { data, error } = await supabase
+                        .from('services')
+                        .select('*')
+                        .eq('business_id', biz.id)
+                        .order('created_at', { ascending: false });
 
-                if (error) throw error;
-                if (data) setServices(data as Service[]);
+                    if (error) throw error;
+                    if (data) setServices(data as Service[]);
+                }
             } catch (e: any) {
                 console.error("Error fetching services:", e);
                 toast({ variant: 'destructive', title: 'Fetch Error', description: 'Could not load your services catalog.' });
@@ -39,7 +51,7 @@ export default function ServicesManagementPage() {
                 setLoading(false);
             }
         };
-        fetchServices();
+        fetchData();
     }, []);
 
     const handleDelete = async (id: string) => {
@@ -51,25 +63,46 @@ export default function ServicesManagementPage() {
         if (error) {
             toast({ variant: 'destructive', title: 'Delete Failed', description: error.message });
         } else {
-            setServices(services.filter(s => s.id !== id));
+            setServices(services.filter(s => (s as any).id !== id));
             toast({ title: 'Service Deleted', description: 'The service has been removed from your catalog.' });
         }
     }
 
+    if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+
+    const isAccessLocked = business?.status !== 'verified' || 
+        (business?.subscriptionStatus !== 'active' && business?.subscriptionStatus !== 'payment_submitted' && new Date(business?.sub_end_date || '') < new Date());
+
     return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold">Services Catalog</h1>
                     <p className="text-muted-foreground">Manage your car wash packages and pricing.</p>
                 </div>
-                <Button asChild>
-                    <Link href="/business/add-service">
-                        <PlusCircle className="mr-2 h-4 w-4" /> Add Service
-                    </Link>
-                </Button>
+                {!isAccessLocked && (
+                    <Button asChild shadow-md>
+                        <Link href="/business/add-service">
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add Service
+                        </Link>
+                    </Button>
+                )}
             </div>
-            <Card>
+
+            {isAccessLocked && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Action Required</AlertTitle>
+                    <AlertDescription className="flex items-center justify-between gap-4">
+                        <span>Your trial has ended or your account is not verified. Please submit payment to continue managing services.</span>
+                        <Button size="sm" variant="outline" asChild>
+                            <Link href="/business/subscription">Renew Now</Link>
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            <Card className={cn(isAccessLocked && "opacity-50 pointer-events-none")}>
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader>
@@ -78,37 +111,26 @@ export default function ServicesManagementPage() {
                                 <TableHead>Description</TableHead>
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Price</TableHead>
-                                <TableHead><span className="sr-only">Actions</span></TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {loading ? (
-                                Array.from({length: 3}).map((_, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                        <TableCell><Skeleton className="h-5 w-64" /></TableCell>
-                                        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                                        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                                        <TableCell><Skeleton className="h-8 w-8" /></TableCell>
-                                    </TableRow>
-                                ))
-                            ) : services.length > 0 ? (
+                            {services.length > 0 ? (
                                 services.map(service => (
-                                    <TableRow key={service.id}>
+                                    <TableRow key={(service as any).id}>
                                         <TableCell className="font-medium">{service.name}</TableCell>
                                         <TableCell className="text-muted-foreground max-w-xs truncate">{service.description}</TableCell>
                                         <TableCell>{service.duration} min</TableCell>
-                                        <TableCell className="font-bold">P{service.price.toFixed(2)}</TableCell>
-                                        <TableCell>
+                                        <TableCell className="font-bold">{service.currency_code} {service.price.toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" className="h-8 w-8 p-0">
-                                                        <span className="sr-only">Open menu</span>
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleDelete(service.id)} className="text-destructive">Remove Service</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleDelete((service as any).id)} className="text-destructive">Remove Service</DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
