@@ -1,7 +1,8 @@
 'use client';
+
+import React, { useEffect, useState, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { Booking, Business, Employee } from "@/lib/types";
-import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw, AlertTriangle, AlertCircle } from "lucide-react";
@@ -33,23 +34,32 @@ export default function BusinessDashboardPage() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                const userId = user.id;
+                console.log(`[DEBUG DASHBOARD] UID: ${user.id}`);
                 
                 const { data: bizData } = await supabase
                     .from('businesses')
                     .select('id, owner_id, name, type, status, subscription_status, subscription_plan, sub_end_date')
-                    .eq('owner_id', userId)
+                    .eq('owner_id', user.id)
                     .maybeSingle();
                 
                 if (bizData) {
                     const biz = bizData as Business;
                     setBusiness(biz);
-                    const businessId = biz.id;
 
+                    // Fetch Team (RLS Compliant)
+                    const { data: empData } = await supabase
+                        .from('employees')
+                        .select('*')
+                        .eq('business_id', user.id)
+                        .order('name');
+                    
+                    setEmployees(empData || []);
+
+                    // Fetch Ratings
                     const { data: ratingsData } = await supabase
                         .from('ratings')
                         .select('*, customer:customer_id(name)')
-                        .eq('business_id', businessId)
+                        .eq('business_id', biz.id)
                         .order('created_at', { ascending: false });
 
                     if (ratingsData && ratingsData.length > 0) {
@@ -61,29 +71,19 @@ export default function BusinessDashboardPage() {
                         });
                     }
 
+                    // Fetch Bookings
                     const { data: bookingData } = await supabase
                         .from('bookings')
                         .select('*')
-                        .eq('business_id', businessId)
+                        .eq('business_id', biz.id)
                         .order('booking_time', { ascending: true });
                     
                     setBookings(bookingData || []);
-
-                    const { data: empData, error: empError } = await supabase
-                        .from('employees')
-                        .select('*')
-                        .eq('business_id', userId)
-                        .order('name');
-                    
-                    if (empError) {
-                        console.error('[DEBUG DASHBOARD] Employee fetch error:', empError);
-                    } else {
-                        setEmployees(empData || []);
-                    }
                 }
             }
-        } catch (error) {
-            console.error("Dashboard: General fetch error:", error);
+        } catch (error: any) {
+            console.error("Dashboard Fetch Error:", error);
+            setFetchError("Partial data load failure.");
         } finally {
             setLoading(false);
         }
@@ -95,17 +95,9 @@ export default function BusinessDashboardPage() {
 
     const handleAction = async (id: string, status: 'accepted' | 'rejected' | 'completed') => {
         try {
-            const { error } = await supabase
-                .from('bookings')
-                .update({ status })
-                .eq('id', id);
-            
+            const { error } = await supabase.from('bookings').update({ status }).eq('id', id);
             if (error) throw error;
-
-            toast({
-                title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-                description: status === 'accepted' ? "Invoice has been automatically generated." : "Status updated successfully.",
-            });
+            toast({ title: `Booking Updated`, description: "Status synchronized successfully." });
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -118,8 +110,8 @@ export default function BusinessDashboardPage() {
         return (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <AlertCircle className="h-12 w-12 text-destructive" />
-                <h2 className="text-2xl font-bold">Connection Failed</h2>
-                <p className="text-muted-foreground">Unable to connect to Supabase. Please check environment variables.</p>
+                <h2 className="text-2xl font-bold">Configuration Error</h2>
+                <p className="text-muted-foreground">Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.</p>
             </div>
         );
     }
@@ -128,11 +120,6 @@ export default function BusinessDashboardPage() {
 
     const requested = bookings.filter(b => b.status === 'requested');
     const active = bookings.filter(b => b.status === 'accepted' || b.status === 'in-progress');
-
-    const now = new Date();
-    const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
-    const trialDays = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
-    const isPlanActive = business.subscription_status?.toLowerCase() === 'active' || (trialDays > 0 && (business.status?.toLowerCase() === 'verified' || business.status?.toLowerCase() === 'pending'));
 
     return (
         <div className="space-y-8">
@@ -143,15 +130,11 @@ export default function BusinessDashboardPage() {
                         <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
                             {(business.type || 'station').toUpperCase()}
                         </Badge>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={fetchData}>
-                            <RefreshCw className="h-4 w-4" />
-                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={fetchData}><RefreshCw className="h-4 w-4" /></Button>
                     </div>
                     <p className="text-muted-foreground text-lg">Operations center for your car wash.</p>
                 </div>
-                <div className="w-full md:w-80 shrink-0">
-                    <ShareBusinessCard businessId={business.id} />
-                </div>
+                <div className="w-full md:w-80 shrink-0"><ShareBusinessCard businessId={business.id} /></div>
             </div>
 
             <div className="grid gap-6 md:grid-cols-4">
@@ -163,7 +146,7 @@ export default function BusinessDashboardPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-3xl font-bold">{stats.avgRating.toFixed(1)}</div>
-                        <p className="text-xs text-muted-foreground mt-1">{stats.totalReviews} verified reviews</p>
+                        <p className="text-xs text-muted-foreground mt-1">{stats.totalReviews} reviews</p>
                     </CardContent>
                 </Card>
 
@@ -175,9 +158,7 @@ export default function BusinessDashboardPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl font-bold">{business.subscription_plan || 'Starter'}</div>
-                        <p className={cn("text-xs mt-1 font-medium", isPlanActive ? "text-blue-600" : "text-destructive")}>
-                            {trialDays > 0 ? `${trialDays} Days Trial Left` : business.subscription_status === 'active' ? "Active Subscription" : "Expired"}
-                        </p>
+                        <p className="text-xs text-blue-600 mt-1 font-medium">{business.subscription_status.toUpperCase()}</p>
                     </CardContent>
                 </Card>
 
@@ -197,9 +178,7 @@ export default function BusinessDashboardPage() {
                                     ))}
                                 </div>
                             </div>
-                            <p className="text-sm text-muted-foreground italic line-clamp-1">
-                                &quot;{stats.latestReview.feedback || 'No comment provided'}&quot;
-                            </p>
+                            <p className="text-sm text-muted-foreground italic line-clamp-1">"{stats.latestReview.feedback || 'No comment'}"</p>
                         </CardContent>
                     </Card>
                 )}
@@ -225,26 +204,16 @@ export default function BusinessDashboardPage() {
                                                     <Clock className="h-3 w-3" /> {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                 </CardDescription>
                                             </CardHeader>
-                                            <CardContent className="space-y-4">
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <Car className="h-4 w-4 text-muted-foreground" />
-                                                    <span className="font-medium">Pula {booking.price} Wash</span>
-                                                </div>
-                                            </CardContent>
                                             <CardFooter className="flex gap-2">
-                                                <Button className="flex-1" onClick={() => handleAction(booking.id, 'accepted')}>
-                                                    <CheckCircle2 className="mr-2 h-4 w-4" /> Accept
-                                                </Button>
-                                                <Button variant="outline" className="flex-1 text-destructive" onClick={() => handleAction(booking.id, 'rejected')}>
-                                                    <XCircle className="mr-2 h-4 w-4" /> Reject
-                                                </Button>
+                                                <Button className="flex-1" onClick={() => handleAction(booking.id, 'accepted')}>Accept</Button>
+                                                <Button variant="outline" className="flex-1 text-destructive" onClick={() => handleAction(booking.id, 'rejected')}>Reject</Button>
                                             </CardFooter>
                                         </Card>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl bg-muted/20 text-center">
-                                    <p className="text-muted-foreground font-medium italic">No new booking requests.</p>
+                                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20 italic text-muted-foreground">
+                                    No new requests.
                                 </div>
                             )}
                         </TabsContent>
@@ -260,20 +229,15 @@ export default function BusinessDashboardPage() {
                                                     <Badge>ACCEPTED</Badge>
                                                 </div>
                                             </CardHeader>
-                                            <CardContent className="space-y-4">
-                                                <p className="text-sm font-bold text-primary italic">Invoice Issued</p>
-                                            </CardContent>
                                             <CardFooter>
-                                                <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleAction(booking.id, 'completed')}>
-                                                    <PlayCircle className="mr-2 h-4 w-4" /> Mark Completed
-                                                </Button>
+                                                <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleAction(booking.id, 'completed')}>Mark Completed</Button>
                                             </CardFooter>
                                         </Card>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20">
-                                    <p className="text-muted-foreground">No active wash operations.</p>
+                                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20 italic text-muted-foreground">
+                                    No active washes.
                                 </div>
                             )}
                         </TabsContent>
@@ -291,17 +255,9 @@ export default function BusinessDashboardPage() {
                             </Button>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {fetchError ? (
-                                <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20 text-center space-y-2">
-                                    <AlertTriangle className="h-6 w-6 text-destructive mx-auto" />
-                                    <p className="text-xs font-bold text-destructive">Unable to fetch team list.</p>
-                                    <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={fetchData}>
-                                        Retry
-                                    </Button>
-                                </div>
-                            ) : employees.length > 0 ? (
+                            {employees.length > 0 ? (
                                 employees.slice(0, 5).map(emp => (
-                                    <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
+                                    <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg border border-transparent hover:bg-muted/50 transition-colors">
                                         <Avatar className="h-10 w-10 border shadow-sm">
                                             <AvatarImage src={emp.image_url} alt={emp.name} className="object-cover" />
                                             <AvatarFallback className="bg-primary/10 text-primary font-bold">
@@ -318,12 +274,8 @@ export default function BusinessDashboardPage() {
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center py-10 bg-muted/10 rounded-xl border border-dashed">
-                                    <Users className="h-8 w-8 mx-auto text-muted-foreground opacity-20 mb-2" />
-                                    <p className="text-xs text-muted-foreground italic">No staff registered.</p>
-                                    <Button variant="link" size="sm" asChild className="text-[10px] h-6">
-                                        <Link href="/business/employees">Add Team Members</Link>
-                                    </Button>
+                                <div className="text-center py-10 bg-muted/10 rounded-xl border border-dashed text-xs text-muted-foreground italic">
+                                    No staff registered.
                                 </div>
                             )}
                         </CardContent>

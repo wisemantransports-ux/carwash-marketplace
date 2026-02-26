@@ -34,7 +34,7 @@ export default function EmployeeRegistryPage() {
 
     const fetchData = useCallback(async () => {
         if (!isSupabaseConfigured) {
-            setFetchError("Unable to connect to Supabase. Please check environment variables.");
+            setFetchError("Unable to connect to Supabase. Please check environment variables (URL/Anon Key).");
             setLoading(false);
             return;
         }
@@ -48,11 +48,13 @@ export default function EmployeeRegistryPage() {
                 return;
             }
 
-            // Diagnostic Log for Checklist #2 & #3
-            console.log(`[DEBUG] Current Auth User ID: ${user.id}`);
-            console.log(`[DEBUG] Attempting to fetch staff where business_id = ${user.id}`);
+            console.log(`[DEBUG] Fetching staff for UID: ${user.id}`);
 
-            // Fetch directly aligned with RLS: USING (business_id = auth.uid())
+            // TEMPORARY DEBUG PROBE: Log total row count in table to find ID mismatches
+            const { count: globalCount } = await supabase.from('employees').select('*', { count: 'exact', head: true });
+            console.log(`[DEBUG PROBE] Total staff rows in DB (all businesses): ${globalCount}`);
+
+            // RLS Compliant Fetch: business_id = auth.uid()
             const { data: empData, error: empError } = await supabase
                 .from('employees')
                 .select('*')
@@ -61,13 +63,8 @@ export default function EmployeeRegistryPage() {
             
             if (empError) throw empError;
             
-            // Checklist #6: Handle empty list
             setEmployees(empData || []);
-            console.log(`[DEBUG] Successfully fetched ${empData?.length || 0} employees.`);
-
-            // TEMPORARY PROBE: Check if any data exists in table regardless of ID (for debugging only)
-            const { data: anyData } = await supabase.from('employees').select('id, business_id').limit(5);
-            console.log('[DEBUG PROBE] Sample of rows in employees table:', anyData);
+            console.log(`[DEBUG] Staff found for this business: ${empData?.length || 0}`);
 
         } catch (error: any) {
             console.error(`[CRITICAL] Employee Fetch Failure:`, {
@@ -121,7 +118,7 @@ export default function EmployeeRegistryPage() {
         setSubmitting(true);
         const tempId = crypto.randomUUID();
         
-        // Checklist #4: Optimistic Update - Show entry immediately
+        // Optimistic Update
         const tempEmployee: Employee = {
             id: tempId,
             business_id: user.id,
@@ -136,7 +133,7 @@ export default function EmployeeRegistryPage() {
         try {
             let uploadedImageUrl = null;
 
-            // Checklist #5: Upload to business-assets/employees/{user.id}/
+            // 1. Storage Upload
             if (imageFile) {
                 const fileExt = imageFile.name.split('.').pop();
                 const fileName = `${Date.now()}.${fileExt}`;
@@ -156,7 +153,7 @@ export default function EmployeeRegistryPage() {
                 uploadedImageUrl = publicUrl;
             }
 
-            // Checklist #3 & #4: Insert row with business_id = user.id
+            // 2. Database Insert
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
@@ -168,28 +165,22 @@ export default function EmployeeRegistryPage() {
                     image_url: uploadedImageUrl
                 });
             
-            if (insertError) {
-                console.error('[DEBUG] Insert Error:', insertError);
-                throw insertError;
-            }
+            if (insertError) throw insertError;
 
-            // Reset form and close
+            // Reset and Re-fetch
             setName(''); setPhone(''); setIdReference('');
             setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
             
-            toast({ title: "Employee Registered", description: "The record is now permanently stored." });
-            
-            // Checklist #4: Re-fetch to sync
+            toast({ title: "Employee Registered", description: "Record persisted successfully." });
             await fetchData();
         } catch (error: any) {
             console.error(`[ERROR] Registration Failed:`, error);
-            // Re-fetch to clear optimistic state if insert failed
-            await fetchData();
+            await fetchData(); // Clear optimistic entry on error
             toast({
                 variant: 'destructive',
                 title: "Registration Error",
-                description: error.message || "Could not save to database. Check RLS policies.",
+                description: error.message || "Could not save to database.",
             });
         } finally {
             setSubmitting(false);
@@ -197,16 +188,13 @@ export default function EmployeeRegistryPage() {
     };
 
     const handleDeleteEmployee = async (id: string) => {
-        const original = [...employees];
-        setEmployees(prev => prev.filter(e => e.id !== id));
-        
         try {
             const { error } = await supabase.from('employees').delete().eq('id', id);
             if (error) throw error;
             toast({ title: 'Employee Removed' });
+            fetchData();
         } catch (error: any) {
-            setEmployees(original);
-            toast({ variant: 'destructive', title: 'Removal Failed', description: 'Could not delete from database.' });
+            toast({ variant: 'destructive', title: 'Removal Failed', description: error.message });
         }
     };
 
@@ -279,13 +267,12 @@ export default function EmployeeRegistryPage() {
                 </div>
             </div>
 
-            {/* Checklist #1 & #6: Supabase Connection Alerts */}
             {!isSupabaseConfigured && (
                 <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Configuration Error</AlertTitle>
                     <AlertDescription>
-                        Unable to connect to Supabase. Please check environment variables (URL/Anon Key).
+                        Unable to connect to Supabase. Please check environment variables.
                     </AlertDescription>
                 </Alert>
             )}
@@ -295,10 +282,10 @@ export default function EmployeeRegistryPage() {
                     <CardContent className="flex items-center gap-4 py-4">
                         <AlertTriangle className="h-5 w-5 text-destructive" />
                         <div className="flex-1">
-                            <p className="text-sm font-bold text-destructive">Database Connection Alert</p>
+                            <p className="text-sm font-bold text-destructive">Connection Alert</p>
                             <p className="text-xs text-destructive/80">{fetchError}</p>
                         </div>
-                        <Button variant="outline" size="sm" className="h-8" onClick={fetchData}>Retry Sync</Button>
+                        <Button variant="outline" size="sm" onClick={fetchData}>Retry Sync</Button>
                     </CardContent>
                 </Card>
             )}
@@ -318,7 +305,7 @@ export default function EmployeeRegistryPage() {
                             {loading && employees.length === 0 ? (
                                 Array.from({length: 3}).map((_, i) => (
                                     <TableRow key={i}>
-                                        <TableCell className="pl-6"><Skeleton className="h-10 w-40 rounded-full" /></TableCell>
+                                        <TableCell className="pl-6 py-4"><Skeleton className="h-10 w-40 rounded-full" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                                         <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                                         <TableCell className="text-right pr-6"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
@@ -337,14 +324,13 @@ export default function EmployeeRegistryPage() {
                                                 </Avatar>
                                                 <div className="flex flex-col">
                                                     <span className="font-bold">{employee.name}</span>
-                                                    {/* Optimistic State Hint */}
                                                     {employee.id.includes('-') && employee.id.length > 20 && (
                                                         <span className="text-[8px] text-primary/60 font-mono italic">Syncing...</span>
                                                     )}
                                                 </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-sm font-medium">
+                                        <TableCell className="text-sm">
                                             <div className="flex items-center gap-2">
                                                 <PhoneIcon className="h-3 w-3 text-muted-foreground" />
                                                 {employee.phone}
@@ -356,9 +342,7 @@ export default function EmployeeRegistryPage() {
                                         <TableCell className="text-right pr-6">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48 shadow-xl border-2">
                                                     <DropdownMenuItem onClick={() => handleDeleteEmployee(employee.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
@@ -371,16 +355,8 @@ export default function EmployeeRegistryPage() {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="h-64 text-center text-muted-foreground">
-                                        <div className="flex flex-col items-center justify-center gap-4">
-                                            <div className="p-4 bg-muted/20 rounded-full">
-                                                <ShieldCheck className="h-12 w-12 opacity-10" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <p className="font-bold text-lg">No employees registered yet.</p>
-                                                <p className="text-sm">Employees linked to your account will appear here.</p>
-                                            </div>
-                                        </div>
+                                    <TableCell colSpan={4} className="h-64 text-center text-muted-foreground italic">
+                                        No employees registered yet.
                                     </TableCell>
                                 </TableRow>
                             )}
