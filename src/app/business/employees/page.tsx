@@ -123,6 +123,7 @@ export default function EmployeeRegistryPage() {
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
+                    id: crypto.randomUUID(), // Generate UUID as requested
                     business_id: business.id,
                     name,
                     phone,
@@ -146,7 +147,12 @@ export default function EmployeeRegistryPage() {
             setIsAddOpen(false);
             await fetchData();
         } catch (error: any) {
-            console.error("Employee insertion error:", error);
+            console.error("Employee insertion error detail:", {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint
+            });
             toast({
                 variant: 'destructive',
                 title: "Registration Failed",
