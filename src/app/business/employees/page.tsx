@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from "next/image";
 
 export default function EmployeeRegistryPage() {
@@ -32,13 +33,22 @@ export default function EmployeeRegistryPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const fetchData = useCallback(async () => {
+        if (!isSupabaseConfigured) {
+            setFetchError("Unable to connect to Supabase. Please check environment variables.");
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         setFetchError(null);
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (!user) {
+                setLoading(false);
+                return;
+            }
 
-            // Diagnostic Log: Verify which ID we are searching for
+            // Diagnostic: Explicit fetch for logging
             console.log(`[${new Date().toISOString()}] Fetching staff for business_id: ${user.id}`);
 
             const { data: empData, error: empError } = await supabase
@@ -51,13 +61,12 @@ export default function EmployeeRegistryPage() {
             
             setEmployees(empData || []);
         } catch (error: any) {
-            const timestamp = new Date().toISOString();
-            console.error(`[${timestamp}] Registry Fetch Failure:`, error);
+            console.error(`[${new Date().toISOString()}] Registry Fetch Failure:`, error);
             setFetchError("Unable to fetch employees. Please check database connection or RLS policies.");
             toast({ 
                 variant: 'destructive', 
                 title: 'Database Alert', 
-                description: 'We had trouble reaching your staff list. Check browser console for details.' 
+                description: 'We had trouble reaching your staff list.' 
             });
         } finally {
             setLoading(false);
@@ -119,7 +128,7 @@ export default function EmployeeRegistryPage() {
                 const fileName = `${user.id}/${Date.now()}.${fileExt}`;
                 const { error: uploadError } = await supabase.storage
                     .from('business-assets')
-                    .upload(`employees/${fileName}`, imageFile, {
+                    .upload(`employees/${user.id}/${fileName}`, imageFile, {
                         cacheControl: '3600',
                         upsert: true
                     });
@@ -128,7 +137,7 @@ export default function EmployeeRegistryPage() {
 
                 const { data: { publicUrl } } = supabase.storage
                     .from('business-assets')
-                    .getPublicUrl(`employees/${fileName}`);
+                    .getPublicUrl(`employees/${user.id}/${fileName}`);
                 
                 uploadedImageUrl = publicUrl;
             }
@@ -151,14 +160,16 @@ export default function EmployeeRegistryPage() {
             setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
             
-            toast({ title: "Employee Registered", description: "Team list updated in database." });
-            await fetchData(); // Final persistent sync
+            toast({ title: "Employee Registered", description: "The record is now permanently stored." });
+            await fetchData(); // Final persistent sync from database
         } catch (error: any) {
             console.error(`[${new Date().toISOString()}] Registry Insertion Failed:`, error);
+            // Re-fetch to clear optimistic state if insert failed
+            await fetchData();
             toast({
                 variant: 'destructive',
                 title: "Registration Error",
-                description: error.message || "Could not save to database. Entry is stored locally for now.",
+                description: error.message || "Could not save to database.",
             });
         } finally {
             setSubmitting(false);
@@ -248,7 +259,17 @@ export default function EmployeeRegistryPage() {
                 </div>
             </div>
 
-            {fetchError && (
+            {!isSupabaseConfigured && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Configuration Error</AlertTitle>
+                    <AlertDescription>
+                        Unable to connect to Supabase. Please check environment variables (URL/Anon Key).
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            {fetchError && isSupabaseConfigured && (
                 <Card className="bg-destructive/5 border-destructive/20">
                     <CardContent className="flex items-center gap-4 py-4">
                         <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -334,8 +355,8 @@ export default function EmployeeRegistryPage() {
                                                 <ShieldCheck className="h-12 w-12 opacity-10" />
                                             </div>
                                             <div className="space-y-1">
-                                                <p className="font-bold text-lg">No staff found</p>
-                                                <p className="text-sm">Employees linked to your business ID ({employees.length === 0 ? 'Empty' : 'Checking...'}) will appear here.</p>
+                                                <p className="font-bold text-lg">No employees registered yet.</p>
+                                                <p className="text-sm">Employees linked to your account will appear here.</p>
                                             </div>
                                         </div>
                                     </TableCell>

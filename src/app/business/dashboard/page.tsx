@@ -1,10 +1,10 @@
 'use client';
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { Booking, Business, Employee } from "@/lib/types";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw, AlertTriangle } from "lucide-react";
+import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, PlayCircle, Star, MessageCircle, ShieldCheck, Users, Phone, RefreshCw, AlertTriangle, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,6 +22,12 @@ export default function BusinessDashboardPage() {
     const [fetchError, setFetchError] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
+        if (!isSupabaseConfigured) {
+            setFetchError("Unable to connect to Supabase. Check environment variables.");
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         setFetchError(null);
         try {
@@ -66,7 +72,7 @@ export default function BusinessDashboardPage() {
                     
                     setBookings(bookingData || []);
 
-                    // 4. Fetch Employees with Error Detection
+                    // 4. Fetch Employees (RLS compliant: business_id = user.id)
                     try {
                         const { data: empData, error: empError } = await supabase
                             .from('employees')
@@ -77,8 +83,7 @@ export default function BusinessDashboardPage() {
                         if (empError) throw empError;
                         setEmployees(empData || []);
                     } catch (err: any) {
-                        const timestamp = new Date().toISOString();
-                        console.error(`[${timestamp}] Dashboard Employee Fetch Error:`, err);
+                        console.error("Dashboard Employee Fetch Error:", err);
                         setFetchError("Unable to fetch employees. Please check database connection.");
                     }
                 }
@@ -114,6 +119,17 @@ export default function BusinessDashboardPage() {
     };
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
+    
+    if (!isSupabaseConfigured) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <AlertCircle className="h-12 w-12 text-destructive" />
+                <h2 className="text-2xl font-bold">Connection Failed</h2>
+                <p className="text-muted-foreground">Unable to connect to Supabase. Please check environment variables.</p>
+            </div>
+        );
+    }
+
     if (!business) return <div className="text-center py-20">Business profile not found. Please complete your profile.</div>;
 
     const requested = bookings.filter(b => b.status === 'requested');
@@ -274,7 +290,7 @@ export default function BusinessDashboardPage() {
                     <Card className="shadow-md">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <Users className="h-5 w-5 text-primary" /> Team Overview
+                                <Users className="h-5 w-5 text-primary" /> Your Team
                             </CardTitle>
                             <Button variant="ghost" size="sm" className="h-8 text-xs text-primary" asChild>
                                 <Link href="/business/employees">Manage All</Link>
@@ -284,7 +300,7 @@ export default function BusinessDashboardPage() {
                             {fetchError ? (
                                 <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20 text-center space-y-2">
                                     <AlertTriangle className="h-6 w-6 text-destructive mx-auto" />
-                                    <p className="text-xs font-bold text-destructive">{fetchError}</p>
+                                    <p className="text-xs font-bold text-destructive">Unable to fetch employees. Please check database connection.</p>
                                     <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={fetchData}>
                                         Retry Connection
                                     </Button>
@@ -310,7 +326,7 @@ export default function BusinessDashboardPage() {
                             ) : (
                                 <div className="text-center py-10 bg-muted/10 rounded-xl border border-dashed">
                                     <Users className="h-8 w-8 mx-auto text-muted-foreground opacity-20 mb-2" />
-                                    <p className="text-xs text-muted-foreground italic">No staff found.</p>
+                                    <p className="text-xs text-muted-foreground italic">No employees registered yet.</p>
                                     <Button variant="link" size="sm" asChild className="text-[10px] h-6">
                                         <Link href="/business/employees">Register Team</Link>
                                     </Button>
