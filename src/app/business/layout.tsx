@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -34,7 +35,6 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           const typedBiz = biz as Business;
           
           // UNIFIED AUTO-TRIAL LOGIC for ALL Verified Businesses
-          // Triggers 14-day trial if they are verified and haven't had one yet
           if (
             typedBiz.verification_status === 'verified' && 
             !typedBiz.sub_end_date && 
@@ -84,14 +84,12 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     fetchData();
   }, [fetchData]);
 
-  // Access Gating Logic: Shared by all verified businesses
   const now = new Date();
   const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
   const isVerified = business?.verification_status === 'verified';
   const isTrialOrPaid = expiry ? expiry >= now : false;
   const isActive = business?.subscription_status === 'active';
   
-  // All verified businesses get features if they have an active trial or paid subscription
   const hasAccess = isVerified && (isActive || isTrialOrPaid);
   const isBlocked = !hasAccess && pathname !== "/business/subscription" && pathname !== "/business/profile";
   
@@ -128,17 +126,6 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           </Alert>
         )}
 
-        {/* Verification Alert: Rejected */}
-        {business && business.verification_status === 'rejected' && (
-          <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertTitle className="font-bold">Verification Rejected</AlertTitle>
-            <AlertDescription>
-              Your registration was not approved. Please review your documents in the Profile tab or contact support.
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Unified Verified Banner */}
         {isVerified && isTrialOrPaid && (
           <Alert variant="default" className="bg-primary/10 border-primary/20 text-primary">
@@ -167,9 +154,9 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
               <p className="text-muted-foreground max-w-md mx-auto">
                 {!business 
                   ? "Please set up your business profile to continue."
-                  : business.verification_status === 'pending'
-                    ? "Your account is awaiting admin verification. Features are locked until review is complete."
-                    : "Your professional access has expired. Please choose a plan to reactivate your dashboard."}
+                  : !isVerified
+                    ? "Verification pending. Your account is under review."
+                    : "Your professional features are currently paused. Please renew your plan."}
               </p>
             </div>
             <div className="flex gap-4">
@@ -195,7 +182,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
             {isVerified && !isTrialOrPaid && !isActive && pathname === "/business/subscription" && (
               <Alert variant="destructive" className="border-red-200 bg-red-50 mb-6">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Trial Expired</AlertTitle>
+                <AlertTitle>Professional Features Paused</AlertTitle>
                 <AlertDescription>
                   Your professional features are currently paused. Select a plan below to resume receiving bookings.
                 </AlertDescription>

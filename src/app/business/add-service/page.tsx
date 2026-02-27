@@ -29,17 +29,18 @@ export default function AddServicePage() {
 
   useEffect(() => {
     async function fetchBusiness() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+      // Use getUser for the freshest session state
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         router.push('/login');
         return;
       }
 
-      // Fetch the absolute latest business state directly from the database
+      // Fetch absolute latest business state
       const { data, error } = await supabase
         .from('businesses')
         .select('*')
-        .eq('owner_id', session.user.id)
+        .eq('owner_id', user.id)
         .maybeSingle();
 
       if (error) {
@@ -48,20 +49,7 @@ export default function AddServicePage() {
       }
 
       if (data) {
-        const typedBiz = data as Business;
-        setBusiness(typedBiz);
-        
-        // Final Access Gate
-        const isVerified = typedBiz.verification_status === 'verified';
-        const now = new Date();
-        const expiry = typedBiz.sub_end_date ? new Date(typedBiz.sub_end_date) : null;
-        const isTrialOrPaid = (typedBiz.subscription_status === 'active') || (expiry && expiry >= now);
-
-        if (!isVerified) {
-            router.push('/business/profile');
-        } else if (!isTrialOrPaid) {
-            router.push('/business/subscription');
-        }
+        setBusiness(data as Business);
       } else {
         router.push('/business/profile');
       }
@@ -106,21 +94,10 @@ export default function AddServicePage() {
       return;
     }
 
-    // 2. Strict Access Enforcement
-    const now = new Date();
-    const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
-    const hasAccess = (business.verification_status === 'verified') && 
-                     ((business.subscription_status === 'active') || (expiry && expiry >= now));
-
-    if (!hasAccess) {
-        toast({ variant: 'destructive', title: 'Access Denied', description: 'Your business account is not authorized to add services yet.' });
-        return;
-    }
-
     setSubmitting(true);
     try {
         // IMPORTANT: The services table does NOT have a 'status' column.
-        // We only include valid schema fields.
+        // Payload strictly matches schema: business_id, name, description, price, duration, currency_code
         const { error } = await supabase
           .from('services')
           .insert([{
@@ -141,7 +118,7 @@ export default function AddServicePage() {
         toast({ 
             variant: 'destructive', 
             title: 'Creation Failed', 
-            description: 'Unable to save service. Please check your connection and try again.' 
+            description: error.message || 'Unable to save service. Please check your connection and try again.' 
         });
     } finally {
         setSubmitting(false);

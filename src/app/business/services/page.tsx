@@ -20,17 +20,17 @@ export default function ServicesManagementPage() {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
                 setLoading(false);
                 return;
             }
 
-            // Always fetch the freshest business record from the database
+            // Always fetch the freshest business record
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
-                .eq('owner_id', session.user.id)
+                .eq('owner_id', user.id)
                 .maybeSingle();
             
             if (bizError) throw bizError;
@@ -42,7 +42,6 @@ export default function ServicesManagementPage() {
 
             setBusiness(biz as Business);
 
-            // Access Check Logic: verified AND (active OR future trial expiry)
             const isVerified = biz.verification_status === 'verified';
             const now = new Date();
             const expiry = biz.sub_end_date ? new Date(biz.sub_end_date) : null;
@@ -125,9 +124,9 @@ export default function ServicesManagementPage() {
                     <AlertTitle>Catalog Access Locked</AlertTitle>
                     <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <span>
-                            {business?.verification_status === 'pending'
-                                ? "Your business verification is currently under review. Features unlock once documents are approved." 
-                                : "Your professional access has expired. Please renew your subscription to continue managing services."}
+                            {!isVerified
+                                ? "Verification pending. Your account is under review." 
+                                : "Your professional features are currently paused. Please renew your plan."}
                         </span>
                         {isVerified && !isActive && !isTrialActive && (
                             <Button size="sm" variant="outline" asChild className="border-destructive/20 hover:bg-destructive/10">

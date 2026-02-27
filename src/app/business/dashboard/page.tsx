@@ -39,7 +39,6 @@ export default function BusinessDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Tracks selected staff per booking row before acceptance
     const [assignments, setAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async () => {
@@ -58,7 +57,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Resolve Business Info
+            // 1. Resolve Business Info (Freshest record)
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -70,7 +69,6 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // Access Gating logic mirrored from Layout
                 const isVerified = bizData.verification_status === 'verified';
                 const now = new Date();
                 const expiry = bizData.sub_end_date ? new Date(bizData.sub_end_date) : null;
@@ -80,7 +78,6 @@ export default function BusinessDashboardPage() {
                 const isAccessActive = isVerified && (isActive || isTrialActive);
 
                 if (isAccessActive) {
-                    // 2. Fetch Staff for this Business
                     const { data: staffData } = await supabase
                         .from('employees')
                         .select('id, name')
@@ -89,7 +86,6 @@ export default function BusinessDashboardPage() {
                     
                     setEmployees(staffData || []);
 
-                    // 3. Fetch Bookings using the view
                     const { data: bookingData, error: bookingError } = await supabase
                         .from('booking_with_customer')
                         .select(`
@@ -141,7 +137,6 @@ export default function BusinessDashboardPage() {
 
             toast({ title: "Booking Accepted", description: "Request moved to the active queue." });
             
-            // Local state update
             setBookings(prev => prev.map(b => 
                 b.id === bookingId 
                     ? { ...b, status: 'accepted', staff_id: staffId, staff: { name: employees.find(e => e.id === staffId)?.name } } 
@@ -321,9 +316,9 @@ export default function BusinessDashboardPage() {
             <Lock className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
             <h2 className="text-2xl font-bold">Operations Locked</h2>
             <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                {business?.verification_status === 'pending'
-                    ? "Your business verification is pending. Features will unlock once an administrator verifies your documents." 
-                    : "Your professional access has expired. Please choose a plan to continue managing bookings."}
+                {!isVerified
+                    ? "Verification pending. Your account is under review." 
+                    : "Your professional features are currently paused. Please renew your plan."}
             </p>
             <div className="mt-8 flex gap-4">
                 <Button variant="outline" asChild>
