@@ -50,8 +50,8 @@ export default function BusinessDashboardPage() {
         setLoading(true);
         setFetchError(null);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) {
                 setLoading(false);
                 return;
             }
@@ -60,7 +60,7 @@ export default function BusinessDashboardPage() {
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
-                .eq('owner_id', user.id)
+                .eq('owner_id', authUser.id)
                 .maybeSingle();
             
             if (bizError) throw bizError;
@@ -77,7 +77,7 @@ export default function BusinessDashboardPage() {
                 
                 setEmployees(staffData || []);
 
-                // 3. Fetch Bookings with Full Relational Joins (Customer, Car, Service)
+                // 3. Fetch Bookings with Relational Joins (Customer Profile, Car, Service)
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -86,16 +86,24 @@ export default function BusinessDashboardPage() {
                         status,
                         mobile_status,
                         price,
-                        customer:customer_id ( name, email ),
+                        user:customer_id ( 
+                            id, 
+                            email, 
+                            profiles ( full_name ) 
+                        ),
                         service:service_id ( name, price, duration ),
                         car:car_id ( make, model ),
-                        staff:staff_id ( name ),
+                        staff:staff_id ( id, name, phone ),
                         rating:ratings!booking_id ( rating, feedback )
                     `)
                     .eq('business_id', bizData.id)
                     .order('booking_time', { ascending: true });
                 
                 if (bookingError) throw bookingError;
+
+                // Optional Debugging Log as requested
+                console.log("DEBUG: Bookings Fetch Result", JSON.stringify(bookingData, null, 2));
+                
                 setBookings(bookingData || []);
 
             } else {
@@ -193,114 +201,121 @@ export default function BusinessDashboardPage() {
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {list.length > 0 ? list.map((booking) => (
-                    <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
-                        <TableCell className="align-top py-4">
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2 font-extrabold text-sm text-foreground">
-                                    <User className="h-3.5 w-3.5 text-primary" />
-                                    {booking.customer?.name || 'Unknown Customer'}
-                                </div>
-                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
-                                    <Mail className="h-3 w-3" />
-                                    {booking.customer?.email || 'No email on file'}
-                                </div>
-                            </div>
-                        </TableCell>
-                        <TableCell className="align-top py-4">
-                            <div className="flex flex-col gap-1.5">
-                                <div className="flex items-center gap-2 text-sm font-black text-primary uppercase bg-primary/5 px-2 py-1 rounded w-fit border border-primary/10">
-                                    <Car className="h-4 w-4" />
-                                    {booking.car ? `${booking.car.make} ${booking.car.model}` : 'Unknown Vehicle'}
-                                </div>
-                            </div>
-                        </TableCell>
-                        <TableCell className="align-top py-4">
-                            <div className="flex flex-col gap-1">
-                                <div className="font-bold text-xs uppercase tracking-tight">{booking.service?.name || 'Standard Wash'}</div>
-                                <div className="text-[10px] font-bold text-primary">
-                                    P{booking.service?.price || booking.price} • {booking.service?.duration || '--'} min
-                                </div>
-                            </div>
-                        </TableCell>
-                        {isCompleted ? (
+                {list.length > 0 ? list.map((booking) => {
+                    // Handle nested profiles structure (Supabase returns arrays for some joins if not unique)
+                    const profileData = Array.isArray(booking.user?.profiles) ? booking.user.profiles[0] : booking.user?.profiles;
+                    const customerName = profileData?.full_name || booking.user?.email || 'Unknown Customer';
+                    const customerEmail = booking.user?.email || 'No email on file';
+                    
+                    return (
+                        <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
                             <TableCell className="align-top py-4">
-                                {booking.rating && booking.rating.length > 0 ? (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-1">
-                                            {Array.from({ length: 5 }).map((_, i) => (
-                                                <Star key={i} className={cn("h-3 w-3", i < booking.rating[0].rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300")} />
-                                            ))}
-                                        </div>
-                                        {booking.rating[0].feedback && (
-                                            <p className="text-[10px] text-muted-foreground italic line-clamp-2">"{booking.rating[0].feedback}"</p>
-                                        )}
+                                <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2 font-extrabold text-sm text-foreground">
+                                        <User className="h-3.5 w-3.5 text-primary" />
+                                        {customerName}
                                     </div>
-                                ) : (
-                                    <span className="text-[10px] text-muted-foreground italic">No feedback yet</span>
-                                )}
+                                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                                        <Mail className="h-3 w-3" />
+                                        {customerEmail}
+                                    </div>
+                                </div>
                             </TableCell>
-                        ) : (
-                            <TableCell className="align-top py-4 text-[11px]">
-                                <div className="font-extrabold">{new Date(booking.booking_time).toLocaleDateString()}</div>
-                                <div className="text-muted-foreground font-medium">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                            <TableCell className="align-top py-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center gap-2 text-sm font-black text-primary uppercase bg-primary/5 px-2 py-1 rounded w-fit border border-primary/10">
+                                        <Car className="h-4 w-4" />
+                                        {booking.car ? `${booking.car.make} ${booking.car.model}` : 'Unknown Vehicle'}
+                                    </div>
+                                </div>
                             </TableCell>
-                        )}
-                        <TableCell className="align-top py-4">
-                            {booking.status === 'pending' ? (
-                                <Select 
-                                    value={assignments[booking.id] || ""} 
-                                    onValueChange={(val) => setAssignments(prev => ({ ...prev, [booking.id]: val }))}
-                                >
-                                    <SelectTrigger className="w-[140px] h-9 text-[10px] font-bold shadow-sm">
-                                        <SelectValue placeholder="Assign Staff..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {employees.length > 0 ? employees.map(emp => (
-                                            <SelectItem key={emp.id} value={emp.id} className="text-xs font-bold">{emp.name}</SelectItem>
-                                        )) : (
-                                            <div className="p-2 text-[10px] italic text-destructive">No staff available</div>
-                                        )}
-                                    </SelectContent>
-                                </Select>
+                            <TableCell className="align-top py-4">
+                                <div className="flex flex-col gap-1">
+                                    <div className="font-bold text-xs uppercase tracking-tight">{booking.service?.name || 'Standard Wash'}</div>
+                                    <div className="text-[10px] font-bold text-primary">
+                                        P{booking.service?.price || booking.price} • {booking.service?.duration || '--'} min
+                                    </div>
+                                </div>
+                            </TableCell>
+                            {isCompleted ? (
+                                <TableCell className="align-top py-4">
+                                    {booking.rating && booking.rating.length > 0 ? (
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-1">
+                                                {Array.from({ length: 5 }).map((_, i) => (
+                                                    <Star key={i} className={cn("h-3 w-3", i < booking.rating[0].rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300")} />
+                                                ))}
+                                            </div>
+                                            {booking.rating[0].feedback && (
+                                                <p className="text-[10px] text-muted-foreground italic line-clamp-2">"{booking.rating[0].feedback}"</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <span className="text-[10px] text-muted-foreground italic">No feedback yet</span>
+                                    )}
+                                </TableCell>
                             ) : (
-                                <Badge variant="secondary" className="flex items-center gap-1 bg-green-50 text-green-700 border-green-200 text-[10px] font-black uppercase">
-                                    <UserCheck className="h-3 w-3" />
-                                    {booking.staff?.name || 'Assigned'}
-                                </Badge>
+                                <TableCell className="align-top py-4 text-[11px]">
+                                    <div className="font-extrabold">{new Date(booking.booking_time).toLocaleDateString()}</div>
+                                    <div className="text-muted-foreground font-medium">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                </TableCell>
                             )}
-                        </TableCell>
-                        <TableCell className="text-right align-top py-4 pr-6">
-                            <div className="flex justify-end gap-2">
-                                {showActions && booking.status === 'pending' && (
-                                    <>
-                                        <Button 
-                                            size="sm" 
-                                            className="h-9 bg-green-600 hover:bg-green-700 text-[10px] font-black uppercase shadow-md" 
-                                            onClick={() => handleAcceptBooking(booking.id)} 
-                                            disabled={!assignments[booking.id]}
-                                        >
-                                            <Check className="h-3.5 w-3.5 mr-1" /> Accept
-                                        </Button>
-                                        <Button 
-                                            size="sm" 
-                                            variant="ghost" 
-                                            className="h-9 text-destructive hover:bg-destructive/10 text-[10px] font-black uppercase" 
-                                            onClick={() => handleRejectBooking(booking.id)}
-                                        >
-                                            <Ban className="h-3.5 w-3.5 mr-1" /> Reject
-                                        </Button>
-                                    </>
+                            <TableCell className="align-top py-4">
+                                {booking.status === 'pending' ? (
+                                    <Select 
+                                        value={assignments[booking.id] || ""} 
+                                        onValueChange={(val) => setAssignments(prev => ({ ...prev, [booking.id]: val }))}
+                                    >
+                                        <SelectTrigger className="w-[140px] h-9 text-[10px] font-bold shadow-sm">
+                                            <SelectValue placeholder="Assign Staff..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {employees.length > 0 ? employees.map(emp => (
+                                                <SelectItem key={emp.id} value={emp.id} className="text-xs font-bold">{emp.name}</SelectItem>
+                                            )) : (
+                                                <div className="p-2 text-[10px] italic text-destructive">No staff available</div>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <Badge variant="secondary" className="flex items-center gap-1 bg-green-50 text-green-700 border-green-200 text-[10px] font-black uppercase">
+                                        <UserCheck className="h-3 w-3" />
+                                        {booking.staff?.name || 'Assigned'}
+                                    </Badge>
                                 )}
-                                {isConfirmed && booking.status === 'confirmed' && (
-                                    <Button size="sm" className="h-9 text-[10px] font-black uppercase shadow-lg" onClick={() => handleCompleteBooking(booking.id)}>
-                                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Finish Job
-                                    </Button>
-                                )}
-                            </div>
-                        </TableCell>
-                    </TableRow>
-                )) : (
+                            </TableCell>
+                            <TableCell className="text-right align-top py-4 pr-6">
+                                <div className="flex justify-end gap-2">
+                                    {showActions && booking.status === 'pending' && (
+                                        <>
+                                            <Button 
+                                                size="sm" 
+                                                className="h-9 bg-green-600 hover:bg-green-700 text-[10px] font-black uppercase shadow-md" 
+                                                onClick={() => handleAcceptBooking(booking.id)} 
+                                                disabled={!assignments[booking.id]}
+                                            >
+                                                <Check className="h-3.5 w-3.5 mr-1" /> Accept
+                                            </Button>
+                                            <Button 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                className="h-9 text-destructive hover:bg-destructive/10 text-[10px] font-black uppercase" 
+                                                onClick={() => handleRejectBooking(booking.id)}
+                                            >
+                                                <Ban className="h-3.5 w-3.5 mr-1" /> Reject
+                                            </Button>
+                                        </>
+                                    )}
+                                    {isConfirmed && booking.status === 'confirmed' && (
+                                        <Button size="sm" className="h-9 text-[10px] font-black uppercase shadow-lg" onClick={() => handleCompleteBooking(booking.id)}>
+                                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Finish Job
+                                        </Button>
+                                    )}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    );
+                }) : (
                     <TableRow><TableCell colSpan={6} className="h-64 text-center text-muted-foreground italic">
                         <div className="flex flex-col items-center justify-center gap-2 opacity-40">
                             <Truck className="h-12 w-12" />
