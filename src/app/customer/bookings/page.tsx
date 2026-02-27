@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, MapPin, Star, Repeat, Loader2, Car as CarIcon, XCircle, FileText, ChevronRight } from "lucide-react";
+import { Calendar, Clock, MapPin, Star, Repeat, Loader2, Car as CarIcon, XCircle, FileText, ChevronRight, UserCheck, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
@@ -54,7 +54,7 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: () => void
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow overflow-hidden">
+    <Card className="hover:shadow-md transition-shadow overflow-hidden flex flex-col h-full">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
@@ -80,7 +80,7 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: () => void
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 pb-4">
+      <CardContent className="space-y-4 pb-4 flex-grow">
         <div className="bg-muted/30 p-3 rounded-lg space-y-2">
             <div className="flex justify-between items-center text-sm">
                 <span className="font-semibold text-primary">{booking.service_name || 'Wash Service'}</span>
@@ -98,6 +98,34 @@ function BookingCard({ booking, onCancel }: { booking: any, onCancel: () => void
             <span className="text-muted-foreground">•</span>
             <Clock className="h-4 w-4 text-primary" />
             <span>{booking.booking_time ? new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---'}</span>
+        </div>
+
+        {/* Assigned Staff Section */}
+        <div className="mt-4 pt-4 border-t">
+            {booking.staff ? (
+                <div className="flex items-center gap-3">
+                    <Avatar className="h-9 w-9 border-2 border-primary/10">
+                        <AvatarImage src={booking.staff.image_url} alt={booking.staff.name} className="object-cover" />
+                        <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-bold">
+                            {booking.staff.name?.charAt(0)}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold">{booking.staff.name}</span>
+                            <Badge variant="outline" className="text-[8px] h-4 px-1 py-0 border-primary/20 text-primary">Detailer</Badge>
+                        </div>
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Phone className="h-2.5 w-2.5" /> {booking.staff.phone}
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground italic">
+                    <UserCheck className="h-3 w-3 opacity-50" />
+                    {['cancelled', 'rejected'].includes(booking.status) ? "No detailer assigned" : "Staff not yet assigned."}
+                </div>
+            )}
         </div>
       </CardContent>
       <CardFooter className="flex justify-between gap-2 border-t pt-3 bg-muted/5">
@@ -166,14 +194,15 @@ export default function BookingHistoryPage() {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
 
-            // Direct fetch with joins to ensure car and business details are correct
+            // Direct fetch with joins to ensure car, business, and staff details are correct
             const { data, error } = await supabase
                 .from('bookings')
                 .select(`
                     *,
                     business:business_id ( name, city, logo_url ),
                     service:service_id ( name, duration ),
-                    car:car_id ( make, model )
+                    car:car_id ( make, model ),
+                    staff:staff_id ( name, phone, image_url )
                 `)
                 .eq('customer_id', session.user.id)
                 .order('booking_time', { ascending: false });
@@ -192,7 +221,8 @@ export default function BookingHistoryPage() {
                 service_name: b.service?.name || 'Wash Service',
                 service_duration: b.service?.duration,
                 car_details: b.car ? `${b.car.make} ${b.car.model}` : 'Registered Vehicle',
-                mobile_status: b.mobileBookingStatus
+                mobile_status: b.mobileBookingStatus,
+                staff: b.staff
             }));
 
             setBookings(formatted);

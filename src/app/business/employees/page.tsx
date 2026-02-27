@@ -6,7 +6,7 @@ import type { Employee } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle, RefreshCw, Info } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle, RefreshCw, Info, Image as ImageIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,14 +37,12 @@ export default function EmployeeRegistryPage() {
         setLoading(true);
         setFetchError(null);
         try {
-            // 1. Get the current logged-in user
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
                 setFetchError("Session expired. Please log in again.");
                 return;
             }
 
-            // 2. Find the business record where owner_id matches user.id
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('id, name')
@@ -59,9 +57,7 @@ export default function EmployeeRegistryPage() {
             }
 
             setBusinessId(biz.id);
-            console.log(`[STAFF DEBUG] Fetching employees for Business UUID: ${biz.id}`);
 
-            // 3. Fetch employees linked to this business UUID
             const { data, error } = await supabase
                 .from('employees')
                 .select('*')
@@ -69,8 +65,6 @@ export default function EmployeeRegistryPage() {
                 .order('name', { ascending: true });
             
             if (error) throw error;
-            
-            console.log(`[STAFF DEBUG] Success! Employees found:`, data?.length || 0);
             setEmployees(data || []);
 
         } catch (error: any) {
@@ -103,8 +97,15 @@ export default function EmployeeRegistryPage() {
         e.preventDefault();
         if (!businessId) return;
 
+        // Validation
         if (!name.trim() || !phone.trim() || !idReference.trim()) {
             toast({ variant: 'destructive', title: 'Missing Info', description: 'Name, Phone, and ID are required.' });
+            return;
+        }
+
+        const phoneRegex = /^[0-9+ \-()]{7,20}$/;
+        if (!phoneRegex.test(phone.trim())) {
+            toast({ variant: 'destructive', title: 'Invalid Phone', description: 'Please enter a valid phone number.' });
             return;
         }
 
@@ -117,10 +118,10 @@ export default function EmployeeRegistryPage() {
                 const fileName = `${Date.now()}.${fileExt}`;
                 const filePath = `employees/${businessId}/${fileName}`;
                 const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
-                if (!uploadError) {
-                    const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
-                    uploadedImageUrl = publicUrl;
-                }
+                if (uploadError) throw uploadError;
+                
+                const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
+                uploadedImageUrl = publicUrl;
             }
 
             const { error: insertError } = await supabase
@@ -179,11 +180,14 @@ export default function EmployeeRegistryPage() {
                         <DialogContent className="max-w-md">
                             <DialogHeader>
                                 <DialogTitle>New Team Member</DialogTitle>
-                                <DialogDescription>Register a detailer. Omang/ID is required for platform transparency.</DialogDescription>
+                                <DialogDescription>Register a detailer. Omang/ID and Phone are required.</DialogDescription>
                             </DialogHeader>
                             <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
                                 <div className="flex justify-center">
-                                    <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group cursor-pointer">
+                                    <div 
+                                        className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group cursor-pointer"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
                                         {imagePreview ? (
                                             <Image src={imagePreview} alt="Preview" fill className="object-cover" />
                                         ) : (
@@ -191,28 +195,24 @@ export default function EmployeeRegistryPage() {
                                                 <User className="h-10 w-10 text-muted-foreground opacity-40" />
                                             </div>
                                         )}
-                                        <button 
-                                            type="button"
-                                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                                            onClick={() => fileInputRef.current?.click()}
-                                        >
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                                             <Upload className="h-5 w-5" />
-                                        </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="name">Full Name (per ID)</Label>
+                                    <Label htmlFor="name">Full Name (per ID) *</Label>
                                     <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Full legal name" required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="phone">Phone Number</Label>
-                                        <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+267..." required />
+                                        <Label htmlFor="phone">Phone Number *</Label>
+                                        <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="77123456" required />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="idref">Omang / ID</Label>
+                                        <Label htmlFor="idref">Omang / ID *</Label>
                                         <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="ID number" required />
                                     </div>
                                 </div>
