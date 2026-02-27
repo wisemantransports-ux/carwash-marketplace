@@ -19,7 +19,8 @@ import {
     Mail,
     Info,
     Truck,
-    Ban
+    Ban,
+    Lock
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -29,6 +30,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<any[]>([]);
@@ -56,7 +58,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Resolve Business UUID
+            // 1. Resolve Business Info
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -68,31 +70,38 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff for this Business
-                const { data: staffData } = await supabase
-                    .from('employees')
-                    .select('id, name')
-                    .eq('business_id', bizData.id)
-                    .order('name');
-                
-                setEmployees(staffData || []);
+                // GATING: Only fetch operational data if verified AND active
+                const isVerified = bizData.status === 'verified';
+                const now = new Date();
+                const expiry = bizData.sub_end_date ? new Date(bizData.sub_end_date) : null;
+                const isAccessActive = isVerified && (bizData.subscription_status === 'active' || (expiry && expiry >= now));
 
-                // 3. Fetch Bookings from view with Relational Joins
-                const { data: bookingData, error: bookingError } = await supabase
-                    .from('booking_with_customer')
-                    .select(`
-                        *,
-                        car:car_id ( make, model ),
-                        staff:staff_id ( id, name, phone ),
-                        service:service_id ( name, price, duration )
-                    `)
-                    .eq('business_id', bizData.id)
-                    .order('booking_time', { ascending: true });
-                
-                if (bookingError) throw bookingError;
-                
-                setBookings(bookingData || []);
+                if (isAccessActive) {
+                    // 2. Fetch Staff for this Business
+                    const { data: staffData } = await supabase
+                        .from('employees')
+                        .select('id, name')
+                        .eq('business_id', bizData.id)
+                        .order('name');
+                    
+                    setEmployees(staffData || []);
 
+                    // 3. Fetch Bookings from view with Relational Joins
+                    const { data: bookingData, error: bookingError } = await supabase
+                        .from('booking_with_customer')
+                        .select(`
+                            *,
+                            car:car_id ( make, model ),
+                            staff:staff_id ( id, name, phone ),
+                            service:service_id ( name, price, duration )
+                        `)
+                        .eq('business_id', bizData.id)
+                        .order('booking_time', { ascending: true });
+                    
+                    if (bookingError) throw bookingError;
+                    
+                    setBookings(bookingData || []);
+                }
             } else {
                 setFetchError("Business profile not found. Please complete your profile setup.");
             }
@@ -276,12 +285,33 @@ export default function BusinessDashboardPage() {
         </Table>
     );
 
-    if (loading && !business) return <div className="flex justify-center py-32"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
-    if (!business) return <div className="text-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8">
-        <ShieldCheck className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-        <h2 className="text-xl font-bold">Profile Required</h2>
-        <p className="text-muted-foreground mt-2">Complete your business profile to start managing bookings.</p>
-    </div>;
+    if (loading) return <div className="flex justify-center py-32"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
+    
+    // Check access for Banner/UI
+    const isVerified = business?.status === 'verified';
+    const now = new Date();
+    const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
+    const isAccessActive = isVerified && (business.subscription_status === 'active' || (expiry && expiry >= now));
+
+    if (!isAccessActive) return (
+        <div className="flex flex-col items-center justify-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8 text-center">
+            <Lock className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+            <h2 className="text-2xl font-bold">Operations Locked</h2>
+            <p className="text-muted-foreground mt-2 max-w-md mx-auto">
+                {!isVerified 
+                    ? "Your business verification is pending. Please wait for an administrator to review your documents." 
+                    : "Your subscription or trial has expired. Please choose a plan to continue managing bookings."}
+            </p>
+            <div className="mt-8 flex gap-4">
+                <Button variant="outline" asChild>
+                    <Link href="/business/profile">Review Profile</Link>
+                </Button>
+                <Button asChild>
+                    <Link href="/business/subscription">View Plans</Link>
+                </Button>
+            </div>
+        </div>
+    );
 
     const pendingList = bookings.filter(b => b.status === 'pending');
     const confirmedList = bookings.filter(b => b.status === 'confirmed');
@@ -293,13 +323,15 @@ export default function BusinessDashboardPage() {
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div>
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business.name}</h1>
-                    <p className="text-muted-foreground font-medium">Operations Center • View: booking_with_customer</p>
+                    <p className="text-muted-foreground font-medium">Operations Center • {business.subscription_plan} Access</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button variant="outline" size="sm" onClick={fetchData} className="rounded-full h-10">
                         <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} /> Refresh
                     </Button>
-                    <Badge className="bg-primary hover:bg-primary font-bold px-4 py-1.5 rounded-full">{business.subscription_plan}</Badge>
+                    <Badge className="bg-primary hover:bg-primary font-bold px-4 py-1.5 rounded-full uppercase tracking-tighter">
+                        {business.subscription_status}
+                    </Badge>
                 </div>
             </div>
 
@@ -317,13 +349,13 @@ export default function BusinessDashboardPage() {
                         Incoming ({pendingList.length})
                     </TabsTrigger>
                     <TabsTrigger value="confirmed" className="rounded-lg text-[10px] font-black uppercase">
-                        Confirmed ({confirmedList.length})
+                        Active ({confirmedList.length})
                     </TabsTrigger>
                     <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase">
-                        Completed ({completedList.length})
+                        Done ({completedList.length})
                     </TabsTrigger>
                     <TabsTrigger value="cancelled" className="rounded-lg text-[10px] font-black uppercase">
-                        History ({historyList.length})
+                        Archived ({historyList.length})
                     </TabsTrigger>
                 </TabsList>
 
@@ -378,7 +410,7 @@ export default function BusinessDashboardPage() {
                     <CardHeader>
                         <CardTitle className="text-lg flex items-center gap-2">
                             <Info className="h-5 w-5 text-primary" />
-                            Workflow Tips
+                            Efficiency Tips
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="text-xs text-muted-foreground leading-relaxed space-y-2 font-medium">

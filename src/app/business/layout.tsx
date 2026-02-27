@@ -1,18 +1,20 @@
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt, Package, Loader2 } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt, Package, Loader2, CheckCircle2 } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Business } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
+import { toast } from "@/hooks/use-toast";
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
+  const trialTriggered = useRef(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -20,17 +22,53 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user?.id) {
-        // Explicitly fetch snake_case columns
         const { data: biz, error } = await supabase
           .from('businesses')
-          .select('id, owner_id, status, subscription_status, subscription_plan, sub_end_date')
+          .select('*')
           .eq('owner_id', user.id)
           .maybeSingle();
         
         if (error) {
           console.error("Layout business fetch error:", error.message);
         } else if (biz) {
-          setBusiness(biz as Business);
+          const typedBiz = biz as Business;
+          setBusiness(typedBiz);
+
+          // AUTO-TRIAL LOGIC
+          // If verified but has no sub history/expiry, grant a 14-day trial automatically
+          if (
+            typedBiz.status === 'verified' && 
+            !typedBiz.sub_end_date && 
+            typedBiz.subscription_status === 'inactive' &&
+            !trialTriggered.current
+          ) {
+            trialTriggered.current = true;
+            const expiry = new Date();
+            expiry.setDate(expiry.getDate() + 14);
+
+            const { error: updateError } = await supabase
+              .from('businesses')
+              .update({
+                subscription_status: 'active',
+                subscription_plan: 'Starter',
+                sub_end_date: expiry.toISOString()
+              })
+              .eq('id', typedBiz.id);
+
+            if (!updateError) {
+              toast({
+                title: "14-Day Trial Activated!",
+                description: "Your account is verified and your professional trial has started.",
+              });
+              // Refresh state to reflect new sub status
+              setBusiness({
+                ...typedBiz,
+                subscription_status: 'active',
+                subscription_plan: 'Starter',
+                sub_end_date: expiry.toISOString()
+              });
+            }
+          }
         }
       }
     } catch (e) {
@@ -44,17 +82,17 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     fetchData();
   }, [fetchData]);
 
-  // Access Gating Logic derived strictly from businesses table
+  // Access Gating Logic
   const now = new Date();
   const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
   const isVerified = business?.status === 'verified';
-  const isPaid = business?.subscription_status === 'active';
-  const isTrialActive = expiry ? expiry >= now : false;
+  const isTrialOrPaid = expiry ? expiry >= now : false;
+  const isActive = business?.subscription_status === 'active';
   
-  const hasAccess = isVerified && (isPaid || isTrialActive);
+  const hasAccess = isVerified && (isActive || isTrialOrPaid);
   const isBlocked = !hasAccess && pathname !== "/business/subscription" && pathname !== "/business/profile";
   
-  const trialRemaining = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+  const daysRemaining = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
   const navItems = [
     { href: "/business/dashboard", label: "Operations", icon: LayoutDashboard },
@@ -77,25 +115,25 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     <SharedLayout navItems={filteredNavItems} role="business-owner">
       <div className="space-y-6">
         {/* Verification Alert */}
-        {business && !isVerified && (
+        {business && business.status !== 'verified' && (
           <Alert variant="destructive" className="bg-orange-50 border-orange-200 text-orange-800">
             <AlertCircle className="h-4 w-4 text-orange-600" />
             <AlertTitle>Verification Pending</AlertTitle>
             <AlertDescription>
-              Your business profile is currently under review by our administrators. Some features will be available once verified.
+              Your business profile is currently under review. Operational features (Bookings, Services, Employees) will be unlocked once an administrator verifies your identity documents.
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Trial Status Banner - Only show if not paid but trial is active */}
-        {isVerified && !isPaid && isTrialActive && (
-          <Alert variant="default" className="bg-blue-50 border-blue-200">
-            <Clock className="h-4 w-4 text-blue-600" />
-            <AlertTitle>Free Trial Active</AlertTitle>
+        {/* Trial Status Banner */}
+        {isVerified && isTrialOrPaid && (
+          <Alert variant="default" className="bg-primary/10 border-primary/20 text-primary">
+            <CheckCircle2 className="h-4 w-4 text-primary" />
+            <AlertTitle className="font-bold">Account Verified</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-4">
-              <span>Your trial ends in {trialRemaining} days. Subscribe anytime to avoid account interruption.</span>
-              <Button size="sm" asChild>
-                <Link href="/business/subscription">Choose Plan</Link>
+              <span>Your {business?.subscription_plan} access is active. {daysRemaining} days remaining in your current period.</span>
+              <Button size="sm" variant="outline" className="bg-white" asChild>
+                <Link href="/business/subscription">Manage Billing</Link>
               </Button>
             </AlertDescription>
           </Alert>
@@ -109,19 +147,19 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
             </div>
             <div className="space-y-2">
               <h2 className="text-3xl font-bold">Access Restricted</h2>
-              <p className="text-muted-foreground max-md mx-auto">
+              <p className="text-muted-foreground max-w-md mx-auto">
                 {!business 
                   ? "Please set up your business profile to continue."
-                  : !isVerified 
-                    ? "Your account is awaiting admin verification. Please check back later."
-                    : "Your trial has ended. Please submit payment to continue managing your services."}
+                  : business.status !== 'verified'
+                    ? "Your account is awaiting admin verification. Some features are restricted until review is complete."
+                    : "Your access has expired. Please choose a plan or submit payment proof to reactivate your operations dashboard."}
               </p>
             </div>
             <div className="flex gap-4">
               {business ? (
-                isVerified ? (
+                business.status === 'verified' ? (
                   <Button size="lg" asChild>
-                    <Link href="/business/subscription">View Pricing Plans</Link>
+                    <Link href="/business/subscription">Renew Access</Link>
                   </Button>
                 ) : (
                   <Button size="lg" variant="outline" asChild>
@@ -137,12 +175,12 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           </div>
         ) : (
           <>
-            {isVerified && !isPaid && !isTrialActive && !isBlocked && pathname === "/business/subscription" && (
+            {isVerified && !isTrialOrPaid && !isBlocked && pathname === "/business/subscription" && (
               <Alert variant="destructive" className="border-red-200 bg-red-50 mb-6">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Trial Expired</AlertTitle>
+                <AlertTitle>Access Expired</AlertTitle>
                 <AlertDescription>
-                  Your access is restricted. Please select a plan and submit payment to reactivate your dashboard.
+                  Your operations are currently paused. Select a plan below to resume receiving bookings and managing your team.
                 </AlertDescription>
               </Alert>
             )}
