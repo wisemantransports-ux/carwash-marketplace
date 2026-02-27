@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -10,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Plus, Sparkles, Banknote, AlertCircle, Lock } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Banknote, AlertCircle } from 'lucide-react';
 import { generateServiceDescription } from '@/ai/flows/business-owner-service-description-flow';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -179,11 +178,12 @@ export default function AddServicePage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="sname">Service Name *</Label>
-              <Input 
+              <input 
                 id="sname" 
                 value={serviceName} 
                 onChange={(e) => setServiceName(e.target.value)} 
                 placeholder="e.g. Interior Steam Clean" 
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                 required 
               />
             </div>
@@ -216,11 +216,11 @@ export default function AddServicePage() {
               <Label htmlFor="sprice">Price (BWP) *</Label>
               <div className="relative">
                 <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
+                <input 
                   id="sprice" 
                   type="number" 
                   step="0.01"
-                  className="pl-10"
+                  className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                   value={price} 
                   onChange={(e) => setPrice(e.target.value)} 
                   placeholder="0.00" 
