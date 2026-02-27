@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Clock, Package, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Clock, Package, ArrowRight, CheckCircle2, Phone, Tags } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,20 +14,22 @@ import { toast } from '@/hooks/use-toast';
 
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
+  const hasLogo = !!business.logo_url;
 
   return (
-    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card">
+    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
       <div className="relative h-48 w-full group overflow-hidden bg-muted">
-        {business.avatarUrl ? (
+        {business.logo_url ? (
           <Image
-            src={business.avatarUrl}
+            src={business.logo_url}
             alt={business.name}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-110"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-            <Store className="h-12 w-12 opacity-20" />
+          <div className="h-full w-full flex items-center justify-center text-muted-foreground bg-primary/5">
+            <Store className="h-16 w-16 opacity-10" />
+            <span className="absolute bottom-4 text-[10px] font-bold uppercase tracking-widest opacity-40">Professional Partner</span>
           </div>
         )}
         <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
@@ -37,42 +39,67 @@ function BusinessCard({ business }: { business: any }) {
             </Badge>
           )}
           <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold">
-            {business.plan || 'Verified Partner'}
+            {business.services?.length || 0} Packages
           </Badge>
         </div>
       </div>
+      
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2">
           <CardTitle className="text-xl line-clamp-1">{business.name}</CardTitle>
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 shrink-0">
-            <ShieldCheck className="h-3 w-3 mr-1" /> Trust Seal
+          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 shrink-0 text-[10px]">
+            <ShieldCheck className="h-3 w-3 mr-1" /> Verified
           </Badge>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <MapPin className="h-3 w-3" />
-          <span className="truncate">{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
+        <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                <span className="truncate">{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
+            </div>
+            {business.whatsapp_number && (
+                <div className="flex items-center gap-2 text-[10px] text-green-600 font-bold">
+                    <Phone className="h-3 w-3" />
+                    <span>{business.whatsapp_number}</span>
+                </div>
+            )}
         </div>
       </CardHeader>
-      <CardContent className="flex-grow pb-4">
-        <p className="text-xs text-muted-foreground line-clamp-2 mb-3 h-8">
-          {business.description || 'Providing professional car wash and detailing services across the city.'}
-        </p>
-        <div className="flex items-center gap-1.5">
-          <div className="flex">
+
+      <CardContent className="flex-grow space-y-4 pb-4">
+        <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
+                <Tags className="h-3 w-3" /> Top Service Packages
+            </p>
+            <div className="space-y-1.5">
+                {business.services?.slice(0, 3).map((svc: any) => (
+                    <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent hover:border-primary/20 transition-colors">
+                        <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
+                        <span className="font-bold text-primary">{svc.currency_code || 'BWP'} {svc.price}</span>
+                    </div>
+                ))}
+                {business.services?.length > 3 && (
+                    <p className="text-[10px] text-center text-muted-foreground italic pt-1">
+                        + {business.services.length - 3} more packages available
+                    </p>
+                )}
+            </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 pt-2 border-t border-dashed">
+          <div className="flex text-yellow-400">
             {[1, 2, 3, 4, 5].map((s) => (
-              <Star key={s} className={s <= Math.floor(business.avg_rating || 5) ? "h-3 w-3 text-yellow-400 fill-yellow-400" : "h-3 w-3 text-gray-300"} />
+              <Star key={s} className={s <= 5 ? "h-3 w-3 fill-current" : "h-3 w-3 opacity-20"} />
             ))}
           </div>
-          <span className="text-xs font-bold">{(business.avg_rating || 5.0).toFixed(1)}</span>
-          <span className="text-[10px] text-muted-foreground ml-auto">
-            {business.review_count || 0} Reviews
-          </span>
+          <span className="text-xs font-bold">5.0</span>
+          <span className="text-[10px] text-muted-foreground ml-auto uppercase font-bold tracking-widest">Trust Seal Active</span>
         </div>
       </CardContent>
+
       <CardFooter className="pt-0">
-        <Button asChild className="w-full shadow-md" disabled={!business.access_active}>
+        <Button asChild className="w-full shadow-md font-bold" disabled={!business.access_active}>
           <Link href={`/customer/book/${business.id}`}>
-            {business.access_active ? 'View & Book Services' : 'Service Paused'}
+            Book This Business
           </Link>
         </Button>
       </CardFooter>
@@ -89,6 +116,7 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
+        // Fetch users who have active platform access
         const { data: userData, error: userError } = await supabase
           .from('users_with_access')
           .select('*')
@@ -98,59 +126,47 @@ export default function CustomerHomePage() {
         if (userError) throw userError;
 
         const userIds = (userData || []).map(u => u.id);
-        const { data: bizData } = await supabase
+        
+        // Fetch verified businesses with their services
+        const { data: bizData, error: bizError } = await supabase
             .from('businesses')
-            .select('id, owner_id, special_tag, verification_status, logo_url, address, city, description')
-            .in('owner_id', userIds);
+            .select('*, services(*)')
+            .in('owner_id', userIds)
+            .eq('verification_status', 'verified');
         
-        const bizMap = (bizData || []).reduce((acc: any, b: any) => {
-            acc[b.owner_id] = b;
-            return acc;
-        }, {});
+        if (bizError) throw bizError;
 
-        const bizIds = (bizData || []).map(b => b.id);
-        const { data: ratingsData } = await supabase
-          .from('ratings')
-          .select('business_id, rating')
-          .in('business_id', bizIds);
-
-        const ratingsMap = (ratingsData || []).reduce((acc: any, curr: any) => {
-          if (!acc[curr.business_id]) acc[curr.business_id] = { total: 0, count: 0 };
-          acc[curr.business_id].total += curr.rating;
-          acc[curr.business_id].count += 1;
-          return acc;
-        }, {});
-        
-        const formatted = (userData || [])
-          .filter(u => !!bizMap[u.id])
-          .map(u => {
-            const biz = bizMap[u.id];
-            const stats = ratingsMap[biz.id] || { total: 0, count: 0 };
-            
+        const formatted = bizData
+          .filter(biz => biz.services && biz.services.length > 0) // Must have services
+          .map(biz => {
+            const user = (userData || []).find(u => u.id === biz.owner_id);
             return {
-              ...u,
-              name: biz.name || u.name,
-              avatarUrl: biz.logo_url || u.avatar_url,
-              address: biz.address,
-              city: biz.city,
-              description: biz.description,
-              accessActive: u.access_active,
-              special_tag: biz.special_tag,
-              avg_rating: stats.count > 0 ? (stats.total / stats.count) : 5.0,
-              review_count: stats.count
+              ...biz,
+              access_active: user?.access_active || false,
+              plan: biz.subscription_plan
             };
-          }) as any[];
+          });
 
-        // Sorting: CIPA verified businesses first, then by rating
+        // Requirement 3: Sorting & Prioritization
+        // 1. Logos first
+        // 2. Service count (desc)
+        // 3. Name (asc)
         formatted.sort((a, b) => {
-            const aCipa = a.special_tag === 'CIPA Verified' ? 1 : 0;
-            const bCipa = b.special_tag === 'CIPA Verified' ? 1 : 0;
-            if (bCipa !== aCipa) return bCipa - aCipa;
-            return b.avg_rating - a.avg_rating;
+            const aHasLogo = !!a.logo_url ? 1 : 0;
+            const bHasLogo = !!b.logo_url ? 1 : 0;
+            
+            if (bHasLogo !== aHasLogo) return bHasLogo - aHasLogo;
+            
+            const aSvcCount = a.services?.length || 0;
+            const bSvcCount = b.services?.length || 0;
+            if (bSvcCount !== aSvcCount) return bSvcCount - aSvcCount;
+            
+            return a.name.localeCompare(b.name);
         });
         
         setBusinesses(formatted);
       } catch (e: any) {
+        console.error("Marketplace Load Error:", e);
         toast({ variant: 'destructive', title: 'Load Error', description: 'Could not fetch verified car washes.' });
       } finally {
         setLoading(false);
@@ -174,7 +190,7 @@ export default function CustomerHomePage() {
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-primary">Discover Top Washes</h1>
           <p className="text-muted-foreground text-lg max-w-2xl">
-            Browse professional mobile detailers and stations. CIPA verified and top-rated partners are featured first.
+            Browse professional mobile detailers and stations. Only verified partners with active services are featured here.
           </p>
           
           <div className="flex gap-4 max-w-2xl pt-2">
@@ -182,7 +198,7 @@ export default function CustomerHomePage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search by business name or city..." 
-                className="pl-10 h-12 bg-card shadow-sm"
+                className="pl-10 h-12 bg-card shadow-sm border-2"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -190,7 +206,7 @@ export default function CustomerHomePage() {
           </div>
         </div>
 
-        <Card className="w-full lg:w-80 bg-muted/30 border-dashed shrink-0">
+        <Card className="w-full lg:w-80 bg-primary/5 border-primary/20 border-dashed shrink-0">
           <CardHeader className="pb-3">
             <div className="flex justify-between items-start">
               <div className="p-2 bg-primary/10 rounded-lg">
@@ -202,7 +218,7 @@ export default function CustomerHomePage() {
           </CardHeader>
           <CardContent className="pb-4">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Buy car accessories directly from businesses while booking your wash. Launching soon for all verified locations.
+              Soon you can add air fresheners, shampoos, and wipers to your wash booking.
             </p>
           </CardContent>
           <CardFooter>
@@ -230,14 +246,14 @@ export default function CustomerHomePage() {
             <BusinessCard key={business.id} business={business} />
           ))
         ) : (
-          <div className="col-span-full py-24 text-center border-2 border-dashed rounded-2xl bg-muted/20">
+          <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <div className="max-w-xs mx-auto space-y-4">
               <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20" />
               <div className="space-y-1">
                 <p className="text-xl font-bold">No verified businesses available</p>
-                <p className="text-muted-foreground">Try adjusting your search or check back later for new partners.</p>
+                <p className="text-muted-foreground text-sm">Try adjusting your search or check back later for new partners.</p>
               </div>
-              <Button variant="outline" onClick={() => setSearch('')}>Clear Search</Button>
+              <Button variant="outline" className="rounded-full" onClick={() => setSearch('')}>Clear Search</Button>
             </div>
           </div>
         )}

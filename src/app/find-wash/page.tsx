@@ -3,11 +3,10 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { User as ProfileUser } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, Filter, ShieldCheck, ArrowLeft, Store, CheckCircle2 } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, CheckCircle2, Phone, Tags } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,20 +14,21 @@ import { Input } from '@/components/ui/input';
 
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
+  const hasLogo = !!business.logo_url;
 
   return (
-    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card">
+    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
       <div className="relative h-48 w-full group overflow-hidden bg-muted">
-        {business.avatarUrl ? (
+        {business.logo_url ? (
           <Image
-            src={business.avatarUrl}
+            src={business.logo_url}
             alt={business.name}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-110"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-            <Store className="h-12 w-12 opacity-20" />
+          <div className="h-full w-full flex items-center justify-center text-muted-foreground bg-primary/5">
+            <Store className="h-16 w-16 opacity-10" />
           </div>
         )}
         <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
@@ -38,34 +38,59 @@ function BusinessCard({ business }: { business: any }) {
             </Badge>
           )}
           <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black shadow-sm font-bold">
-            {business.plan || 'Verified'}
+            {business.services?.length || 0} Services
           </Badge>
         </div>
       </div>
+      
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2">
           <CardTitle className="text-xl line-clamp-1">{business.name}</CardTitle>
           <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 shrink-0">
-            <ShieldCheck className="h-3 w-3 mr-1" /> Trust Seal
+            <ShieldCheck className="h-3 w-3 mr-1" /> Verified
           </Badge>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <MapPin className="h-3 w-3" />
-          <span>{business.address || 'Location on file'}, {business.city || 'Botswana'}</span>
+        <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                <span>{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
+            </div>
+            {business.whatsapp_number && (
+                <div className="flex items-center gap-2 text-[10px] text-green-600 font-bold">
+                    <Phone className="h-3 w-3" />
+                    <span>{business.whatsapp_number}</span>
+                </div>
+            )}
         </div>
       </CardHeader>
-      <CardContent className="flex-grow pb-4">
-        <div className="flex items-center gap-1.5">
-          <div className="flex">
+
+      <CardContent className="flex-grow space-y-4 pb-4">
+        <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
+                <Tags className="h-3 w-3" /> Service Catalog
+            </p>
+            <div className="space-y-1.5">
+                {business.services?.slice(0, 3).map((svc: any) => (
+                    <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent">
+                        <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
+                        <span className="font-bold text-primary">{svc.currency_code || 'BWP'} {svc.price}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 pt-2 border-t border-dashed">
+          <div className="flex text-yellow-400">
             {[1, 2, 3, 4, 5].map((s) => (
-                <Star key={s} className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                <Star key={s} className="h-3 w-3 fill-current" />
             ))}
           </div>
           <span className="text-xs font-bold">5.0</span>
         </div>
       </CardContent>
+
       <CardFooter className="pt-0">
-        <Button asChild className="w-full shadow-md">
+        <Button asChild className="w-full shadow-md font-bold">
           <Link href={`/find-wash/${business.id}`}>View Services</Link>
         </Button>
       </CardFooter>
@@ -82,45 +107,50 @@ export default function PublicFindWashPage() {
     const load = async () => {
       setLoading(true);
       try {
-        // Step 1: Fetch verified users
-        const { data, error } = await supabase
+        // Step 1: Fetch verified users with access
+        const { data: userData, error: userError } = await supabase
           .from('users_with_access')
           .select('*')
           .eq('role', 'business-owner')
           .eq('access_active', true);
         
-        if (error) throw error;
+        if (userError) throw userError;
 
-        // Step 2: Validate against businesses table to ensure profile completion
-        const userIds = (data || []).map(u => u.id);
-        const { data: bizData } = await supabase
+        const userIds = (userData || []).map(u => u.id);
+        
+        // Step 2: Fetch verified businesses with their services
+        const { data: bizData, error: bizError } = await supabase
             .from('businesses')
-            .select('id, owner_id, name, logo_url, address, city, special_tag')
-            .in('owner_id', userIds);
+            .select('*, services(*)')
+            .in('owner_id', userIds)
+            .eq('verification_status', 'verified');
         
-        const bizMap = (bizData || []).reduce((acc: any, b: any) => {
-            acc[b.owner_id] = b;
-            return acc;
-        }, {});
+        if (bizError) throw bizError;
         
-        const formatted = (data || [])
-          .filter(u => !!bizMap[u.id]) // Only show completed profiles
-          .map(u => {
-            const biz = bizMap[u.id];
-            return {
-              ...u,
-              name: biz.name || u.name,
-              avatarUrl: biz.logo_url || u.avatar_url,
-              address: biz.address,
-              city: biz.city,
-              special_tag: biz.special_tag,
-              accessActive: u.access_active
-            };
-          }) as any[];
+        const formatted = bizData
+          .filter(biz => biz.services && biz.services.length > 0)
+          .map(biz => ({
+            ...biz,
+            access_active: true
+          }));
+
+        // Requirement 3: Sorting & Prioritization
+        formatted.sort((a, b) => {
+            const aHasLogo = !!a.logo_url ? 1 : 0;
+            const bHasLogo = !!b.logo_url ? 1 : 0;
+            
+            if (bHasLogo !== aHasLogo) return bHasLogo - aHasLogo;
+            
+            const aSvcCount = a.services?.length || 0;
+            const bSvcCount = b.services?.length || 0;
+            if (bSvcCount !== aSvcCount) return bSvcCount - aSvcCount;
+            
+            return a.name.localeCompare(b.name);
+        });
         
         setBusinesses(formatted);
       } catch (e) {
-        console.error('Error loading businesses:', e);
+        console.error('Marketplace Load Error:', e);
       } finally {
         setLoading(false);
       }
@@ -163,14 +193,14 @@ export default function PublicFindWashPage() {
             <span>Active Trust Seals Only</span>
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight">Verified Partners</h1>
-          <p className="text-muted-foreground text-lg">Browse professional car wash businesses verified for quality and reliability.</p>
+          <p className="text-muted-foreground text-lg">Browse professional car wash businesses. Only partners with active trust seals and packages are listed.</p>
           
           <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     placeholder="Search by business name or city..." 
-                    className="pl-10 h-12 bg-card"
+                    className="pl-10 h-12 bg-card border-2"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
@@ -196,7 +226,7 @@ export default function PublicFindWashPage() {
           ) : (
               <div className="col-span-full py-24 text-center border-2 border-dashed rounded-xl bg-muted/20">
                   <p className="text-muted-foreground font-bold text-lg">No verified businesses available at the moment.</p>
-                  <p className="text-muted-foreground text-sm">Check back later for newly verified partners.</p>
+                  <p className="text-muted-foreground text-sm">Newly verified partners with services will appear here automatically.</p>
                   <Button variant="link" onClick={() => setSearch('')}>Clear Search</Button>
               </div>
           )}
