@@ -82,7 +82,7 @@ export default function BusinessDashboardPage() {
                 
                 setEmployees(staffData || []);
 
-                // 3. Fetch Bookings with Full Context (Relational Joins)
+                // 3. Fetch Bookings with Relational Joins
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -152,8 +152,11 @@ export default function BusinessDashboardPage() {
             notifyCustomer(bookingId, "Your booking has been confirmed");
             
             // Optimistic update
-            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'confirmed', staff: { name: employees.find(e => e.id === staffId)?.name } } : b));
-            fetchData();
+            setBookings(prev => prev.map(b => 
+                b.id === bookingId 
+                    ? { ...b, status: 'confirmed', staff: { name: employees.find(e => e.id === staffId)?.name } } 
+                    : b
+            ));
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
@@ -172,7 +175,6 @@ export default function BusinessDashboardPage() {
             
             // Optimistic update
             setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
-            fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
@@ -191,7 +193,6 @@ export default function BusinessDashboardPage() {
             
             // Optimistic update
             setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'completed' } : b));
-            fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
@@ -225,11 +226,11 @@ export default function BusinessDashboardPage() {
                             <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2 font-bold text-sm">
                                     <User className="h-3.5 w-3.5 text-primary" />
-                                    {booking.customer?.name || 'Customer'}
+                                    {booking.customer?.name || 'No customer'}
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                                     <Mail className="h-3 w-3" />
-                                    {booking.customer?.email}
+                                    {booking.customer?.email || 'No email'}
                                 </div>
                             </div>
                         </TableCell>
@@ -241,7 +242,7 @@ export default function BusinessDashboardPage() {
                                     ) : (
                                         <Car className="h-4 w-4" />
                                     )}
-                                    {booking.car ? `${booking.car.make} ${booking.car.model}` : 'Unknown Vehicle'}
+                                    {booking.car ? `${booking.car.make} ${booking.car.model}` : 'No vehicle'}
                                 </div>
                                 <Badge variant="secondary" className={cn(
                                     "w-fit text-[9px] font-extrabold uppercase px-1.5 py-0.5",
