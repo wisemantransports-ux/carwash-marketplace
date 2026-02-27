@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle, RefreshCw } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle, RefreshCw, Info } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,24 +34,17 @@ export default function EmployeeRegistryPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const fetchData = useCallback(async () => {
-        if (!isSupabaseConfigured) {
-            setFetchError("Database connection not configured.");
-            setLoading(false);
-            return;
-        }
-
         setLoading(true);
         setFetchError(null);
         try {
-            // Use getUser for more reliable ID resolution
+            // 1. Get the current logged-in user
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
-                setFetchError("You must be logged in to view staff.");
-                setLoading(false);
+                setFetchError("Session expired. Please log in again.");
                 return;
             }
 
-            // 1. Get the Business UUID for the current owner
+            // 2. Find the business record where owner_id matches user.id
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('id, name')
@@ -60,16 +53,15 @@ export default function EmployeeRegistryPage() {
             
             if (bizError) throw bizError;
             
-            if (!biz?.id) {
-                setFetchError("Business profile not found. Please set up your business profile first.");
-                setLoading(false);
+            if (!biz) {
+                setFetchError("Business profile not found. Please complete your profile setup.");
                 return;
             }
 
             setBusinessId(biz.id);
-            console.log(`[STAFF DEBUG] Fetching staff for Business ID: ${biz.id} (${biz.name})`);
+            console.log(`[STAFF DEBUG] Fetching employees for Business UUID: ${biz.id}`);
 
-            // 2. Fetch staff members linked to this business UUID
+            // 3. Fetch employees linked to this business UUID
             const { data, error } = await supabase
                 .from('employees')
                 .select('*')
@@ -78,17 +70,12 @@ export default function EmployeeRegistryPage() {
             
             if (error) throw error;
             
-            console.log(`[STAFF DEBUG] Employees found in DB:`, data);
+            console.log(`[STAFF DEBUG] Success! Employees found:`, data?.length || 0);
             setEmployees(data || []);
 
         } catch (error: any) {
-            console.error(`[STAFF DEBUG] Registry fetch error:`, error);
-            setFetchError(error.message || "Unable to load employees.");
-            toast({ 
-                variant: 'destructive', 
-                title: 'Load Error', 
-                description: 'Unable to fetch the employee registry.' 
-            });
+            console.error(`[STAFF DEBUG] Fatal Registry Error:`, error);
+            setFetchError(error.message || "Unable to load the staff registry.");
         } finally {
             setLoading(false);
         }
@@ -114,11 +101,7 @@ export default function EmployeeRegistryPage() {
 
     const handleAddEmployee = async (e: React.FormEvent) => {
         e.preventDefault();
-        
-        if (!businessId) {
-            toast({ variant: 'destructive', title: 'Context Missing', description: 'Business ID not found.' });
-            return;
-        }
+        if (!businessId) return;
 
         if (!name.trim() || !phone.trim() || !idReference.trim()) {
             toast({ variant: 'destructive', title: 'Missing Info', description: 'Name, Phone, and ID are required.' });
@@ -133,15 +116,9 @@ export default function EmployeeRegistryPage() {
                 const fileExt = imageFile.name.split('.').pop();
                 const fileName = `${Date.now()}.${fileExt}`;
                 const filePath = `employees/${businessId}/${fileName}`;
-                
-                const { error: uploadError } = await supabase.storage
-                    .from('business-assets')
-                    .upload(filePath, imageFile);
-                
+                const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
                 if (!uploadError) {
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('business-assets')
-                        .getPublicUrl(filePath);
+                    const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
                     uploadedImageUrl = publicUrl;
                 }
             }
@@ -158,13 +135,11 @@ export default function EmployeeRegistryPage() {
             
             if (insertError) throw insertError;
 
-            // Reset form
+            // Clear form and reload
             setName(''); setPhone(''); setIdReference('');
             setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
-            
-            toast({ title: "Staff Registered", description: `${name} added successfully.` });
-            // Re-fetch to show the new staff member
+            toast({ title: "Staff Registered", description: `${name} has been added to your team.` });
             await fetchData();
         } catch (error: any) {
             toast({ variant: 'destructive', title: "Registration Failed", description: error.message });
@@ -177,7 +152,6 @@ export default function EmployeeRegistryPage() {
         try {
             const { error } = await supabase.from('employees').delete().eq('id', id);
             if (error) throw error;
-            
             toast({ title: 'Employee Removed' });
             setEmployees(prev => prev.filter(e => e.id !== id));
         } catch (error: any) {
@@ -186,29 +160,29 @@ export default function EmployeeRegistryPage() {
     };
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-8 animate-in fade-in duration-500 max-w-6xl mx-auto pb-12">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-primary">Staff Registry</h1>
-                    <p className="text-muted-foreground">Manage verified team members and their identification details.</p>
+                <div className="space-y-1">
+                    <h1 className="text-4xl font-extrabold tracking-tight text-primary">Team Management</h1>
+                    <p className="text-muted-foreground">Manage your professional detailers and their verified identity details.</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" size="icon" onClick={() => fetchData()} disabled={loading}>
+                    <Button variant="outline" size="icon" onClick={() => fetchData()} disabled={loading} className="rounded-full">
                         <RefreshCw className={loading ? "animate-spin h-4 w-4" : "h-4 w-4"} />
                     </Button>
                     <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                         <DialogTrigger asChild>
-                            <Button className="shadow-lg">
-                                <PlusCircle className="mr-2 h-4 w-4" /> Register Staff
+                            <Button className="shadow-xl rounded-full px-6">
+                                <PlusCircle className="mr-2 h-5 w-5" /> Register New Detailer
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="max-w-md">
                             <DialogHeader>
                                 <DialogTitle>New Team Member</DialogTitle>
-                                <DialogDescription>ID/Omang is required for compliance.</DialogDescription>
+                                <DialogDescription>Register a detailer. Omang/ID is required for platform transparency.</DialogDescription>
                             </DialogHeader>
                             <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
-                                <div className="flex justify-center mb-4">
+                                <div className="flex justify-center">
                                     <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group cursor-pointer">
                                         {imagePreview ? (
                                             <Image src={imagePreview} alt="Preview" fill className="object-cover" />
@@ -238,14 +212,14 @@ export default function EmployeeRegistryPage() {
                                         <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+267..." required />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="idref">ID (Omang)</Label>
+                                        <Label htmlFor="idref">Omang / ID</Label>
                                         <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="ID number" required />
                                     </div>
                                 </div>
                                 <DialogFooter className="pt-4">
-                                    <Button type="submit" className="w-full h-12" disabled={submitting}>
+                                    <Button type="submit" className="w-full h-12 shadow-lg" disabled={submitting}>
                                         {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
-                                        Add to Registry
+                                        Complete Registration
                                     </Button>
                                 </DialogFooter>
                             </form>
@@ -257,27 +231,31 @@ export default function EmployeeRegistryPage() {
             {fetchError && (
                 <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Configuration Error</AlertTitle>
+                    <AlertTitle>Registry Error</AlertTitle>
                     <AlertDescription className="flex flex-col gap-2">
                         <p>{fetchError}</p>
-                        <Button variant="outline" size="sm" onClick={fetchData} className="w-fit">Retry Fetch</Button>
+                        <Button variant="outline" size="sm" onClick={fetchData} className="w-fit">Try Again</Button>
                     </AlertDescription>
                 </Alert>
             )}
 
-            <Card className="shadow-lg border-muted/50 overflow-hidden">
+            <Card className="shadow-2xl border-muted/50 overflow-hidden rounded-2xl">
+                <CardHeader className="bg-muted/10 border-b">
+                    <CardTitle className="text-lg">Staff Registry</CardTitle>
+                    <CardDescription>Verified employees available for booking assignments.</CardDescription>
+                </CardHeader>
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader>
                             <TableRow className="bg-muted/30">
-                                <TableHead className="pl-6">Staff Member</TableHead>
-                                <TableHead>Phone</TableHead>
-                                <TableHead>ID Reference</TableHead>
-                                <TableHead className="text-right pr-6">Actions</TableHead>
+                                <TableHead className="pl-6 py-4 font-bold">Detailer</TableHead>
+                                <TableHead className="font-bold">Contact</TableHead>
+                                <TableHead className="font-bold">ID Reference</TableHead>
+                                <TableHead className="text-right pr-6 font-bold">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {loading && employees.length === 0 ? (
+                            {loading ? (
                                 Array.from({length: 3}).map((_, i) => (
                                     <TableRow key={i}>
                                         <TableCell className="pl-6 py-4"><Skeleton className="h-10 w-40 rounded-full" /></TableCell>
@@ -288,34 +266,36 @@ export default function EmployeeRegistryPage() {
                                 ))
                             ) : employees.length > 0 ? (
                                 employees.map(employee => (
-                                    <TableRow key={employee.id} className="hover:bg-muted/10 transition-colors">
+                                    <TableRow key={employee.id} className="hover:bg-muted/10 transition-colors group">
                                         <TableCell className="pl-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <Avatar className="h-10 w-10 border">
+                                                <Avatar className="h-12 w-12 border-2 border-background shadow-md">
                                                     <AvatarImage src={employee.image_url} alt={employee.name} className="object-cover" />
-                                                    <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                                    <AvatarFallback className="bg-primary/10 text-primary font-black uppercase">
                                                         {employee.name?.charAt(0) || '?'}
                                                     </AvatarFallback>
                                                 </Avatar>
-                                                <span className="font-bold">{employee.name}</span>
+                                                <span className="font-extrabold text-base tracking-tight">{employee.name}</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-sm">
-                                            <div className="flex items-center gap-2">
-                                                <PhoneIcon className="h-3 w-3 text-muted-foreground" />
+                                        <TableCell>
+                                            <div className="flex items-center gap-2 text-sm font-medium">
+                                                <div className="bg-muted p-1.5 rounded-lg"><PhoneIcon className="h-3.5 w-3.5 text-primary" /></div>
                                                 {employee.phone}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="font-mono text-[10px] font-bold text-primary bg-primary/5 px-2 py-1 rounded w-fit">
-                                            {employee.id_reference}
+                                        <TableCell>
+                                            <code className="text-[10px] font-black bg-primary/5 text-primary px-2 py-1 rounded border border-primary/10">
+                                                {employee.id_reference}
+                                            </code>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" className="h-10 w-10 p-0 rounded-full hover:bg-muted border"><MoreHorizontal className="h-5 w-5" /></Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-48 shadow-xl border-2">
-                                                    <DropdownMenuItem onClick={() => handleDeleteEmployee(employee.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                <DropdownMenuContent align="end" className="w-56 shadow-2xl border-2">
+                                                    <DropdownMenuItem onClick={() => handleDeleteEmployee(employee.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10 font-bold">
                                                         <Trash2 className="mr-2 h-4 w-4" /> Remove from Team
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -325,11 +305,13 @@ export default function EmployeeRegistryPage() {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="h-64 text-center text-muted-foreground italic">
-                                        <div className="flex flex-col items-center justify-center gap-2">
-                                            <User className="h-12 w-12 opacity-10" />
-                                            <p>No staff members found for this business.</p>
-                                            {businessId && <p className="text-[10px] opacity-50 font-mono">Business ID: {businessId}</p>}
+                                    <TableCell colSpan={4} className="h-72 text-center text-muted-foreground italic">
+                                        <div className="flex flex-col items-center justify-center gap-4">
+                                            <div className="bg-muted/30 p-8 rounded-full border-2 border-dashed">
+                                                <User className="h-12 w-12 opacity-10" />
+                                            </div>
+                                            <p className="text-lg font-bold">No staff members found.</p>
+                                            <p className="text-sm opacity-60">Register your first detailer to start accepting bookings.</p>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -338,6 +320,13 @@ export default function EmployeeRegistryPage() {
                     </Table>
                 </CardContent>
             </Card>
+
+            <div className="flex items-center justify-center gap-2 p-4 bg-muted/20 border-2 border-dashed rounded-xl opacity-50">
+                <Info className="h-4 w-4" />
+                <span className="text-[10px] font-mono tracking-tighter uppercase font-black">
+                    Connected Business ID: {businessId || 'Not Resolved'}
+                </span>
+            </div>
         </div>
     );
 }
