@@ -42,6 +42,7 @@ export default function AddServicePage() {
             owner_id,
             name,
             status,
+            verification_status,
             subscription_status,
             subscription_plan,
             sub_end_date
@@ -58,12 +59,17 @@ export default function AddServicePage() {
         setBusiness(data as Business);
         
         // Verification and Subscription Checks
-        if (data.status !== 'verified') {
+        if (data.verification_status !== 'verified') {
             toast({ title: 'Verification Pending', description: 'Your account is waiting for admin verification. Access will be granted once verified.' });
             router.push('/business/services');
         } else if (data.subscription_status !== 'active') {
-            toast({ title: 'Subscription Inactive', description: 'Your subscription is inactive. Please complete payment to continue.' });
-            router.push('/business/services');
+            // Check if it's currently being activated by the layout
+            const expiry = data.sub_end_date ? new Date(data.sub_end_date) : null;
+            const now = new Date();
+            if (!(expiry && expiry >= now)) {
+                toast({ title: 'Subscription Inactive', description: 'Your subscription is inactive. Please complete payment to continue.' });
+                router.push('/business/services');
+            }
         }
       } else {
         toast({ variant: 'destructive', title: 'Profile Not Found', description: 'Please set up your business profile first.' });
@@ -100,7 +106,12 @@ export default function AddServicePage() {
       return;
     }
 
-    if (business.status !== 'verified' || business.subscription_status !== 'active') {
+    const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
+    const now = new Date();
+    const isTrialActive = expiry && expiry >= now;
+    const isActive = business.subscription_status === 'active';
+
+    if (business.verification_status !== 'verified' || (!isActive && !isTrialActive)) {
         toast({ variant: 'destructive', title: 'Access Denied', description: 'Your account must be verified and have an active subscription to add services.' });
         return;
     }

@@ -32,8 +32,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           console.error("Layout business fetch error:", error.message);
         } else if (biz) {
           const typedBiz = biz as Business;
-          setBusiness(typedBiz);
-
+          
           // UNIFIED AUTO-TRIAL LOGIC for ALL Verified Businesses
           // Triggers 14-day trial if they are verified and haven't had one yet
           if (
@@ -66,7 +65,11 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
                 subscription_plan: 'Starter',
                 sub_end_date: expiry.toISOString()
               });
+            } else {
+              setBusiness(typedBiz);
             }
+          } else {
+            setBusiness(typedBiz);
           }
         }
       }
