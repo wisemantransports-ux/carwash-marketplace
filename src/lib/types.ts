@@ -33,10 +33,10 @@ export type Service = {
   id: string;
   business_id: string;
   name: string;
-  description: string;
+  description?: string;
   price: number;
-  duration: number; // in minutes
-  currency_code: string;
+  type: 'mobile' | 'station';
+  created_at?: string;
 };
 
 export type SubscriptionPlan = 'Starter' | 'Pro' | 'Enterprise' | 'None';

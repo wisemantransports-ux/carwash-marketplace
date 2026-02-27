@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Business } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,11 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Plus, Sparkles, Clock, Banknote } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Banknote, AlertCircle, Lock } from 'lucide-react';
 import { generateServiceDescription } from '@/ai/flows/business-owner-service-description-flow';
 import { useRouter } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 
 export default function AddServicePage() {
   const router = useRouter();
@@ -24,50 +26,50 @@ export default function AddServicePage() {
   const [serviceName, setServiceName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [duration, setDuration] = useState('');
-  const [currency, setCurrency] = useState('BWP');
 
-  useEffect(() => {
-    async function fetchBusiness() {
-      // Use getUser for the freshest session state
+  const fetchLatestBusiness = useCallback(async () => {
+    setLoading(true);
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push('/login');
         return;
       }
 
-      // Fetch absolute latest business state
       const { data, error } = await supabase
         .from('businesses')
         .select('*')
         .eq('owner_id', user.id)
         .maybeSingle();
 
-      if (error) {
-        console.error("Business fetch error:", error);
-        toast({ variant: 'destructive', title: 'Load Error', description: 'Could not fetch your latest business details.' });
-      }
-
+      if (error) throw error;
+      
       if (data) {
         setBusiness(data as Business);
       } else {
         router.push('/business/profile');
       }
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Load Error', description: e.message });
+    } finally {
       setLoading(false);
     }
-    fetchBusiness();
   }, [router]);
+
+  useEffect(() => {
+    fetchLatestBusiness();
+  }, [fetchLatestBusiness]);
 
   const handleAiDescription = async () => {
     if (!serviceName || !price) {
-      toast({ variant: 'destructive', title: "Details Required", description: "Enter name and price first." });
+      toast({ variant: 'destructive', title: "Details Required", description: "Enter service name and price first." });
       return;
     }
     setGeneratingAi(true);
     try {
       const result = await generateServiceDescription({
         serviceName: serviceName,
-        price: `${currency}${price}`,
+        price: `P${price}`,
       });
       setDescription(result.generatedDescription);
     } catch (e) {
@@ -80,45 +82,54 @@ export default function AddServicePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // 1. Validation
-    if (!serviceName.trim() || !description.trim() || !price || !duration || !business) {
-      toast({ variant: 'destructive', title: 'Fields Required', description: 'Please fill all required fields.' });
+    if (!business) return;
+
+    // 1. Authorization Check
+    if (business.verification_status !== 'verified') {
+      toast({ variant: 'destructive', title: "Access Denied", description: "Verification pending. Access will be granted once verified." });
+      return;
+    }
+
+    if (business.subscription_status !== 'active') {
+      toast({ variant: 'destructive', title: "Subscription Required", description: "Your professional features are currently paused. Please select a plan." });
+      return;
+    }
+
+    // 2. Validation
+    if (!serviceName.trim() || !price) {
+      toast({ variant: 'destructive', title: 'Fields Required', description: 'Please enter a name and price for the service.' });
       return;
     }
 
     const priceVal = parseFloat(price);
-    const durationVal = parseInt(duration);
-
-    if (isNaN(priceVal) || priceVal <= 0 || isNaN(durationVal) || durationVal <= 0) {
-      toast({ variant: 'destructive', title: 'Invalid Input', description: 'Price and duration must be positive numbers.' });
+    if (isNaN(priceVal) || priceVal <= 0) {
+      toast({ variant: 'destructive', title: 'Invalid Price', description: 'Please enter a valid numeric price.' });
       return;
     }
 
     setSubmitting(true);
     try {
-        // IMPORTANT: The services table does NOT have a 'status' column.
-        // Payload strictly matches schema: business_id, name, description, price, duration, currency_code
+        // 3. Exact Schema Insertion (RLS compliant)
         const { error } = await supabase
           .from('services')
           .insert([{
-            business_id: business.id,
+            business_id: business.id, // Business UUID
             name: serviceName.trim(),
             description: description.trim(),
             price: priceVal,
-            duration: durationVal,
-            currency_code: currency
+            type: business.type // Inherit from business model (mobile/station)
           }]);
 
         if (error) throw error;
 
-        toast({ title: 'Service Added', description: `${serviceName} has been added to your catalog.` });
+        toast({ title: 'Service Published', description: `${serviceName} is now live in your catalog.` });
         router.push('/business/services');
     } catch (error: any) {
-        console.error("Service Insertion Failed:", error.message || error);
+        console.error("Supabase Insertion Error:", error.message);
         toast({ 
             variant: 'destructive', 
             title: 'Creation Failed', 
-            description: error.message || 'Unable to save service. Please check your connection and try again.' 
+            description: error.message || 'Unable to save service. Please check your connection.' 
         });
     } finally {
         setSubmitting(false);
@@ -128,17 +139,41 @@ export default function AddServicePage() {
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   if (!business) return null;
 
+  const isUnverified = business.verification_status !== 'verified';
+  const isInactive = business.subscription_status !== 'active';
+
   return (
     <div className="max-w-3xl mx-auto space-y-8 pb-12">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-primary">Add New Service</h1>
-        <p className="text-muted-foreground">Define a new wash package for your catalog.</p>
+        <p className="text-muted-foreground">Define a professional wash package for your business.</p>
       </div>
 
-      <Card className="shadow-lg border-2">
+      {isUnverified ? (
+        <Alert variant="destructive" className="bg-orange-50 border-orange-200 text-orange-800">
+          <AlertCircle className="h-4 w-4 text-orange-600" />
+          <AlertTitle className="font-bold">Verification Required</AlertTitle>
+          <AlertDescription>
+            Verification pending. Access will be granted once an administrator reviews your documents.
+          </AlertDescription>
+        </Alert>
+      ) : isInactive ? (
+        <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertTitle className="font-bold">Service Paused</AlertTitle>
+          <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
+            <span>Your professional features are currently paused. Please select a plan to continue.</span>
+            <Button size="sm" variant="outline" className="border-red-200 hover:bg-red-100" asChild>
+              <Link href="/business/subscription">View Plans</Link>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Card className={`shadow-lg border-2 ${(isUnverified || isInactive) ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
         <CardHeader className="bg-muted/10 border-b">
           <CardTitle>Service Details</CardTitle>
-          <CardDescription>Enter specifications for your car wash package.</CardDescription>
+          <CardDescription>Enter specifications for your {business.type} wash package.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -155,7 +190,7 @@ export default function AddServicePage() {
 
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <Label htmlFor="sdesc">Description *</Label>
+                <Label htmlFor="sdesc">Description (Optional)</Label>
                 <Button 
                   type="button" 
                   variant="ghost" 
@@ -174,60 +209,29 @@ export default function AddServicePage() {
                 onChange={(e) => setDescription(e.target.value)} 
                 placeholder="Describe what is included in this package..." 
                 className="min-h-[120px]"
-                required 
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="sprice">Price *</Label>
-                <div className="relative">
-                  <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="sprice" 
-                    type="number" 
-                    step="0.01"
-                    className="pl-10"
-                    value={price} 
-                    onChange={(e) => setPrice(e.target.value)} 
-                    placeholder="0.00" 
-                    required 
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sdur">Duration (Mins) *</Label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="sdur" 
-                    type="number" 
-                    className="pl-10"
-                    value={duration} 
-                    onChange={(e) => setDuration(e.target.value)} 
-                    placeholder="45" 
-                    required 
-                  />
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-2">
-              <Label>Currency</Label>
-              <Select value={currency} onValueChange={setCurrency}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Currency" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="BWP">Botswana Pula (BWP)</SelectItem>
-                  <SelectItem value="USD">US Dollar (USD)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="sprice">Price (BWP) *</Label>
+              <div className="relative">
+                <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  id="sprice" 
+                  type="number" 
+                  step="0.01"
+                  className="pl-10"
+                  value={price} 
+                  onChange={(e) => setPrice(e.target.value)} 
+                  placeholder="0.00" 
+                  required 
+                />
+              </div>
             </div>
 
-            <Button type="submit" className="w-full h-12 text-lg shadow-xl" disabled={submitting}>
+            <Button type="submit" className="w-full h-12 text-lg shadow-xl" disabled={submitting || isUnverified || isInactive}>
               {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <Plus className="mr-2 h-5 w-5" />}
-              Publish Service Package
+              Publish Service
             </Button>
           </form>
         </CardContent>
