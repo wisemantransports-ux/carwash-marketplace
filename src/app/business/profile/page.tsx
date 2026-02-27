@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { ShareBusinessCard } from '@/components/app/share-business-card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Business } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 export default function BusinessProfilePage() {
   const [profile, setProfile] = useState<Business | null>(null);
