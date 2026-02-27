@@ -52,7 +52,7 @@ function BusinessCard({ business }: { business: any }) {
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <MapPin className="h-3 w-3" />
-                <span>{business.address || 'No address provided'}, {business.city || 'Botswana'}</span>
+                <span className="truncate">{business.address || 'No address provided'}, {business.city || 'Botswana'}</span>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-green-600 font-bold">
                 <Phone className="h-3 w-3" />
@@ -64,12 +64,12 @@ function BusinessCard({ business }: { business: any }) {
       <CardContent className="flex-grow space-y-4 pb-4 overflow-hidden flex flex-col">
         <div className="space-y-2 flex-1 flex flex-col min-h-0">
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
-                <Tags className="h-3 w-3" /> Service Catalog
+                <Tags className="h-3 w-3" /> Full Service Catalog
             </p>
             <ScrollArea className="flex-1 pr-2">
                 <div className="space-y-1.5">
                     {business.services?.map((svc: any) => (
-                        <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent">
+                        <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent hover:border-primary/20 transition-colors">
                             <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
                             <span className="font-bold text-primary">{svc.currency_code || 'BWP'} {Number(svc.price).toFixed(2)}</span>
                         </div>
@@ -115,14 +115,13 @@ export default function PublicFindWashPage() {
         
         if (bizError) throw bizError;
         
-        // Requirement: Filter by verification_status, status, and services.length > 0
-        // Requirement: Do NOT filter out businesses because of missing optional fields
+        // Filter: verification_status === 'verified', status === 'active', services.length > 0
         const formatted = (bizData || [])
           .filter(biz => biz.services && biz.services.length > 0);
 
-        // Requirement: Sorting & Prioritization
+        // Sorting & Prioritization
         // 1. Verified businesses with logos first
-        // 2. Within those, prioritize businesses with more services
+        // 2. Within those, prioritize businesses with more services (descending)
         // 3. Alphabetical by name
         formatted.sort((a, b) => {
             const aHasLogo = !!a.logo_url ? 1 : 0;
@@ -182,7 +181,7 @@ export default function PublicFindWashPage() {
             <span>Active Trust Seals Only</span>
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight">Verified Partners</h1>
-          <p className="text-muted-foreground text-lg">Browse professional car wash businesses. Only partners with active trust seals and packages are listed.</p>
+          <p className="text-muted-foreground text-lg">Browse professional car wash businesses. Only partners with active trust seals and packages are listed here.</p>
           
           <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <div className="relative flex-1">
@@ -214,7 +213,7 @@ export default function PublicFindWashPage() {
               ))
           ) : (
               <div className="col-span-full py-24 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                  <p className="text-muted-foreground font-bold text-lg">No verified businesses available at the moment.</p>
+                  <p className="text-muted-foreground font-bold text-lg">No verified businesses available. Try adjusting your search or check back later.</p>
                   <p className="text-muted-foreground text-sm">Newly verified partners with services will appear here automatically.</p>
                   <Button variant="link" onClick={() => setSearch('')}>Clear Search</Button>
               </div>

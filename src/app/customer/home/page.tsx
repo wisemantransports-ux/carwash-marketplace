@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Package, ArrowRight, CheckCircle2, Phone, Tags, Info } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Package, ArrowRight, CheckCircle2, Phone, Tags } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -120,14 +120,13 @@ export default function CustomerHomePage() {
         
         if (bizError) throw bizError;
 
-        // Requirement: Filter by verification_status, status, and services.length > 0
-        // Requirement: Do NOT filter out businesses because of missing optional fields
+        // Filter: verification_status === 'verified', status === 'active', services.length > 0
         const formatted = (bizData || [])
           .filter(biz => biz.services && biz.services.length > 0);
 
-        // Requirement: Sorting & Prioritization
+        // Sorting & Prioritization
         // 1. Verified businesses with logos first
-        // 2. Within those, prioritize businesses with more services
+        // 2. Within those, prioritize businesses with more services (descending)
         // 3. Alphabetical by name
         formatted.sort((a, b) => {
             const aHasLogo = !!a.logo_url ? 1 : 0;
