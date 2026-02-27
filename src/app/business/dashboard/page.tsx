@@ -1,24 +1,51 @@
+
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Car, Loader2, CheckCircle2, XCircle, Star, MessageCircle, ShieldCheck, RefreshCw, AlertTriangle, AlertCircle, User, Trash2 } from "lucide-react";
+import { 
+    Calendar, 
+    Clock, 
+    Car, 
+    Loader2, 
+    CheckCircle2, 
+    XCircle, 
+    Star, 
+    MessageCircle, 
+    ShieldCheck, 
+    RefreshCw, 
+    AlertCircle, 
+    User, 
+    UserCheck,
+    Check
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShareBusinessCard } from "@/components/app/share-business-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+
+// Placeholder for future multi-channel notifications
+const notifyCustomer = (bookingId: string, message: string) => {
+    console.log(`[NOTIFICATION] Booking ${bookingId}: ${message}`);
+    // Future: Integrate with WhatsApp / Email / Push
+};
 
 export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<any[]>([]);
     const [business, setBusiness] = useState<any>(null);
+    const [employees, setEmployees] = useState<any[]>([]);
     const [stats, setStats] = useState({ avgRating: 0, totalReviews: 0, latestReview: null as any });
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    
+    // Tracking assignments locally for pending bookings
+    const [assignments, setAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async () => {
         if (!isSupabaseConfigured) {
@@ -36,7 +63,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Fetch Business Profile to get business_id
+            // 1. Fetch Business Profile
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -47,7 +74,15 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Bookings with requested schema and joins
+                // 2. Fetch Staff (Resilient check for both Business UUID and Owner UID)
+                const { data: staffData } = await supabase
+                    .from('employees')
+                    .select('id, name')
+                    .or(`business_id.eq.${bizData.id},business_id.eq.${user.id}`);
+                
+                setEmployees(staffData || []);
+
+                // 3. Fetch Bookings with Relations
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -59,8 +94,9 @@ export default function BusinessDashboardPage() {
                         booking_time,
                         status,
                         mobile_status,
-                        customer:customer_id ( name ),
-                        service:service_id ( name ),
+                        price,
+                        customer:customer_id ( name, email ),
+                        service:service_id ( name, duration ),
                         car:car_id ( make, model ),
                         staff:staff_id ( name )
                     `)
@@ -70,7 +106,7 @@ export default function BusinessDashboardPage() {
                 if (bookingError) throw bookingError;
                 setBookings(bookingData || []);
 
-                // 3. Fetch Ratings for summary
+                // 4. Fetch Ratings Summary
                 const { data: ratingsData } = await supabase
                     .from('ratings')
                     .select('*, customer:customer_id(name)')
@@ -87,7 +123,7 @@ export default function BusinessDashboardPage() {
                 }
             }
         } catch (error: any) {
-            console.error("Fetch error:", error);
+            console.error("Dashboard fetch error:", error);
             setFetchError("Unable to fetch bookings. Check database connection.");
             toast({ variant: 'destructive', title: 'Data Error', description: 'Unable to fetch bookings. Check database connection.' });
         } finally {
@@ -99,29 +135,70 @@ export default function BusinessDashboardPage() {
         fetchData();
     }, [fetchData]);
 
-    const handleCancelBooking = async (id: string) => {
-        try {
-            // Optimistic update: filter out the booking immediately
-            const previousBookings = [...bookings];
-            setBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b));
+    const handleAcceptBooking = async (bookingId: string) => {
+        const staffId = assignments[bookingId];
+        if (!staffId) {
+            toast({ variant: 'destructive', title: "Staff Required", description: "Please assign a staff member before accepting." });
+            return;
+        }
 
+        try {
             const { data, error } = await supabase
                 .from('bookings')
-                .update({ status: 'cancelled' })
-                .eq('id', id)
+                .update({ 
+                    status: 'confirmed',
+                    staff_id: staffId 
+                })
+                .eq('id', bookingId)
                 .select();
 
-            if (error) {
-                setBookings(previousBookings); // Rollback on error
-                throw error;
-            }
+            if (error) throw error;
+
+            toast({ title: "Booking Accepted", description: "The request has been moved to confirmed." });
+            notifyCustomer(bookingId, "Your booking has been confirmed");
+            
+            // Local update for immediate UI feedback
+            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'confirmed', staff_id: staffId, staff: employees.find(e => e.id === staffId) } : b));
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
+        }
+    };
+
+    const handleCancelBooking = async (bookingId: string) => {
+        try {
+            const { error } = await supabase
+                .from('bookings')
+                .update({ status: 'cancelled' })
+                .eq('id', bookingId)
+                .select();
+
+            if (error) throw error;
 
             toast({ title: "Booking Cancelled", description: "The request status has been updated to cancelled." });
             
-            // Refresh the full list to ensure UI is in sync with DB
-            await fetchData();
+            // Local update
+            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Cancellation Failed', description: e.message });
+        }
+    };
+
+    const handleCompleteBooking = async (bookingId: string) => {
+        try {
+            const { error } = await supabase
+                .from('bookings')
+                .update({ status: 'completed' })
+                .eq('id', bookingId)
+                .select();
+
+            if (error) throw error;
+
+            toast({ title: "Booking Completed", description: "Great job! The service is marked as complete." });
+            
+            // Local update
+            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'completed' } : b));
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
     };
 
@@ -129,8 +206,123 @@ export default function BusinessDashboardPage() {
     
     if (!business) return <div className="text-center py-20">Business profile not found. Please complete your profile.</div>;
 
-    const pendingBookings = bookings.filter(b => b.status === 'pending');
-    const cancelledHistory = bookings.filter(b => b.status === 'cancelled');
+    // Filters
+    const pendingList = bookings.filter(b => b.status === 'pending');
+    const confirmedList = bookings.filter(b => b.status === 'confirmed');
+    const completedList = bookings.filter(b => b.status === 'completed');
+    const cancelledList = bookings.filter(b => b.status === 'cancelled' || b.status === 'rejected');
+
+    const BookingTable = ({ list, showActions = false, isConfirmed = false }: { list: any[], showActions?: boolean, isConfirmed?: boolean }) => (
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Service</TableHead>
+                    <TableHead>Car Details</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Staff Assignment</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {list.length > 0 ? list.map((booking) => (
+                    <TableRow key={booking.id}>
+                        <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                    <div className="font-bold">{booking.customer?.name || 'Unknown'}</div>
+                                    <div className="text-[10px] text-muted-foreground">{booking.customer?.email}</div>
+                                </div>
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <div className="font-medium text-primary">{booking.service?.name || 'Wash'}</div>
+                            <div className="text-[10px] text-muted-foreground">{booking.service?.duration} mins • P{Number(booking.price || 0).toFixed(2)}</div>
+                        </TableCell>
+                        <TableCell>
+                            <div className="flex items-center gap-2">
+                                <Car className="h-4 w-4 text-muted-foreground" />
+                                {booking.car ? `${booking.car.make} ${booking.car.model}` : 'Vehicle'}
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <div className="text-xs">
+                                <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString()}</div>
+                                <div className="text-muted-foreground">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            {booking.status === 'pending' ? (
+                                <Select 
+                                    value={assignments[booking.id] || ""} 
+                                    onValueChange={(val) => setAssignments(prev => ({ ...prev, [booking.id]: val }))}
+                                >
+                                    <SelectTrigger className="w-[160px] h-8 text-xs">
+                                        <SelectValue placeholder="Assign Staff..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {employees.map(emp => (
+                                            <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                <Badge variant="outline" className="flex items-center gap-1 w-fit bg-primary/5">
+                                    <UserCheck className="h-3 w-3" />
+                                    {booking.staff?.name || 'Assigned'}
+                                </Badge>
+                            )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                                {showActions && booking.status === 'pending' && (
+                                    <>
+                                        <Button 
+                                            size="sm" 
+                                            className="h-8 bg-green-600 hover:bg-green-700"
+                                            onClick={() => handleAcceptBooking(booking.id)}
+                                            disabled={!assignments[booking.id]}
+                                        >
+                                            <Check className="h-4 w-4 mr-1" /> Accept
+                                        </Button>
+                                        <Button 
+                                            size="sm" 
+                                            variant="ghost" 
+                                            className="h-8 text-destructive hover:bg-destructive/10"
+                                            onClick={() => handleCancelBooking(booking.id)}
+                                        >
+                                            <XCircle className="h-4 w-4 mr-1" /> Reject
+                                        </Button>
+                                    </>
+                                )}
+                                {isConfirmed && booking.status === 'confirmed' && (
+                                    <Button 
+                                        size="sm" 
+                                        className="h-8"
+                                        onClick={() => handleCompleteBooking(booking.id)}
+                                    >
+                                        <CheckCircle2 className="h-4 w-4 mr-1" /> Mark Done
+                                    </Button>
+                                )}
+                                {(booking.status === 'completed' || booking.status === 'cancelled') && (
+                                    <Badge variant={booking.status === 'completed' ? 'secondary' : 'destructive'} className="text-[10px]">
+                                        {booking.status.toUpperCase()}
+                                    </Badge>
+                                )}
+                            </div>
+                        </TableCell>
+                    </TableRow>
+                )) : (
+                    <TableRow>
+                        <TableCell colSpan={6} className="h-32 text-center text-muted-foreground italic">
+                            No bookings found in this category.
+                        </TableCell>
+                    </TableRow>
+                )}
+            </TableBody>
+        </Table>
+    );
 
     return (
         <div className="space-y-8">
@@ -204,122 +396,65 @@ export default function BusinessDashboardPage() {
             </div>
 
             <Tabs defaultValue="pending" className="w-full">
-                <TabsList className="mb-8">
-                    <TabsTrigger value="pending">Pending Requests ({pendingBookings.length})</TabsTrigger>
-                    <TabsTrigger value="history">Activity History ({cancelledHistory.length})</TabsTrigger>
+                <TabsList className="mb-8 grid w-full grid-cols-4 max-w-2xl bg-muted/50 p-1">
+                    <TabsTrigger value="pending" className="data-[state=active]:bg-background">
+                        Pending ({pendingList.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="confirmed" className="data-[state=active]:bg-background">
+                        Confirmed ({confirmedList.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="completed" className="data-[state=active]:bg-background">
+                        Completed ({completedList.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className="data-[state=active]:bg-background">
+                        History ({cancelledList.length})
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="pending">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Upcoming Washes</CardTitle>
-                            <CardDescription>Review and manage scheduled customer requests.</CardDescription>
+                    <Card className="shadow-lg border-muted/50 overflow-hidden">
+                        <CardHeader className="bg-muted/10 border-b">
+                            <CardTitle>Incoming Requests</CardTitle>
+                            <CardDescription>Review new bookings and assign staff to confirm them.</CardDescription>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Customer</TableHead>
-                                        <TableHead>Service</TableHead>
-                                        <TableHead>Car Details</TableHead>
-                                        <TableHead>Booking Time</TableHead>
-                                        <TableHead>Staff</TableHead>
-                                        <TableHead className="text-right">Action</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {pendingBookings.length > 0 ? pendingBookings.map((booking) => (
-                                        <TableRow key={booking.id}>
-                                            <TableCell className="font-medium">
-                                                <div className="flex items-center gap-2">
-                                                    <User className="h-4 w-4 text-muted-foreground" />
-                                                    {booking.customer?.name || 'Unknown'}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>{booking.service?.name || 'Wash'}</TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Car className="h-4 w-4 text-muted-foreground" />
-                                                    {booking.car ? `${booking.car.make} ${booking.car.model}` : 'Generic Vehicle'}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="text-xs">
-                                                    <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString()}</div>
-                                                    <div className="text-muted-foreground">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                {booking.staff?.name ? (
-                                                    <Badge variant="secondary">{booking.staff.name}</Badge>
-                                                ) : (
-                                                    <span className="text-xs text-muted-foreground italic">Unassigned</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button 
-                                                    size="sm" 
-                                                    variant="ghost" 
-                                                    className="text-destructive hover:bg-destructive/10"
-                                                    onClick={() => handleCancelBooking(booking.id)}
-                                                >
-                                                    <XCircle className="h-4 w-4 mr-2" />
-                                                    Cancel
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    )) : (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="h-24 text-center text-muted-foreground italic">
-                                                No pending booking requests.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                            <BookingTable list={pendingList} showActions />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="confirmed">
+                    <Card className="shadow-lg border-muted/50 overflow-hidden">
+                        <CardHeader className="bg-muted/10 border-b">
+                            <CardTitle>Active Schedule</CardTitle>
+                            <CardDescription>Confirmed washes currently in queue or being serviced.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <BookingTable list={confirmedList} isConfirmed />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="completed">
+                    <Card className="shadow-lg border-muted/50 overflow-hidden">
+                        <CardHeader className="bg-muted/10 border-b">
+                            <CardTitle>Service History</CardTitle>
+                            <CardDescription>Recently finished bookings.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <BookingTable list={completedList} />
                         </CardContent>
                     </Card>
                 </TabsContent>
 
                 <TabsContent value="history">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Cancelled Bookings</CardTitle>
-                            <CardDescription>Record of all requests that were cancelled or rejected.</CardDescription>
+                    <Card className="shadow-lg border-muted/50 overflow-hidden opacity-80">
+                        <CardHeader className="bg-muted/10 border-b">
+                            <CardTitle>Cancelled/Rejected</CardTitle>
+                            <CardDescription>A record of requests that did not proceed.</CardDescription>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Customer</TableHead>
-                                        <TableHead>Service</TableHead>
-                                        <TableHead>Car</TableHead>
-                                        <TableHead>Scheduled For</TableHead>
-                                        <TableHead>Status</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {cancelledHistory.length > 0 ? cancelledHistory.map((booking) => (
-                                        <TableRow key={booking.id} className="opacity-60 bg-muted/10">
-                                            <TableCell className="font-medium">{booking.customer?.name || 'Unknown'}</TableCell>
-                                            <TableCell>{booking.service?.name || 'Wash'}</TableCell>
-                                            <TableCell>{booking.car ? `${booking.car.make} ${booking.car.model}` : 'Generic'}</TableCell>
-                                            <TableCell className="text-xs">
-                                                {new Date(booking.booking_time).toLocaleDateString()}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant="destructive" className="text-[10px]">CANCELLED</Badge>
-                                            </TableCell>
-                                        </TableRow>
-                                    )) : (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="h-24 text-center text-muted-foreground italic">
-                                                No cancellation history found.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                            <BookingTable list={cancelledList} />
                         </CardContent>
                     </Card>
                 </TabsContent>
