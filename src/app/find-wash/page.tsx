@@ -36,8 +36,8 @@ function BusinessCard({ business }: { business: any }) {
               <CheckCircle2 className="h-3 w-3 mr-1" /> CIPA VERIFIED
             </Badge>
           )}
-          <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black shadow-sm font-bold">
-            {business.services?.length || 0} Services
+          <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold">
+            {business.services?.length || 0} Packages
           </Badge>
         </div>
       </div>
@@ -106,7 +106,6 @@ export default function PublicFindWashPage() {
     const load = async () => {
       setLoading(true);
       try {
-        // Fetch all verified and active businesses with their services
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select('*, services(*)')
@@ -115,14 +114,9 @@ export default function PublicFindWashPage() {
         
         if (bizError) throw bizError;
         
-        // Filter: verification_status === 'verified', status === 'active', services.length > 0
         const formatted = (bizData || [])
           .filter(biz => biz.services && biz.services.length > 0);
 
-        // Sorting & Prioritization
-        // 1. Verified businesses with logos first
-        // 2. Within those, prioritize businesses with more services (descending)
-        // 3. Alphabetical by name
         formatted.sort((a, b) => {
             const aHasLogo = !!a.logo_url ? 1 : 0;
             const bHasLogo = !!b.logo_url ? 1 : 0;
@@ -161,7 +155,7 @@ export default function PublicFindWashPage() {
           </Link>
           <div className="flex items-center gap-2">
              <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-[10px]">CWM</div>
-            <span className="text-sm font-bold text-primary tracking-tight">Carwash Marketplace</span>
+            <span className="text-sm font-bold text-primary tracking-tight text-nowrap">Carwash Marketplace</span>
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild>

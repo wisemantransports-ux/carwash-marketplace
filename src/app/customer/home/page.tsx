@@ -111,7 +111,6 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
-        // Fetch all verified and active businesses with their services
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select('*, services(*)')
@@ -120,14 +119,9 @@ export default function CustomerHomePage() {
         
         if (bizError) throw bizError;
 
-        // Filter: verification_status === 'verified', status === 'active', services.length > 0
         const formatted = (bizData || [])
           .filter(biz => biz.services && biz.services.length > 0);
 
-        // Sorting & Prioritization
-        // 1. Verified businesses with logos first
-        // 2. Within those, prioritize businesses with more services (descending)
-        // 3. Alphabetical by name
         formatted.sort((a, b) => {
             const aHasLogo = !!a.logo_url ? 1 : 0;
             const bHasLogo = !!b.logo_url ? 1 : 0;
