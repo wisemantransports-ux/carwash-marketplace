@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -22,7 +21,6 @@ import {
     Check,
     Mail,
     Info,
-    Banknote,
     Truck
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +35,6 @@ import { cn } from "@/lib/utils";
 // Modular notification placeholder
 const notifyCustomer = (bookingId: string, message: string) => {
     console.log(`[NOTIFICATION] Booking ${bookingId}: ${message}`);
-    // Future integration: WhatsApp/Email/Push
 };
 
 export default function BusinessDashboardPage() {
@@ -48,6 +45,7 @@ export default function BusinessDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
+    // Track selected staff for each pending booking
     const [assignments, setAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async () => {
@@ -85,7 +83,7 @@ export default function BusinessDashboardPage() {
                 
                 setEmployees(staffData || []);
 
-                // 3. Fetch Bookings with Full Context (Explicit Joins)
+                // 3. Fetch Bookings with Full Context (Relational Joins)
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -95,7 +93,7 @@ export default function BusinessDashboardPage() {
                         mobile_status,
                         price,
                         customer:users!customer_id ( name, email ),
-                        service:services!service_id ( name, description, price, duration ),
+                        service:services!service_id ( name, price, duration ),
                         car:cars!car_id ( make, model ),
                         staff:employees!staff_id ( name )
                     `)
@@ -124,7 +122,6 @@ export default function BusinessDashboardPage() {
         } catch (error: any) {
             console.error("Dashboard fetch error:", error);
             setFetchError("Unable to fetch bookings. Check database connection.");
-            toast({ variant: 'destructive', title: 'Data Error', description: 'Unable to fetch bookings. Check database connection.' });
         } finally {
             setLoading(false);
         }
@@ -154,6 +151,9 @@ export default function BusinessDashboardPage() {
 
             toast({ title: "Booking Accepted", description: "The request has been moved to confirmed." });
             notifyCustomer(bookingId, "Your booking has been confirmed");
+            
+            // Optimistic update
+            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'confirmed', staff: { name: employees.find(e => e.id === staffId)?.name } } : b));
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -170,6 +170,9 @@ export default function BusinessDashboardPage() {
             if (error) throw error;
 
             toast({ title: "Booking Rejected", description: "The request has been marked as cancelled." });
+            
+            // Optimistic update
+            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -186,6 +189,9 @@ export default function BusinessDashboardPage() {
             if (error) throw error;
 
             toast({ title: "Booking Completed", description: "The service is marked as complete." });
+            
+            // Optimistic update
+            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'completed' } : b));
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -220,7 +226,7 @@ export default function BusinessDashboardPage() {
                             <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2 font-bold text-sm">
                                     <User className="h-3.5 w-3.5 text-primary" />
-                                    {booking.customer?.name || 'Unknown Customer'}
+                                    {booking.customer?.name || 'Customer'}
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                                     <Mail className="h-3 w-3" />
@@ -249,7 +255,7 @@ export default function BusinessDashboardPage() {
                         <TableCell className="align-top py-4">
                             <div className="flex flex-col gap-1 max-w-[200px]">
                                 <div className="font-bold text-xs text-foreground uppercase">
-                                    {booking.service?.name}
+                                    {booking.service?.name || 'Wash Service'}
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] font-bold">
                                     <span className="flex items-center gap-1 text-primary">
@@ -257,7 +263,7 @@ export default function BusinessDashboardPage() {
                                     </span>
                                     <span className="text-muted-foreground">•</span>
                                     <span className="flex items-center gap-1 text-muted-foreground">
-                                        {booking.service?.duration}m
+                                        {booking.service?.duration || '--'}m
                                     </span>
                                 </div>
                             </div>
@@ -483,9 +489,9 @@ export default function BusinessDashboardPage() {
                         <CardContent className="p-0">
                             <BookingTable list={historyList} />
                         </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
-        </div>
-    );
-}
+                    </TabsContent>
+                </Tabs>
+            </div>
+        );
+    }
+    
