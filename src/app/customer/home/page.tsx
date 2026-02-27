@@ -111,13 +111,17 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
+        // Querying businesses table directly. 
+        // Logic: verification_status = 'verified' AND subscription_status = 'active'
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select('*, services(*)')
             .eq('verification_status', 'verified')
-            .eq('status', 'active');
+            .eq('subscription_status', 'active');
         
         if (bizError) throw bizError;
+
+        console.log(`[Marketplace Debug] Fetched ${bizData?.length || 0} verified active businesses.`);
 
         const formatted = (bizData || [])
           .filter(biz => biz.services && biz.services.length > 0);

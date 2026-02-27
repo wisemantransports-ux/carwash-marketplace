@@ -110,10 +110,12 @@ export default function PublicFindWashPage() {
             .from('businesses')
             .select('*, services(*)')
             .eq('verification_status', 'verified')
-            .eq('status', 'active');
+            .eq('subscription_status', 'active');
         
         if (bizError) throw bizError;
         
+        console.log(`[Public Marketplace Debug] Fetched ${bizData?.length || 0} verified active businesses.`);
+
         const formatted = (bizData || [])
           .filter(biz => biz.services && biz.services.length > 0);
 
