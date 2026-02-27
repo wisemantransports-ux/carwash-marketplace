@@ -22,7 +22,8 @@ import {
     Check,
     Mail,
     Info,
-    Banknote
+    Banknote,
+    Truck
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -33,9 +34,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-// Placeholder for future multi-channel notifications
+// Modular notification placeholder
 const notifyCustomer = (bookingId: string, message: string) => {
     console.log(`[NOTIFICATION] Booking ${bookingId}: ${message}`);
+    // Future integration: WhatsApp/Email/Push
 };
 
 export default function BusinessDashboardPage() {
@@ -64,6 +66,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
+            // 1. Fetch Business Profile
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -74,14 +77,15 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
+                // 2. Fetch Staff (Employees)
                 const { data: staffData } = await supabase
                     .from('employees')
                     .select('id, name')
-                    .or(`business_id.eq.${bizData.id},business_id.eq.${user.id}`);
+                    .eq('business_id', bizData.id);
                 
                 setEmployees(staffData || []);
 
-                // Updated Join Query for Full Context
+                // 3. Fetch Bookings with Full Context (Joins)
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -101,6 +105,7 @@ export default function BusinessDashboardPage() {
                 if (bookingError) throw bookingError;
                 setBookings(bookingData || []);
 
+                // 4. Fetch Reputation Stats
                 const { data: ratingsData } = await supabase
                     .from('ratings')
                     .select('*, customer:customer_id(name)')
@@ -155,16 +160,16 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    const handleRejectBooking = async (bookingId: string) => {
+    const handleCancelBooking = async (bookingId: string) => {
         try {
             const { error } = await supabase
                 .from('bookings')
-                .update({ status: 'rejected' })
+                .update({ status: 'cancelled' })
                 .eq('id', bookingId);
 
             if (error) throw error;
 
-            toast({ title: "Booking Rejected", description: "The request has been marked as rejected." });
+            toast({ title: "Booking Cancelled", description: "The request has been marked as cancelled." });
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -200,9 +205,9 @@ export default function BusinessDashboardPage() {
         <Table>
             <TableHeader>
                 <TableRow className="bg-muted/50">
-                    <TableHead className="w-[200px]">Customer</TableHead>
-                    <TableHead>Service Context</TableHead>
-                    <TableHead>Vehicle</TableHead>
+                    <TableHead className="w-[180px]">Customer</TableHead>
+                    <TableHead className="w-[220px]">Vehicle</TableHead>
+                    <TableHead>Service</TableHead>
                     <TableHead>Timing</TableHead>
                     <TableHead>Assignment</TableHead>
                     <TableHead className="text-right">Action</TableHead>
@@ -224,33 +229,41 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
                         <TableCell className="align-top py-4">
-                            <div className="flex flex-col gap-1 max-w-[250px]">
-                                <div className="font-bold text-sm text-primary uppercase tracking-tight">
+                            <div className="flex flex-col gap-1.5">
+                                <div className="flex items-center gap-2 text-sm font-black text-primary uppercase tracking-tight">
+                                    {booking.car?.make === 'Bus' || booking.car?.model?.toLowerCase().includes('bus') ? (
+                                        <Truck className="h-4 w-4" />
+                                    ) : (
+                                        <Car className="h-4 w-4" />
+                                    )}
+                                    {booking.car ? `${booking.car.make} ${booking.car.model}` : 'Unknown Vehicle'}
+                                </div>
+                                <Badge variant="secondary" className={cn(
+                                    "w-fit text-[9px] font-extrabold uppercase px-1.5 py-0.5",
+                                    booking.car?.model?.toLowerCase().includes('bus') ? "bg-orange-100 text-orange-700" : "bg-blue-50 text-blue-700"
+                                )}>
+                                    {booking.car?.model?.toLowerCase().includes('bus') ? 'Large Vehicle' : 'Standard Car'}
+                                </Badge>
+                            </div>
+                        </TableCell>
+                        <TableCell className="align-top py-4">
+                            <div className="flex flex-col gap-1 max-w-[200px]">
+                                <div className="font-bold text-xs text-foreground uppercase">
                                     {booking.service?.name}
                                 </div>
-                                <div className="flex items-center gap-3 text-[10px] font-bold">
-                                    <span className="flex items-center gap-1 bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                                        <Banknote className="h-3 w-3" />
+                                <div className="flex items-center gap-2 text-[10px] font-bold">
+                                    <span className="flex items-center gap-1 text-primary">
                                         P{Number(booking.service?.price || booking.price).toFixed(2)}
                                     </span>
-                                    <span className="flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                                        <Clock className="h-3 w-3" />
-                                        {booking.service?.duration} mins
+                                    <span className="text-muted-foreground">•</span>
+                                    <span className="flex items-center gap-1 text-muted-foreground">
+                                        {booking.service?.duration}m
                                     </span>
                                 </div>
-                                <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1 italic">
-                                    {booking.service?.description}
-                                </p>
                             </div>
                         </TableCell>
                         <TableCell className="align-top py-4">
-                            <div className="flex items-center gap-2 text-sm font-medium">
-                                <Car className="h-4 w-4 text-muted-foreground" />
-                                {booking.car ? `${booking.car.make} ${booking.car.model}` : 'N/A'}
-                            </div>
-                        </TableCell>
-                        <TableCell className="align-top py-4">
-                            <div className="flex flex-col gap-0.5 text-xs">
+                            <div className="flex flex-col gap-0.5 text-[11px]">
                                 <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString()}</div>
                                 <div className="text-muted-foreground">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                             </div>
@@ -261,18 +274,20 @@ export default function BusinessDashboardPage() {
                                     value={assignments[booking.id] || ""} 
                                     onValueChange={(val) => setAssignments(prev => ({ ...prev, [booking.id]: val }))}
                                 >
-                                    <SelectTrigger className="w-[140px] h-8 text-[10px] font-bold">
+                                    <SelectTrigger className="w-[130px] h-8 text-[10px] font-bold">
                                         <SelectValue placeholder="Assign Staff..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {employees.map(emp => (
+                                        {employees.length > 0 ? employees.map(emp => (
                                             <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-                                        ))}
+                                        )) : (
+                                            <div className="p-2 text-[10px] text-muted-foreground italic">No staff found</div>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             ) : (
-                                <Badge variant="secondary" className="flex items-center gap-1 w-fit bg-primary/5 text-[10px] font-bold py-1 border-primary/10">
-                                    <UserCheck className="h-3 w-3" />
+                                <Badge variant="outline" className="flex items-center gap-1 w-fit bg-muted/50 text-[10px] font-bold py-1">
+                                    <UserCheck className="h-3 w-3 text-green-600" />
                                     {booking.staff?.name || 'Assigned'}
                                 </Badge>
                             )}
@@ -293,16 +308,16 @@ export default function BusinessDashboardPage() {
                                             size="sm" 
                                             variant="ghost" 
                                             className="h-8 text-destructive hover:bg-destructive/10 text-[10px] font-bold"
-                                            onClick={() => handleRejectBooking(booking.id)}
+                                            onClick={() => handleCancelBooking(booking.id)}
                                         >
-                                            <XCircle className="h-3 w-3 mr-1" /> Reject
+                                            <XCircle className="h-3 w-3 mr-1" /> Cancel
                                         </Button>
                                     </>
                                 )}
                                 {isConfirmed && booking.status === 'confirmed' && (
                                     <Button 
                                         size="sm" 
-                                        className="h-8 text-[10px] font-bold"
+                                        className="h-8 text-[10px] font-bold bg-primary hover:bg-primary/90"
                                         onClick={() => handleCompleteBooking(booking.id)}
                                     >
                                         <CheckCircle2 className="h-3 w-3 mr-1" /> Complete
@@ -344,7 +359,7 @@ export default function BusinessDashboardPage() {
                         </Badge>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={fetchData}><RefreshCw className="h-4 w-4" /></Button>
                     </div>
-                    <p className="text-muted-foreground text-lg">Central Operations Control</p>
+                    <p className="text-muted-foreground text-lg">Operations Control & Staff Assignment</p>
                 </div>
                 <div className="w-full md:w-80 shrink-0"><ShareBusinessCard businessId={business.id} /></div>
             </div>
@@ -389,7 +404,7 @@ export default function BusinessDashboardPage() {
                     <Card className="md:col-span-2">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2 tracking-widest">
-                                <MessageCircle className="h-3 w-3 text-primary" /> Latest Customer Feedback
+                                <MessageCircle className="h-3 w-3 text-primary" /> Latest Feedback
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -418,8 +433,8 @@ export default function BusinessDashboardPage() {
                     <TabsTrigger value="completed" className="data-[state=active]:bg-background text-[10px] font-black uppercase">
                         Service Done ({completedList.length})
                     </TabsTrigger>
-                    <TabsTrigger value="history" className="data-[state=active]:bg-background text-[10px] font-black uppercase">
-                        History ({historyList.length})
+                    <TabsTrigger value="cancelled" className="data-[state=active]:bg-background text-[10px] font-black uppercase">
+                        Cancelled ({historyList.length})
                     </TabsTrigger>
                 </TabsList>
 
@@ -427,7 +442,7 @@ export default function BusinessDashboardPage() {
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
                         <CardHeader className="bg-muted/10 border-b py-4">
                             <CardTitle className="text-lg">Incoming Requests</CardTitle>
-                            <CardDescription className="text-xs">Review details and assign staff to confirm these bookings.</CardDescription>
+                            <CardDescription className="text-xs">Identify vehicle type and assign staff to accept bookings.</CardDescription>
                         </CardHeader>
                         <CardContent className="p-0">
                             <BookingTable list={pendingList} showActions />
@@ -459,11 +474,11 @@ export default function BusinessDashboardPage() {
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="history">
+                <TabsContent value="cancelled">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden opacity-80">
                         <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Cancelled / Rejected</CardTitle>
-                            <CardDescription className="text-xs">Record of bookings that did not proceed.</CardDescription>
+                            <CardTitle className="text-lg">Cancelled Requests</CardTitle>
+                            <CardDescription className="text-xs">Record of bookings that were rejected or cancelled.</CardDescription>
                         </CardHeader>
                         <CardContent className="p-0">
                             <BookingTable list={historyList} />
