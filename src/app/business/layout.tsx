@@ -1,6 +1,6 @@
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt, Package, Loader2, CheckCircle2 } from "lucide-react";
+import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Clock, Lock, UserCircle, Receipt, Package, Loader2, CheckCircle2, ShieldCheck } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Business } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -34,10 +34,10 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           const typedBiz = biz as Business;
           setBusiness(typedBiz);
 
-          // AUTO-TRIAL LOGIC
-          // If verified but has no sub history/expiry, grant a 14-day trial automatically
+          // AUTO-TRIAL LOGIC for Verified Individual Businesses
           if (
-            typedBiz.status === 'verified' && 
+            typedBiz.verification_status === 'verified' && 
+            typedBiz.business_type === 'individual' &&
             !typedBiz.sub_end_date && 
             typedBiz.subscription_status === 'inactive' &&
             !trialTriggered.current
@@ -58,9 +58,8 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
             if (!updateError) {
               toast({
                 title: "14-Day Trial Activated!",
-                description: "Your account is verified and your professional trial has started.",
+                description: "Your individual business is verified and your professional trial has started.",
               });
-              // Refresh state to reflect new sub status
               setBusiness({
                 ...typedBiz,
                 subscription_status: 'active',
@@ -85,11 +84,14 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   // Access Gating Logic
   const now = new Date();
   const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
-  const isVerified = business?.status === 'verified';
+  const isVerified = business?.verification_status === 'verified';
   const isTrialOrPaid = expiry ? expiry >= now : false;
   const isActive = business?.subscription_status === 'active';
   
-  const hasAccess = isVerified && (isActive || isTrialOrPaid);
+  // Registered businesses might unlock features immediately upon verification in some models, 
+  // but usually they also need a subscription. We'll follow the prompt logic:
+  // For registered: Unlock all if verified.
+  const hasAccess = isVerified && (business?.business_type === 'registered' || isActive || isTrialOrPaid);
   const isBlocked = !hasAccess && pathname !== "/business/subscription" && pathname !== "/business/profile";
   
   const daysRemaining = expiry ? Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
@@ -114,27 +116,49 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   return (
     <SharedLayout navItems={filteredNavItems} role="business-owner">
       <div className="space-y-6">
-        {/* Verification Alert */}
-        {business && business.status !== 'verified' && (
+        {/* Verification Alert: Pending */}
+        {business && business.verification_status === 'pending' && (
           <Alert variant="destructive" className="bg-orange-50 border-orange-200 text-orange-800">
             <AlertCircle className="h-4 w-4 text-orange-600" />
-            <AlertTitle>Verification Pending</AlertTitle>
+            <AlertTitle className="font-bold">Verification Pending</AlertTitle>
             <AlertDescription>
-              Your business profile is currently under review. Operational features (Bookings, Services, Employees) will be unlocked once an administrator verifies your identity documents.
+              Your business profile is under review. Some features are restricted until an administrator verifies your identity documents.
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Trial Status Banner */}
-        {isVerified && isTrialOrPaid && (
+        {/* Verification Alert: Rejected */}
+        {business && business.verification_status === 'rejected' && (
+          <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertTitle className="font-bold">Verification Rejected</AlertTitle>
+            <AlertDescription>
+              Your registration was not approved. Please review your profile details and documents or contact support.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Trial Status Banner: Individual */}
+        {isVerified && business?.business_type === 'individual' && isTrialOrPaid && (
           <Alert variant="default" className="bg-primary/10 border-primary/20 text-primary">
             <CheckCircle2 className="h-4 w-4 text-primary" />
             <AlertTitle className="font-bold">Account Verified</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-4">
-              <span>Your {business?.subscription_plan} access is active. {daysRemaining} days remaining in your current period.</span>
+              <span>Your business account is verified! {daysRemaining}-day free trial is active.</span>
               <Button size="sm" variant="outline" className="bg-white" asChild>
                 <Link href="/business/subscription">Manage Billing</Link>
               </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Verified Banner: Registered */}
+        {isVerified && business?.business_type === 'registered' && (
+          <Alert variant="default" className="bg-green-50 border-green-200 text-green-800">
+            <ShieldCheck className="h-4 w-4 text-green-600" />
+            <AlertTitle className="font-bold">Registered & Verified</AlertTitle>
+            <AlertDescription>
+              Your registered business is verified! All features unlocked.
             </AlertDescription>
           </Alert>
         )}
@@ -150,14 +174,14 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
               <p className="text-muted-foreground max-w-md mx-auto">
                 {!business 
                   ? "Please set up your business profile to continue."
-                  : business.status !== 'verified'
-                    ? "Your account is awaiting admin verification. Some features are restricted until review is complete."
-                    : "Your access has expired. Please choose a plan or submit payment proof to reactivate your operations dashboard."}
+                  : business.verification_status === 'pending'
+                    ? "Your account is awaiting admin verification. Operations and staff management are restricted until review is complete."
+                    : "Your professional access has expired. Please choose a plan to reactivate your dashboard."}
               </p>
             </div>
             <div className="flex gap-4">
               {business ? (
-                business.status === 'verified' ? (
+                isVerified ? (
                   <Button size="lg" asChild>
                     <Link href="/business/subscription">Renew Access</Link>
                   </Button>
@@ -175,7 +199,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
           </div>
         ) : (
           <>
-            {isVerified && !isTrialOrPaid && !isBlocked && pathname === "/business/subscription" && (
+            {isVerified && !isTrialOrPaid && !isActive && business?.business_type === 'individual' && pathname === "/business/subscription" && (
               <Alert variant="destructive" className="border-red-200 bg-red-50 mb-6">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Access Expired</AlertTitle>

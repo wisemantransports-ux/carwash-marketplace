@@ -70,11 +70,15 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // GATING: Only fetch operational data if verified AND active
-                const isVerified = bizData.status === 'verified';
+                // Access Gating logic mirrored from Layout
+                const isVerified = bizData.verification_status === 'verified';
                 const now = new Date();
                 const expiry = bizData.sub_end_date ? new Date(bizData.sub_end_date) : null;
-                const isAccessActive = isVerified && (bizData.subscription_status === 'active' || (expiry && expiry >= now));
+                const isTrialActive = expiry && expiry >= now;
+                const isActive = bizData.subscription_status === 'active';
+                const isRegistered = bizData.business_type === 'registered';
+                
+                const isAccessActive = isVerified && (isRegistered || isActive || isTrialActive);
 
                 if (isAccessActive) {
                     // 2. Fetch Staff for this Business
@@ -86,7 +90,7 @@ export default function BusinessDashboardPage() {
                     
                     setEmployees(staffData || []);
 
-                    // 3. Fetch Bookings from view with Relational Joins
+                    // 3. Fetch Bookings using the view
                     const { data: bookingData, error: bookingError } = await supabase
                         .from('booking_with_customer')
                         .select(`
@@ -128,7 +132,7 @@ export default function BusinessDashboardPage() {
             const { error } = await supabase
                 .from('bookings')
                 .update({ 
-                    status: 'confirmed', 
+                    status: 'accepted', 
                     staff_id: staffId 
                 })
                 .eq('id', bookingId);
@@ -140,7 +144,7 @@ export default function BusinessDashboardPage() {
             // Local state update
             setBookings(prev => prev.map(b => 
                 b.id === bookingId 
-                    ? { ...b, status: 'confirmed', staff_id: staffId, staff: { name: employees.find(e => e.id === staffId)?.name } } 
+                    ? { ...b, status: 'accepted', staff_id: staffId, staff: { name: employees.find(e => e.id === staffId)?.name } } 
                     : b
             ));
         } catch (e: any) {
@@ -152,13 +156,13 @@ export default function BusinessDashboardPage() {
         try {
             const { error } = await supabase
                 .from('bookings')
-                .update({ status: 'cancelled' })
+                .update({ status: 'rejected' })
                 .eq('id', bookingId);
 
             if (error) throw error;
             toast({ title: "Booking Rejected" });
             
-            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
+            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'rejected' } : b));
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Action Failed', description: e.message });
         }
@@ -179,7 +183,7 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    const BookingTable = ({ list, showActions = false, isConfirmed = false }: { list: any[], showActions?: boolean, isConfirmed?: boolean }) => (
+    const BookingTable = ({ list, showActions = false, isActiveTab = false }: { list: any[], showActions?: boolean, isActiveTab?: boolean }) => (
         <Table>
             <TableHeader>
                 <TableRow className="bg-muted/50">
@@ -219,7 +223,7 @@ export default function BusinessDashboardPage() {
                             <div className="text-muted-foreground">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                         </TableCell>
                         <TableCell>
-                            {booking.status === 'pending' ? (
+                            {booking.status === 'requested' ? (
                                 <Select 
                                     value={assignments[booking.id] || ""} 
                                     onValueChange={(val) => setAssignments(prev => ({ ...prev, [booking.id]: val }))}
@@ -243,7 +247,7 @@ export default function BusinessDashboardPage() {
                         </TableCell>
                         <TableCell className="text-right pr-6">
                             <div className="flex justify-end gap-2">
-                                {showActions && booking.status === 'pending' && (
+                                {showActions && booking.status === 'requested' && (
                                     <>
                                         <Button 
                                             size="sm" 
@@ -263,7 +267,7 @@ export default function BusinessDashboardPage() {
                                         </Button>
                                     </>
                                 )}
-                                {isConfirmed && booking.status === 'confirmed' && (
+                                {isActiveTab && booking.status === 'accepted' && (
                                     <Button size="sm" className="h-8 text-[10px] font-bold uppercase" onClick={() => handleCompleteBooking(booking.id)}>
                                         <CheckCircle2 className="h-3 w-3 mr-1" /> Finish
                                     </Button>
@@ -287,18 +291,21 @@ export default function BusinessDashboardPage() {
 
     if (loading) return <div className="flex justify-center py-32"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
     
-    // Check access for Banner/UI
-    const isVerified = business?.status === 'verified';
+    const isVerified = business?.verification_status === 'verified';
+    const isRegistered = business?.business_type === 'registered';
     const now = new Date();
     const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
-    const isAccessActive = isVerified && (business.subscription_status === 'active' || (expiry && expiry >= now));
+    const isTrialActive = expiry && expiry >= now;
+    const isActive = business?.subscription_status === 'active';
+    
+    const isAccessActive = isVerified && (isRegistered || isActive || isTrialActive);
 
     if (!isAccessActive) return (
         <div className="flex flex-col items-center justify-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8 text-center">
             <Lock className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
             <h2 className="text-2xl font-bold">Operations Locked</h2>
             <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                {!isVerified 
+                {business?.verification_status === 'pending'
                     ? "Your business verification is pending. Please wait for an administrator to review your documents." 
                     : "Your subscription or trial has expired. Please choose a plan to continue managing bookings."}
             </p>
@@ -313,17 +320,17 @@ export default function BusinessDashboardPage() {
         </div>
     );
 
-    const pendingList = bookings.filter(b => b.status === 'pending');
-    const confirmedList = bookings.filter(b => b.status === 'confirmed');
+    const pendingList = bookings.filter(b => b.status === 'requested');
+    const activeList = bookings.filter(b => b.status === 'accepted');
     const completedList = bookings.filter(b => b.status === 'completed');
-    const historyList = bookings.filter(b => ['cancelled', 'rejected'].includes(b.status));
+    const historyList = bookings.filter(b => ['rejected', 'cancelled'].includes(b.status));
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div>
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business.name}</h1>
-                    <p className="text-muted-foreground font-medium">Operations Center • {business.subscription_plan} Access</p>
+                    <p className="text-muted-foreground font-medium">Operations Center • {business.business_type === 'registered' ? 'Registered Entity' : 'Individual Partner'}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button variant="outline" size="sm" onClick={fetchData} className="rounded-full h-10">
@@ -348,21 +355,21 @@ export default function BusinessDashboardPage() {
                     <TabsTrigger value="pending" className="rounded-lg text-[10px] font-black uppercase">
                         Incoming ({pendingList.length})
                     </TabsTrigger>
-                    <TabsTrigger value="confirmed" className="rounded-lg text-[10px] font-black uppercase">
-                        Active ({confirmedList.length})
+                    <TabsTrigger value="active" className="rounded-lg text-[10px] font-black uppercase">
+                        Active ({activeList.length})
                     </TabsTrigger>
                     <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase">
                         Done ({completedList.length})
                     </TabsTrigger>
-                    <TabsTrigger value="cancelled" className="rounded-lg text-[10px] font-black uppercase">
-                        Archived ({historyList.length})
+                    <TabsTrigger value="history" className="rounded-lg text-[10px] font-black uppercase">
+                        History ({historyList.length})
                     </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="pending">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
                         <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Pending Requests</CardTitle>
+                            <CardTitle className="text-lg">Incoming Requests</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <BookingTable list={pendingList} showActions />
@@ -370,13 +377,13 @@ export default function BusinessDashboardPage() {
                     </Card>
                 </TabsContent>
                 
-                <TabsContent value="confirmed">
+                <TabsContent value="active">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
                         <CardHeader className="bg-muted/10 border-b py-4">
                             <CardTitle className="text-lg">Active Queue</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <BookingTable list={confirmedList} isConfirmed />
+                            <BookingTable list={activeList} isActiveTab />
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -392,7 +399,7 @@ export default function BusinessDashboardPage() {
                     </Card>
                 </TabsContent>
                 
-                <TabsContent value="cancelled">
+                <TabsContent value="history">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
                         <CardHeader className="bg-muted/10 border-b py-4">
                             <CardTitle className="text-lg">Archived Requests</CardTitle>
@@ -414,9 +421,9 @@ export default function BusinessDashboardPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="text-xs text-muted-foreground leading-relaxed space-y-2 font-medium">
-                        <p>• <strong>Incoming</strong>: Select a detailer from your team before clicking Accept.</p>
-                        <p>• <strong>Confirmed</strong>: These are live jobs. Once the wash is done, mark it as Finished to close the record.</p>
-                        <p>• <strong>History</strong>: View rejected or cancelled requests for your records.</p>
+                        <p>• <strong>Incoming</strong>: Always assign a professional detailer before accepting.</p>
+                        <p>• <strong>Active</strong>: These jobs are in progress. Mark them as Finished when done to generate an invoice.</p>
+                        <p>• <strong>History</strong>: View rejected requests. Frequent rejections may lower your search ranking.</p>
                     </CardContent>
                 </Card>
             </div>

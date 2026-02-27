@@ -29,20 +29,7 @@ export default function ServicesManagementPage() {
             // 1. Fetch Business Profile Safely
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
-                .select(`
-                    id,
-                    owner_id,
-                    name,
-                    address,
-                    city,
-                    type,
-                    rating,
-                    review_count,
-                    status,
-                    subscription_plan,
-                    subscription_status,
-                    sub_end_date
-                `)
+                .select('*')
                 .eq('owner_id', session.user.id)
                 .maybeSingle();
             
@@ -63,30 +50,25 @@ export default function ServicesManagementPage() {
 
             setBusiness(biz as Business);
 
-            // 2. Check Verification Status
-            if (biz.status !== 'verified') {
-                toast({
-                    title: 'Account Pending Verification',
-                    description: 'Your account is waiting for admin verification. Access will be granted once verified.'
-                });
+            // 2. Access Check Logic
+            const isVerified = biz.verification_status === 'verified';
+            const isRegistered = biz.business_type === 'registered';
+            const now = new Date();
+            const expiry = biz.sub_end_date ? new Date(biz.sub_end_date) : null;
+            const isTrialActive = expiry && expiry >= now;
+            const isActive = biz.subscription_status === 'active';
+            
+            const hasAccess = isVerified && (isRegistered || isActive || isTrialActive);
+
+            if (!hasAccess) {
                 setLoading(false);
                 return;
             }
 
-            // 3. Check Subscription Status
-            if (biz.subscription_status !== 'active') {
-                toast({
-                    title: 'Subscription Inactive',
-                    description: 'Your subscription is inactive. Please complete payment to manage services.'
-                });
-                setLoading(false);
-                return;
-            }
-
-            // 4. Fetch Services for Verified Business
+            // 3. Fetch Services for Authorized Business
             const { data: svcs, error: servicesError } = await supabase
                 .from('services')
-                .select('id, name, description, price, duration, currency_code')
+                .select('*')
                 .eq('business_id', biz.id);
 
             if (servicesError) {
@@ -95,13 +77,6 @@ export default function ServicesManagementPage() {
             }
 
             setServices(svcs || []);
-            
-            if (!svcs || svcs.length === 0) {
-                toast({
-                    title: 'No Services',
-                    description: 'You have not added any service packages yet.'
-                });
-            }
 
         } catch (e: any) {
             console.error("General fetch error:", e);
@@ -138,9 +113,14 @@ export default function ServicesManagementPage() {
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
-    const isVerified = business?.status === 'verified';
+    const isVerified = business?.verification_status === 'verified';
+    const isRegistered = business?.business_type === 'registered';
+    const now = new Date();
+    const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
+    const isTrialActive = expiry && expiry >= now;
     const isActive = business?.subscription_status === 'active';
-    const isAccessLocked = !isVerified || !isActive;
+    
+    const isAccessLocked = !isVerified || (!isRegistered && !isActive && !isTrialActive);
 
     return (
         <div className="space-y-6">
@@ -164,11 +144,11 @@ export default function ServicesManagementPage() {
                     <AlertTitle>Action Required</AlertTitle>
                     <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <span>
-                            {!isVerified 
+                            {business?.verification_status === 'pending'
                                 ? "Your account is waiting for admin verification. Access will be granted once verified." 
-                                : "Your subscription is inactive. Please complete payment to continue."}
+                                : "Your professional access has expired. Please choose a plan to continue."}
                         </span>
-                        {isVerified && !isActive && (
+                        {isVerified && !isActive && !isRegistered && (
                             <Button size="sm" variant="outline" asChild className="border-destructive/20 hover:bg-destructive/10">
                                 <Link href="/business/subscription">Renew Now</Link>
                             </Button>
