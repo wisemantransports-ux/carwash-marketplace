@@ -57,32 +57,36 @@ export default function BusinessDashboardPage() {
         setLoading(true);
         setFetchError(null);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) {
                 setLoading(false);
                 return;
             }
 
-            // 1. Fetch Business Profile
+            // 1. Fetch Business Profile using owner_id (user UID)
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
-                .eq('owner_id', user.id)
+                .eq('owner_id', session.user.id)
                 .maybeSingle();
             
             if (bizError) throw bizError;
+            
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff (Employees)
-                const { data: staffData } = await supabase
+                // 2. Fetch Staff (Employees) using Business UUID
+                const { data: staffData, error: staffError } = await supabase
                     .from('employees')
                     .select('id, name')
-                    .eq('business_id', bizData.id);
+                    .eq('business_id', bizData.id)
+                    .order('name');
                 
+                if (staffError) console.error("Staff fetch error:", staffError);
                 setEmployees(staffData || []);
 
                 // 3. Fetch Bookings with Relational Joins
+                // Explicitly joining users (customer), services, and cars
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -120,10 +124,12 @@ export default function BusinessDashboardPage() {
                         latestReview: ratingsData[0]
                     });
                 }
+            } else {
+                setFetchError("Business profile not found. Please set up your profile first.");
             }
         } catch (error: any) {
             console.error("Dashboard fetch error:", error);
-            setFetchError("Unable to fetch bookings. Check database connection.");
+            setFetchError("Unable to fetch data. Check database connection.");
         } finally {
             setLoading(false);
         }
@@ -357,7 +363,13 @@ export default function BusinessDashboardPage() {
 
     if (loading && !business) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
     
-    if (!business) return <div className="text-center py-20">Business profile not found. Please complete your profile.</div>;
+    if (!business) return (
+        <div className="text-center py-20 bg-muted/10 rounded-2xl border-2 border-dashed mx-auto max-w-lg">
+            <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+            <h3 className="text-xl font-bold">Profile Setup Required</h3>
+            <p className="text-muted-foreground mt-2">Please complete your business profile setup to access the operations dashboard.</p>
+        </div>
+    );
 
     const pendingList = bookings.filter(b => b.status === 'pending');
     const confirmedList = bookings.filter(b => b.status === 'confirmed');

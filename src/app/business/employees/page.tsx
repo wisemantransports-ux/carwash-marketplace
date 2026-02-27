@@ -6,7 +6,7 @@ import type { Employee } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle, RefreshCw, AlertTriangle } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Upload, Loader2, User, Phone as PhoneIcon, ShieldCheck, Trash2, AlertCircle, RefreshCw } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,17 +43,17 @@ export default function EmployeeRegistryPage() {
         setLoading(true);
         setFetchError(null);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) {
                 setLoading(false);
                 return;
             }
 
-            // 1. Get the Business UUID for the current owner
+            // 1. Get the Business UUID for the current owner (user.id is the UID)
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('id')
-                .eq('owner_id', user.id)
+                .eq('owner_id', session.user.id)
                 .maybeSingle();
             
             if (bizError) throw bizError;
@@ -66,14 +66,17 @@ export default function EmployeeRegistryPage() {
 
             setBusinessId(biz.id);
 
-            // 2. Fetch staff members linked to this business
+            // 2. Fetch staff members linked to this business UUID
             const { data, error } = await supabase
                 .from('employees')
                 .select('*')
                 .eq('business_id', biz.id)
                 .order('name', { ascending: true });
             
-            if (error) throw error;
+            if (error) {
+                console.error("Employee fetch error:", error);
+                throw error;
+            }
             
             setEmployees(data || []);
 
@@ -112,7 +115,7 @@ export default function EmployeeRegistryPage() {
         e.preventDefault();
         
         if (!businessId) {
-            toast({ variant: 'destructive', title: 'Context Missing', description: 'Business ID not found.' });
+            toast({ variant: 'destructive', title: 'Context Missing', description: 'Business ID not found. Ensure your profile is set up.' });
             return;
         }
 
@@ -134,13 +137,14 @@ export default function EmployeeRegistryPage() {
                     .from('business-assets')
                     .upload(filePath, imageFile);
                 
-                if (uploadError) throw uploadError;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from('business-assets')
-                    .getPublicUrl(filePath);
-                
-                uploadedImageUrl = publicUrl;
+                if (!uploadError) {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('business-assets')
+                        .getPublicUrl(filePath);
+                    uploadedImageUrl = publicUrl;
+                } else {
+                    console.error("Storage upload skipped or failed:", uploadError);
+                }
             }
 
             const { error: insertError } = await supabase
