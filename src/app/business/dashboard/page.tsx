@@ -31,11 +31,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-// Modular notification placeholder
-const notifyCustomer = (bookingId: string, message: string) => {
-    console.log(`[NOTIFICATION] Booking ${bookingId}: ${message}`);
-};
-
 export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<any[]>([]);
     const [business, setBusiness] = useState<any>(null);
@@ -44,7 +39,6 @@ export default function BusinessDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Track selected staff for each pending booking
     const [assignments, setAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async () => {
@@ -57,36 +51,35 @@ export default function BusinessDashboardPage() {
         setLoading(true);
         setFetchError(null);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
                 setLoading(false);
                 return;
             }
 
-            // 1. Fetch Business Profile using owner_id (user UID)
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
-                .eq('owner_id', session.user.id)
+                .eq('owner_id', user.id)
                 .maybeSingle();
             
             if (bizError) throw bizError;
             
             if (bizData) {
                 setBusiness(bizData);
+                console.log(`[DASHBOARD DEBUG] Business Found:`, bizData.id);
 
-                // 2. Fetch Staff (Employees) using Business UUID
-                const { data: staffData, error: staffError } = await supabase
+                // Fetch Staff
+                const { data: staffData } = await supabase
                     .from('employees')
                     .select('id, name')
                     .eq('business_id', bizData.id)
                     .order('name');
                 
-                if (staffError) console.error("Staff fetch error:", staffError);
+                console.log(`[DASHBOARD DEBUG] Staff Fetched:`, staffData);
                 setEmployees(staffData || []);
 
-                // 3. Fetch Bookings with Relational Joins
-                // Explicitly joining users (customer), services, and cars
+                // Fetch Bookings with Relational Joins
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -103,18 +96,13 @@ export default function BusinessDashboardPage() {
                     .eq('business_id', bizData.id)
                     .order('booking_time', { ascending: true });
                 
-                if (bookingError) {
-                    console.error("Booking fetch error:", bookingError);
-                    throw bookingError;
-                }
+                if (bookingError) throw bookingError;
                 setBookings(bookingData || []);
 
-                // 4. Fetch Reputation Stats
                 const { data: ratingsData } = await supabase
                     .from('ratings')
                     .select('*, customer:customer_id(name)')
-                    .eq('business_id', bizData.id)
-                    .order('created_at', { ascending: false });
+                    .eq('business_id', bizData.id);
 
                 if (ratingsData && ratingsData.length > 0) {
                     const avg = ratingsData.reduce((acc, curr) => acc + curr.rating, 0) / ratingsData.length;
@@ -125,11 +113,11 @@ export default function BusinessDashboardPage() {
                     });
                 }
             } else {
-                setFetchError("Business profile not found. Please set up your profile first.");
+                setFetchError("Business profile not found.");
             }
         } catch (error: any) {
-            console.error("Dashboard fetch error:", error);
-            setFetchError("Unable to fetch data. Check database connection.");
+            console.error("[DASHBOARD DEBUG] Fetch error:", error);
+            setFetchError("Unable to fetch data.");
         } finally {
             setLoading(false);
         }
@@ -142,37 +130,26 @@ export default function BusinessDashboardPage() {
     const handleAcceptBooking = async (bookingId: string) => {
         const staffId = assignments[bookingId];
         if (!staffId) {
-            toast({ 
-                variant: 'destructive', 
-                title: "Staff Required", 
-                description: "Please assign a staff member before accepting this booking." 
-            });
+            toast({ variant: 'destructive', title: "Staff Required", description: "Please assign staff first." });
             return;
         }
 
         try {
             const { error } = await supabase
                 .from('bookings')
-                .update({ 
-                    status: 'confirmed',
-                    staff_id: staffId 
-                })
+                .update({ status: 'confirmed', staff_id: staffId })
                 .eq('id', bookingId);
 
             if (error) throw error;
 
-            toast({ title: "Booking Accepted", description: "The request has been confirmed and staff assigned." });
-            notifyCustomer(bookingId, "Your booking has been confirmed");
-            
-            // Optimistic UI Update
+            toast({ title: "Booking Accepted" });
             setBookings(prev => prev.map(b => 
                 b.id === bookingId 
                     ? { ...b, status: 'confirmed', staff: { name: employees.find(e => e.id === staffId)?.name } } 
                     : b
             ));
         } catch (e: any) {
-            console.error("Accept error:", e);
-            toast({ variant: 'destructive', title: 'Action Failed', description: e.message || "Could not accept booking." });
+            toast({ variant: 'destructive', title: 'Action Failed', description: e.message });
         }
     };
 
@@ -184,14 +161,10 @@ export default function BusinessDashboardPage() {
                 .eq('id', bookingId);
 
             if (error) throw error;
-
-            toast({ title: "Booking Rejected", description: "The request has been moved to history." });
-            
-            // Optimistic UI Update
+            toast({ title: "Booking Rejected" });
             setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
         } catch (e: any) {
-            console.error("Reject error:", e);
-            toast({ variant: 'destructive', title: 'Action Failed', description: e.message || "Could not reject booking." });
+            toast({ variant: 'destructive', title: 'Action Failed', description: e.message });
         }
     };
 
@@ -203,13 +176,9 @@ export default function BusinessDashboardPage() {
                 .eq('id', bookingId);
 
             if (error) throw error;
-
-            toast({ title: "Booking Completed", description: "The service is marked as complete." });
-            
-            // Optimistic UI Update
+            toast({ title: "Booking Completed" });
             setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'completed' } : b));
         } catch (e: any) {
-            console.error("Complete error:", e);
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
     };
@@ -235,51 +204,26 @@ export default function BusinessDashboardPage() {
                                     <User className="h-3.5 w-3.5 text-primary" />
                                     {booking.customer?.name || 'No customer'}
                                 </div>
-                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                    <Mail className="h-3 w-3" />
-                                    {booking.customer?.email || 'No email'}
-                                </div>
+                                <div className="text-[10px] text-muted-foreground">{booking.customer?.email}</div>
                             </div>
                         </TableCell>
                         <TableCell className="align-top py-4">
                             <div className="flex flex-col gap-1.5">
-                                <div className="flex items-center gap-2 text-sm font-black text-primary uppercase tracking-tight">
-                                    {booking.car?.model?.toLowerCase().includes('bus') ? (
-                                        <Truck className="h-4 w-4" />
-                                    ) : (
-                                        <Car className="h-4 w-4" />
-                                    )}
+                                <div className="flex items-center gap-2 text-sm font-black text-primary uppercase">
+                                    <Car className="h-4 w-4" />
                                     {booking.car ? `${booking.car.make} ${booking.car.model}` : 'No vehicle'}
                                 </div>
-                                <Badge variant="secondary" className={cn(
-                                    "w-fit text-[9px] font-extrabold uppercase px-1.5 py-0.5",
-                                    booking.car?.model?.toLowerCase().includes('bus') ? "bg-orange-100 text-orange-700" : "bg-blue-50 text-blue-700"
-                                )}>
-                                    {booking.car?.model?.toLowerCase().includes('bus') ? 'Large Vehicle' : 'Standard Car'}
-                                </Badge>
                             </div>
                         </TableCell>
                         <TableCell className="align-top py-4">
-                            <div className="flex flex-col gap-1 max-w-[200px]">
-                                <div className="font-bold text-xs text-foreground uppercase">
-                                    {booking.service?.name || 'Wash Service'}
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px] font-bold">
-                                    <span className="flex items-center gap-1 text-primary">
-                                        P{Number(booking.service?.price || booking.price).toFixed(2)}
-                                    </span>
-                                    <span className="text-muted-foreground">•</span>
-                                    <span className="flex items-center gap-1 text-muted-foreground">
-                                        {booking.service?.duration || '--'}m
-                                    </span>
-                                </div>
+                            <div className="flex flex-col gap-1">
+                                <div className="font-bold text-xs uppercase">{booking.service?.name}</div>
+                                <div className="text-[10px] font-bold text-primary">P{booking.service?.price || booking.price}</div>
                             </div>
                         </TableCell>
-                        <TableCell className="align-top py-4">
-                            <div className="flex flex-col gap-0.5 text-[11px]">
-                                <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString()}</div>
-                                <div className="text-muted-foreground">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                            </div>
+                        <TableCell className="align-top py-4 text-[11px]">
+                            <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString()}</div>
+                            <div className="text-muted-foreground">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                         </TableCell>
                         <TableCell className="align-top py-4">
                             {booking.status === 'pending' ? (
@@ -291,15 +235,14 @@ export default function BusinessDashboardPage() {
                                         <SelectValue placeholder="Assign Staff..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {employees.length > 0 ? employees.map(emp => (
+                                        {employees.map(emp => (
                                             <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-                                        )) : (
-                                            <div className="p-2 text-[10px] text-muted-foreground italic">No staff found</div>
-                                        )}
+                                        ))}
+                                        {employees.length === 0 && <div className="p-2 text-[10px] italic">No staff registered</div>}
                                     </SelectContent>
                                 </Select>
                             ) : (
-                                <Badge variant="outline" className="flex items-center gap-1 w-fit bg-muted/50 text-[10px] font-bold py-1">
+                                <Badge variant="outline" className="flex items-center gap-1 bg-muted/50 text-[10px] font-bold">
                                     <UserCheck className="h-3 w-3 text-green-600" />
                                     {booking.staff?.name || 'Assigned'}
                                 </Badge>
@@ -309,53 +252,24 @@ export default function BusinessDashboardPage() {
                             <div className="flex justify-end gap-2">
                                 {showActions && booking.status === 'pending' && (
                                     <>
-                                        <Button 
-                                            size="sm" 
-                                            className="h-8 bg-green-600 hover:bg-green-700 text-[10px] font-bold px-3"
-                                            onClick={() => handleAcceptBooking(booking.id)}
-                                            disabled={!assignments[booking.id]}
-                                        >
+                                        <Button size="sm" className="h-8 bg-green-600 text-[10px] font-bold" onClick={() => handleAcceptBooking(booking.id)} disabled={!assignments[booking.id]}>
                                             <Check className="h-3 w-3 mr-1" /> Accept
                                         </Button>
-                                        <Button 
-                                            size="sm" 
-                                            variant="ghost" 
-                                            className="h-8 text-destructive hover:bg-destructive/10 text-[10px] font-bold"
-                                            onClick={() => handleRejectBooking(booking.id)}
-                                        >
+                                        <Button size="sm" variant="ghost" className="h-8 text-destructive text-[10px] font-bold" onClick={() => handleRejectBooking(booking.id)}>
                                             <Ban className="h-3 w-3 mr-1" /> Reject
                                         </Button>
                                     </>
                                 )}
                                 {isConfirmed && booking.status === 'confirmed' && (
-                                    <Button 
-                                        size="sm" 
-                                        className="h-8 text-[10px] font-bold bg-primary hover:bg-primary/90"
-                                        onClick={() => handleCompleteBooking(booking.id)}
-                                    >
+                                    <Button size="sm" className="h-8 text-[10px] font-bold" onClick={() => handleCompleteBooking(booking.id)}>
                                         <CheckCircle2 className="h-3 w-3 mr-1" /> Complete
                                     </Button>
-                                )}
-                                {['completed', 'cancelled', 'rejected'].includes(booking.status) && (
-                                    <Badge 
-                                        variant={booking.status === 'completed' ? 'secondary' : 'destructive'} 
-                                        className="text-[9px] font-extrabold uppercase px-2 py-0.5"
-                                    >
-                                        {booking.status}
-                                    </Badge>
                                 )}
                             </div>
                         </TableCell>
                     </TableRow>
                 )) : (
-                    <TableRow>
-                        <TableCell colSpan={6} className="h-48 text-center text-muted-foreground italic">
-                            <div className="flex flex-col items-center justify-center gap-2">
-                                <Info className="h-8 w-8 opacity-20" />
-                                <p>No bookings found in this category.</p>
-                            </div>
-                        </TableCell>
-                    </TableRow>
+                    <TableRow><TableCell colSpan={6} className="h-48 text-center text-muted-foreground italic">No bookings found.</TableCell></TableRow>
                 )}
             </TableBody>
         </Table>
@@ -363,13 +277,7 @@ export default function BusinessDashboardPage() {
 
     if (loading && !business) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
     
-    if (!business) return (
-        <div className="text-center py-20 bg-muted/10 rounded-2xl border-2 border-dashed mx-auto max-w-lg">
-            <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-            <h3 className="text-xl font-bold">Profile Setup Required</h3>
-            <p className="text-muted-foreground mt-2">Please complete your business profile setup to access the operations dashboard.</p>
-        </div>
-    );
+    if (!business) return <div className="text-center py-20">Profile Required</div>;
 
     const pendingList = bookings.filter(b => b.status === 'pending');
     const confirmedList = bookings.filter(b => b.status === 'confirmed');
@@ -378,141 +286,28 @@ export default function BusinessDashboardPage() {
 
     return (
         <div className="space-y-8">
-            <div className="flex flex-col md:flex-row justify-between items-start gap-6">
-                <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-4xl font-bold tracking-tight text-primary">{business.name}</h1>
-                        <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 uppercase font-bold text-[10px]">
-                            {business.type}
-                        </Badge>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={fetchData}><RefreshCw className="h-4 w-4" /></Button>
-                    </div>
-                    <p className="text-muted-foreground text-lg">Operations Control & Staff Assignment</p>
+            <div className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-4xl font-bold tracking-tight text-primary">{business.name}</h1>
+                    <p className="text-muted-foreground">Operations Control & Staff Assignment</p>
                 </div>
-                <div className="w-full md:w-80 shrink-0"><ShareBusinessCard businessId={business.id} /></div>
+                <Button variant="ghost" size="icon" onClick={fetchData}><RefreshCw className="h-4 w-4" /></Button>
             </div>
 
-            {fetchError && (
-                <Alert variant="destructive" className="border-destructive/20 bg-destructive/5">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Connection Alert</AlertTitle>
-                    <AlertDescription>{fetchError}</AlertDescription>
-                </Alert>
-            )}
-
-            <div className="grid gap-6 md:grid-cols-4">
-                <Card className="bg-primary/5 border-primary/20">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2 tracking-widest">
-                            <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" /> Reputation
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-black text-primary">{stats.avgRating.toFixed(1)}</div>
-                        <p className="text-[10px] text-muted-foreground mt-1 font-bold uppercase">{stats.totalReviews} total reviews</p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2 tracking-widest">
-                            <ShieldCheck className="h-3 w-3 text-green-600" /> Account Level
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-xl font-black uppercase tracking-tight">{business.subscription_plan || 'Starter'}</div>
-                        <p className={cn("text-[10px] mt-1 font-black px-2 py-0.5 rounded w-fit", 
-                            business.subscription_status === 'active' ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700")}>
-                            {(business.subscription_status || 'active').toUpperCase()}
-                        </p>
-                    </CardContent>
-                </Card>
-
-                {stats.latestReview && (
-                    <Card className="md:col-span-2">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2 tracking-widest">
-                                <MessageCircle className="h-3 w-3 text-primary" /> Latest Feedback
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="font-black text-sm">{stats.latestReview.customer?.name}</span>
-                                <div className="flex">
-                                    {Array.from({ length: 5 }).map((_, i) => (
-                                        <Star key={i} className={cn("h-3 w-3", i < stats.latestReview.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-200")} />
-                                    ))}
-                                </div>
-                            </div>
-                            <p className="text-xs text-muted-foreground italic line-clamp-1">"{stats.latestReview.feedback || 'No comment'}"</p>
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
+            {fetchError && <Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{fetchError}</AlertDescription></Alert>}
 
             <Tabs defaultValue="pending" className="w-full">
-                <TabsList className="mb-8 grid w-full grid-cols-4 max-w-2xl bg-muted/50 p-1 border border-muted-foreground/10">
-                    <TabsTrigger value="pending" className="data-[state=active]:bg-background text-[10px] font-black uppercase">
-                        Incoming ({pendingList.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="confirmed" className="data-[state=active]:bg-background text-[10px] font-black uppercase">
-                        Confirmed ({confirmedList.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="completed" className="data-[state=active]:bg-background text-[10px] font-black uppercase">
-                        Service Done ({completedList.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="cancelled" className="data-[state=active]:bg-background text-[10px] font-black uppercase">
-                        History ({historyList.length})
-                    </TabsTrigger>
+                <TabsList className="mb-8 grid w-full grid-cols-4 max-w-2xl bg-muted/50">
+                    <TabsTrigger value="pending" className="text-[10px] font-black uppercase">Incoming ({pendingList.length})</TabsTrigger>
+                    <TabsTrigger value="confirmed" className="text-[10px] font-black uppercase">Confirmed ({confirmedList.length})</TabsTrigger>
+                    <TabsTrigger value="completed" className="text-[10px] font-black uppercase">Done ({completedList.length})</TabsTrigger>
+                    <TabsTrigger value="cancelled" className="text-[10px] font-black uppercase">History ({historyList.length})</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="pending">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
-                        <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Incoming Requests</CardTitle>
-                            <CardDescription className="text-xs">Identify vehicle type and assign staff to accept bookings.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <BookingTable list={pendingList} showActions />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="confirmed">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
-                        <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Active Queue</CardTitle>
-                            <CardDescription className="text-xs">Washes currently in progress or scheduled.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <BookingTable list={confirmedList} isConfirmed />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="completed">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
-                        <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Finished Jobs</CardTitle>
-                            <CardDescription className="text-xs">Archive of successfully completed services.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <BookingTable list={completedList} />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="cancelled">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden opacity-80">
-                        <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Cancelled Requests</CardTitle>
-                            <CardDescription className="text-xs">Record of bookings that were rejected or cancelled.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <BookingTable list={historyList} />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                <TabsContent value="pending"><Card><BookingTable list={pendingList} showActions /></Card></TabsContent>
+                <TabsContent value="confirmed"><Card><BookingTable list={confirmedList} isConfirmed /></Card></TabsContent>
+                <TabsContent value="completed"><Card><BookingTable list={completedList} /></Card></TabsContent>
+                <TabsContent value="cancelled"><Card><BookingTable list={historyList} /></Card></TabsContent>
             </Tabs>
         </div>
     );

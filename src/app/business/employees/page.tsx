@@ -43,17 +43,19 @@ export default function EmployeeRegistryPage() {
         setLoading(true);
         setFetchError(null);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) {
+            // Use getUser for more reliable ID resolution
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                setFetchError("You must be logged in to view staff.");
                 setLoading(false);
                 return;
             }
 
-            // 1. Get the Business UUID for the current owner (user.id is the UID)
+            // 1. Get the Business UUID for the current owner
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
-                .select('id')
-                .eq('owner_id', session.user.id)
+                .select('id, name')
+                .eq('owner_id', user.id)
                 .maybeSingle();
             
             if (bizError) throw bizError;
@@ -65,6 +67,7 @@ export default function EmployeeRegistryPage() {
             }
 
             setBusinessId(biz.id);
+            console.log(`[STAFF DEBUG] Fetching staff for Business ID: ${biz.id} (${biz.name})`);
 
             // 2. Fetch staff members linked to this business UUID
             const { data, error } = await supabase
@@ -73,16 +76,14 @@ export default function EmployeeRegistryPage() {
                 .eq('business_id', biz.id)
                 .order('name', { ascending: true });
             
-            if (error) {
-                console.error("Employee fetch error:", error);
-                throw error;
-            }
+            if (error) throw error;
             
+            console.log(`[STAFF DEBUG] Employees found in DB:`, data);
             setEmployees(data || []);
 
         } catch (error: any) {
-            console.error(`Registry fetch error:`, error);
-            setFetchError("Unable to load employees. Please check your connection.");
+            console.error(`[STAFF DEBUG] Registry fetch error:`, error);
+            setFetchError(error.message || "Unable to load employees.");
             toast({ 
                 variant: 'destructive', 
                 title: 'Load Error', 
@@ -115,7 +116,7 @@ export default function EmployeeRegistryPage() {
         e.preventDefault();
         
         if (!businessId) {
-            toast({ variant: 'destructive', title: 'Context Missing', description: 'Business ID not found. Ensure your profile is set up.' });
+            toast({ variant: 'destructive', title: 'Context Missing', description: 'Business ID not found.' });
             return;
         }
 
@@ -142,8 +143,6 @@ export default function EmployeeRegistryPage() {
                         .from('business-assets')
                         .getPublicUrl(filePath);
                     uploadedImageUrl = publicUrl;
-                } else {
-                    console.error("Storage upload skipped or failed:", uploadError);
                 }
             }
 
@@ -165,7 +164,8 @@ export default function EmployeeRegistryPage() {
             setIsAddOpen(false);
             
             toast({ title: "Staff Registered", description: `${name} added successfully.` });
-            fetchData();
+            // Re-fetch to show the new staff member
+            await fetchData();
         } catch (error: any) {
             toast({ variant: 'destructive', title: "Registration Failed", description: error.message });
         } finally {
@@ -257,10 +257,10 @@ export default function EmployeeRegistryPage() {
             {fetchError && (
                 <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Load Warning</AlertTitle>
-                    <AlertDescription className="flex items-center justify-between">
-                        <span>{fetchError}</span>
-                        <Button variant="outline" size="sm" onClick={fetchData}>Retry</Button>
+                    <AlertTitle>Configuration Error</AlertTitle>
+                    <AlertDescription className="flex flex-col gap-2">
+                        <p>{fetchError}</p>
+                        <Button variant="outline" size="sm" onClick={fetchData} className="w-fit">Retry Fetch</Button>
                     </AlertDescription>
                 </Alert>
             )}
@@ -326,7 +326,11 @@ export default function EmployeeRegistryPage() {
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={4} className="h-64 text-center text-muted-foreground italic">
-                                        No staff members registered.
+                                        <div className="flex flex-col items-center justify-center gap-2">
+                                            <User className="h-12 w-12 opacity-10" />
+                                            <p>No staff members found for this business.</p>
+                                            {businessId && <p className="text-[10px] opacity-50 font-mono">Business ID: {businessId}</p>}
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             )}
