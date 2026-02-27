@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,13 +7,15 @@ import type { User as ProfileUser } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, Filter, ShieldCheck, ArrowLeft, Store } from 'lucide-react';
+import { Star, MapPin, Search, Filter, ShieldCheck, ArrowLeft, Store, CheckCircle2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 
-function BusinessCard({ business }: { business: ProfileUser }) {
+function BusinessCard({ business }: { business: any }) {
+  const isCipa = business.special_tag === 'CIPA Verified';
+
   return (
     <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card">
       <div className="relative h-48 w-full group overflow-hidden bg-muted">
@@ -28,14 +31,24 @@ function BusinessCard({ business }: { business: ProfileUser }) {
             <Store className="h-12 w-12 opacity-20" />
           </div>
         )}
-        <div className="absolute top-2 right-2">
-            <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black shadow-sm font-bold">
-                {business.plan || 'Verified'}
+        <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
+          {isCipa && (
+            <Badge className="bg-primary text-white shadow-lg font-bold border-2 border-white/20 px-2 py-1">
+              <CheckCircle2 className="h-3 w-3 mr-1" /> CIPA VERIFIED
             </Badge>
+          )}
+          <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black shadow-sm font-bold">
+            {business.plan || 'Verified'}
+          </Badge>
         </div>
       </div>
       <CardHeader className="pb-2">
-        <CardTitle className="text-xl">{business.name}</CardTitle>
+        <div className="flex justify-between items-start gap-2">
+          <CardTitle className="text-xl line-clamp-1">{business.name}</CardTitle>
+          <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 shrink-0">
+            <ShieldCheck className="h-3 w-3 mr-1" /> Trust Seal
+          </Badge>
+        </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <MapPin className="h-3 w-3" />
           <span>{business.address || 'Location on file'}, {business.city || 'Botswana'}</span>
@@ -49,9 +62,6 @@ function BusinessCard({ business }: { business: ProfileUser }) {
             ))}
           </div>
           <span className="text-xs font-bold">5.0</span>
-          <Badge variant="outline" className="text-[10px] ml-auto bg-green-50 text-green-700 border-green-200">
-            <ShieldCheck className="h-3 w-3 mr-1" /> Trust Seal
-          </Badge>
         </div>
       </CardContent>
       <CardFooter className="pt-0">
@@ -64,7 +74,7 @@ function BusinessCard({ business }: { business: ProfileUser }) {
 }
 
 export default function PublicFindWashPage() {
-  const [businesses, setBusinesses] = useState<ProfileUser[]>([]);
+  const [businesses, setBusinesses] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -85,21 +95,28 @@ export default function PublicFindWashPage() {
         const userIds = (data || []).map(u => u.id);
         const { data: bizData } = await supabase
             .from('businesses')
-            .select('id, owner_id')
+            .select('id, owner_id, name, logo_url, address, city, special_tag')
             .in('owner_id', userIds);
         
         const bizMap = (bizData || []).reduce((acc: any, b: any) => {
-            acc[b.owner_id] = b.id;
+            acc[b.owner_id] = b;
             return acc;
         }, {});
         
         const formatted = (data || [])
           .filter(u => !!bizMap[u.id]) // Only show completed profiles
-          .map(u => ({
-            ...u,
-            avatarUrl: u.avatar_url,
-            accessActive: u.access_active
-          })) as ProfileUser[];
+          .map(u => {
+            const biz = bizMap[u.id];
+            return {
+              ...u,
+              name: biz.name || u.name,
+              avatarUrl: biz.logo_url || u.avatar_url,
+              address: biz.address,
+              city: biz.city,
+              special_tag: biz.special_tag,
+              accessActive: u.access_active
+            };
+          }) as any[];
         
         setBusinesses(formatted);
       } catch (e) {

@@ -100,7 +100,7 @@ export default function CustomerHomePage() {
         const userIds = (userData || []).map(u => u.id);
         const { data: bizData } = await supabase
             .from('businesses')
-            .select('id, owner_id, special_tag, verification_status')
+            .select('id, owner_id, special_tag, verification_status, logo_url, address, city, description')
             .in('owner_id', userIds);
         
         const bizMap = (bizData || []).reduce((acc: any, b: any) => {
@@ -129,7 +129,11 @@ export default function CustomerHomePage() {
             
             return {
               ...u,
-              avatarUrl: u.avatar_url,
+              name: biz.name || u.name,
+              avatarUrl: biz.logo_url || u.avatar_url,
+              address: biz.address,
+              city: biz.city,
+              description: biz.description,
               accessActive: u.access_active,
               special_tag: biz.special_tag,
               avg_rating: stats.count > 0 ? (stats.total / stats.count) : 5.0,
