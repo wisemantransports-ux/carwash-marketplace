@@ -47,7 +47,10 @@ export default function SignupPage() {
       email: '',
       password: '',
       role: 'customer',
+      phone: '',
       businessType: 'individual',
+      idNumber: '',
+      businessName: '',
     },
   });
 
