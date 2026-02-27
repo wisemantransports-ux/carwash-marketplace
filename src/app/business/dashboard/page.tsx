@@ -83,6 +83,7 @@ export default function BusinessDashboardPage() {
                 setEmployees(staffData || []);
 
                 // 3. Fetch Bookings with Relational Joins
+                // We use !customer_id etc. to specify the foreign key column for the join
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -99,7 +100,10 @@ export default function BusinessDashboardPage() {
                     .eq('business_id', bizData.id)
                     .order('booking_time', { ascending: true });
                 
-                if (bookingError) throw bookingError;
+                if (bookingError) {
+                    console.error("Booking fetch error:", bookingError);
+                    throw bookingError;
+                }
                 setBookings(bookingData || []);
 
                 // 4. Fetch Reputation Stats
@@ -133,67 +137,107 @@ export default function BusinessDashboardPage() {
     const handleAcceptBooking = async (bookingId: string) => {
         const staffId = assignments[bookingId];
         if (!staffId) {
-            toast({ variant: 'destructive', title: "Staff Required", description: "Please assign a staff member before accepting." });
+            toast({ 
+                variant: 'destructive', 
+                title: "Staff Required", 
+                description: "Please assign a staff member before accepting this booking." 
+            });
             return;
         }
 
         try {
-            const { error } = await supabase
+            // Update booking status and staff assignment in Supabase
+            const { data, error } = await supabase
                 .from('bookings')
                 .update({ 
                     status: 'confirmed',
                     staff_id: staffId 
                 })
-                .eq('id', bookingId);
+                .eq('id', bookingId)
+                .select(`
+                    id,
+                    booking_time,
+                    status,
+                    mobile_status,
+                    price,
+                    customer:users!customer_id ( name, email ),
+                    service:services!service_id ( name, price, duration ),
+                    car:cars!car_id ( make, model ),
+                    staff:employees!staff_id ( name )
+                `)
+                .single();
 
             if (error) throw error;
 
-            toast({ title: "Booking Accepted", description: "The request has been moved to confirmed." });
+            toast({ title: "Booking Accepted", description: "The request has been confirmed and staff assigned." });
             notifyCustomer(bookingId, "Your booking has been confirmed");
             
-            // Optimistic update
-            setBookings(prev => prev.map(b => 
-                b.id === bookingId 
-                    ? { ...b, status: 'confirmed', staff: { name: employees.find(e => e.id === staffId)?.name } } 
-                    : b
-            ));
+            // Optimistic UI Update: Update the specific booking in the list
+            setBookings(prev => prev.map(b => b.id === bookingId ? data : b));
         } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
+            console.error("Accept error:", e);
+            toast({ variant: 'destructive', title: 'Action Failed', description: e.message || "Could not accept booking." });
         }
     };
 
     const handleRejectBooking = async (bookingId: string) => {
         try {
-            const { error } = await supabase
+            const { data, error } = await supabase
                 .from('bookings')
                 .update({ status: 'cancelled' })
-                .eq('id', bookingId);
+                .eq('id', bookingId)
+                .select(`
+                    id,
+                    booking_time,
+                    status,
+                    mobile_status,
+                    price,
+                    customer:users!customer_id ( name, email ),
+                    service:services!service_id ( name, price, duration ),
+                    car:cars!car_id ( make, model ),
+                    staff:employees!staff_id ( name )
+                `)
+                .single();
 
             if (error) throw error;
 
-            toast({ title: "Booking Rejected", description: "The request has been marked as cancelled." });
+            toast({ title: "Booking Rejected", description: "The request has been moved to history." });
             
-            // Optimistic update
-            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
+            // Optimistic UI Update
+            setBookings(prev => prev.map(b => b.id === bookingId ? data : b));
         } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
+            console.error("Reject error:", e);
+            toast({ variant: 'destructive', title: 'Action Failed', description: e.message || "Could not reject booking." });
         }
     };
 
     const handleCompleteBooking = async (bookingId: string) => {
         try {
-            const { error } = await supabase
+            const { data, error } = await supabase
                 .from('bookings')
                 .update({ status: 'completed' })
-                .eq('id', bookingId);
+                .eq('id', bookingId)
+                .select(`
+                    id,
+                    booking_time,
+                    status,
+                    mobile_status,
+                    price,
+                    customer:users!customer_id ( name, email ),
+                    service:services!service_id ( name, price, duration ),
+                    car:cars!car_id ( make, model ),
+                    staff:employees!staff_id ( name )
+                `)
+                .single();
 
             if (error) throw error;
 
             toast({ title: "Booking Completed", description: "The service is marked as complete." });
             
-            // Optimistic update
-            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'completed' } : b));
+            // Optimistic UI Update
+            setBookings(prev => prev.map(b => b.id === bookingId ? data : b));
         } catch (e: any) {
+            console.error("Complete error:", e);
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
     };
@@ -237,7 +281,7 @@ export default function BusinessDashboardPage() {
                         <TableCell className="align-top py-4">
                             <div className="flex flex-col gap-1.5">
                                 <div className="flex items-center gap-2 text-sm font-black text-primary uppercase tracking-tight">
-                                    {booking.car?.make === 'Bus' || booking.car?.model?.toLowerCase().includes('bus') ? (
+                                    {booking.car?.model?.toLowerCase().includes('bus') ? (
                                         <Truck className="h-4 w-4" />
                                     ) : (
                                         <Car className="h-4 w-4" />
