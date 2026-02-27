@@ -20,14 +20,15 @@ import {
     Check,
     Mail,
     Info,
-    Truck
+    Truck,
+    Ban
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShareBusinessCard } from "@/components/app/share-business-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Alert, AlertDescription, AlertTitle } from "@/components/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +84,7 @@ export default function BusinessDashboardPage() {
                 setEmployees(staffData || []);
 
                 // 3. Fetch Bookings with Relational Joins
+                // Explicitly mapping customer_id to user table for 'name'
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -152,7 +154,8 @@ export default function BusinessDashboardPage() {
                     status: 'confirmed',
                     staff_id: staffId 
                 })
-                .eq('id', bookingId);
+                .eq('id', bookingId)
+                .select();
 
             if (error) throw error;
 
@@ -176,7 +179,8 @@ export default function BusinessDashboardPage() {
             const { error } = await supabase
                 .from('bookings')
                 .update({ status: 'cancelled' })
-                .eq('id', bookingId);
+                .eq('id', bookingId)
+                .select();
 
             if (error) throw error;
 
@@ -195,7 +199,8 @@ export default function BusinessDashboardPage() {
             const { error } = await supabase
                 .from('bookings')
                 .update({ status: 'completed' })
-                .eq('id', bookingId);
+                .eq('id', bookingId)
+                .select();
 
             if (error) throw error;
 
@@ -327,7 +332,7 @@ export default function BusinessDashboardPage() {
                                             className="h-8 text-destructive hover:bg-destructive/10 text-[10px] font-bold"
                                             onClick={() => handleRejectBooking(booking.id)}
                                         >
-                                            <XCircle className="h-3 w-3 mr-1" /> Reject
+                                            <ban className="h-3 w-3 mr-1" /> Reject
                                         </Button>
                                     </>
                                 )}
