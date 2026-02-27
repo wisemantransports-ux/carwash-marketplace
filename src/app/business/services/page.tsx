@@ -6,13 +6,12 @@ import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Loader2, AlertCircle, Trash2, MapPin, Store } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Loader2, AlertCircle, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 
 export default function ServicesManagementPage() {
     const [services, setServices] = useState<Service[]>([]);
@@ -137,7 +136,7 @@ export default function ServicesManagementPage() {
                     <TableHeader>
                         <TableRow className="bg-muted/50">
                             <TableHead className="font-bold">Service Package</TableHead>
-                            <TableHead className="font-bold">Model</TableHead>
+                            <TableHead className="font-bold text-center">Currency</TableHead>
                             <TableHead className="font-bold">Price</TableHead>
                             <TableHead className="text-right font-bold pr-6">Action</TableHead>
                         </TableRow>
@@ -152,14 +151,11 @@ export default function ServicesManagementPage() {
                                             <span className="text-xs text-muted-foreground line-clamp-1 max-w-xs">{service.description || 'No description provided'}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell>
-                                        <Badge variant="secondary" className="text-[10px] uppercase font-bold gap-1 px-2">
-                                            {service.type === 'mobile' ? <MapPin className="h-3 w-3" /> : <Store className="h-3 w-3" />}
-                                            {service.type}
-                                        </Badge>
+                                    <TableCell className="text-center">
+                                        <code className="text-xs font-bold text-muted-foreground">{service.currency_code || 'BWP'}</code>
                                     </TableCell>
                                     <TableCell className="font-mono font-bold text-sm">
-                                        P{Number(service.price).toFixed(2)}
+                                        {Number(service.price).toFixed(2)}
                                     </TableCell>
                                     <TableCell className="text-right pr-6">
                                         <DropdownMenu>

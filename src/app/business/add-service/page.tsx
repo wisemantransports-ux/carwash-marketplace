@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -85,12 +86,12 @@ export default function AddServicePage() {
 
     // 1. Authorization Check
     if (business.verification_status !== 'verified') {
-      toast({ variant: 'destructive', title: "Access Denied", description: "Verification pending. Access will be granted once verified." });
+      toast({ variant: 'destructive', title: "Verification Pending", description: "Access will be granted once verified." });
       return;
     }
 
     if (business.subscription_status !== 'active') {
-      toast({ variant: 'destructive', title: "Subscription Required", description: "Your professional features are currently paused. Please select a plan." });
+      toast({ variant: 'destructive', title: "Subscription Required", description: "Your professional features are currently paused." });
       return;
     }
 
@@ -109,6 +110,7 @@ export default function AddServicePage() {
     setSubmitting(true);
     try {
         // 3. Exact Schema Insertion (RLS compliant)
+        // Schema: business_id, name, price, description, currency_code
         const { error } = await supabase
           .from('services')
           .insert([{
@@ -116,7 +118,7 @@ export default function AddServicePage() {
             name: serviceName.trim(),
             description: description.trim(),
             price: priceVal,
-            type: business.type // Inherit from business model (mobile/station)
+            currency_code: 'BWP'
           }]);
 
         if (error) throw error;
@@ -172,18 +174,17 @@ export default function AddServicePage() {
       <Card className={`shadow-lg border-2 ${(isUnverified || isInactive) ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
         <CardHeader className="bg-muted/10 border-b">
           <CardTitle>Service Details</CardTitle>
-          <CardDescription>Enter specifications for your {business.type} wash package.</CardDescription>
+          <CardDescription>Enter specifications for your wash package.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="sname">Service Name *</Label>
-              <input 
+              <Input 
                 id="sname" 
                 value={serviceName} 
                 onChange={(e) => setServiceName(e.target.value)} 
                 placeholder="e.g. Interior Steam Clean" 
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                 required 
               />
             </div>
@@ -216,11 +217,11 @@ export default function AddServicePage() {
               <Label htmlFor="sprice">Price (BWP) *</Label>
               <div className="relative">
                 <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input 
+                <Input 
                   id="sprice" 
                   type="number" 
                   step="0.01"
-                  className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                  className="pl-10"
                   value={price} 
                   onChange={(e) => setPrice(e.target.value)} 
                   placeholder="0.00" 

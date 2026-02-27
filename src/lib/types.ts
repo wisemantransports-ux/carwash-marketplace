@@ -35,7 +35,7 @@ export type Service = {
   name: string;
   description?: string;
   price: number;
-  type: 'mobile' | 'station';
+  currency_code?: string;
   created_at?: string;
 };
 
