@@ -5,7 +5,6 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
-    Calendar, 
     Clock, 
     Car, 
     Loader2, 
@@ -489,9 +488,9 @@ export default function BusinessDashboardPage() {
                         <CardContent className="p-0">
                             <BookingTable list={historyList} />
                         </CardContent>
-                    </TabsContent>
-                </Tabs>
-            </div>
-        );
-    }
-    
+                    </Card>
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+}
