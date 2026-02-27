@@ -68,7 +68,6 @@ export default function BusinessDashboardPage() {
             
             if (bizData) {
                 setBusiness(bizData);
-                console.log(`[DASHBOARD DEBUG] Resolved Business UUID:`, bizData.id);
 
                 // 2. Fetch Staff for this Business UUID
                 const { data: staffData } = await supabase
@@ -77,10 +76,9 @@ export default function BusinessDashboardPage() {
                     .eq('business_id', bizData.id)
                     .order('name');
                 
-                console.log(`[STAFF DEBUG] Fetched for Dashboard:`, staffData?.length || 0);
                 setEmployees(staffData || []);
 
-                // 3. Fetch Bookings with Full Relational Joins
+                // 3. Fetch Bookings with Full Relational Joins and Ratings
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -92,7 +90,8 @@ export default function BusinessDashboardPage() {
                         customer:customer_id ( name, email ),
                         service:service_id ( name, price, duration ),
                         car:car_id ( make, model ),
-                        staff:staff_id ( name )
+                        staff:staff_id ( name ),
+                        rating:ratings!booking_id ( rating, feedback )
                     `)
                     .eq('business_id', bizData.id)
                     .order('booking_time', { ascending: true });
@@ -123,7 +122,6 @@ export default function BusinessDashboardPage() {
         }
 
         try {
-            // Atomic update of status and staff_id
             const { error } = await supabase
                 .from('bookings')
                 .update({ 
@@ -136,7 +134,6 @@ export default function BusinessDashboardPage() {
 
             toast({ title: "Booking Accepted", description: "Request moved to the active queue." });
             
-            // Optimistic UI Update
             setBookings(prev => prev.map(b => 
                 b.id === bookingId 
                     ? { ...b, status: 'confirmed', staff: { name: employees.find(e => e.id === staffId)?.name } } 
@@ -177,14 +174,18 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    const BookingTable = ({ list, showActions = false, isConfirmed = false }: { list: any[], showActions?: boolean, isConfirmed?: boolean }) => (
+    const BookingTable = ({ list, showActions = false, isConfirmed = false, isCompleted = false }: { list: any[], showActions?: boolean, isConfirmed?: boolean, isCompleted?: boolean }) => (
         <Table>
             <TableHeader>
                 <TableRow className="bg-muted/50">
                     <TableHead className="w-[180px] font-bold">Customer</TableHead>
                     <TableHead className="w-[220px] font-bold">Vehicle Identity</TableHead>
                     <TableHead className="font-bold">Service</TableHead>
-                    <TableHead className="font-bold">Timing</TableHead>
+                    {isCompleted ? (
+                        <TableHead className="font-bold">Customer Feedback</TableHead>
+                    ) : (
+                        <TableHead className="font-bold">Timing</TableHead>
+                    )}
                     <TableHead className="font-bold">Assignment</TableHead>
                     <TableHead className="text-right font-bold pr-6">Action</TableHead>
                 </TableRow>
@@ -215,10 +216,29 @@ export default function BusinessDashboardPage() {
                                 <div className="text-[10px] font-bold text-primary">P{booking.service?.price || booking.price} • {booking.service?.duration}m</div>
                             </div>
                         </TableCell>
-                        <TableCell className="align-top py-4 text-[11px]">
-                            <div className="font-extrabold">{new Date(booking.booking_time).toLocaleDateString()}</div>
-                            <div className="text-muted-foreground font-medium">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                        </TableCell>
+                        {isCompleted ? (
+                            <TableCell className="align-top py-4">
+                                {booking.rating && booking.rating.length > 0 ? (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-1">
+                                            {Array.from({ length: 5 }).map((_, i) => (
+                                                <Star key={i} className={cn("h-3 w-3", i < booking.rating[0].rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300")} />
+                                            ))}
+                                        </div>
+                                        {booking.rating[0].feedback && (
+                                            <p className="text-[10px] text-muted-foreground italic line-clamp-2">"{booking.rating[0].feedback}"</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <span className="text-[10px] text-muted-foreground italic">No feedback yet</span>
+                                )}
+                            </TableCell>
+                        ) : (
+                            <TableCell className="align-top py-4 text-[11px]">
+                                <div className="font-extrabold">{new Date(booking.booking_time).toLocaleDateString()}</div>
+                                <div className="text-muted-foreground font-medium">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                            </TableCell>
+                        )}
                         <TableCell className="align-top py-4">
                             {booking.status === 'pending' ? (
                                 <Select 
@@ -312,7 +332,13 @@ export default function BusinessDashboardPage() {
                 </div>
             </div>
 
-            {fetchError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Critical Error</AlertTitle><AlertDescription>{fetchError}</AlertDescription></Alert>}
+            {fetchError && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Critical Error</AlertTitle>
+                    <AlertDescription>{fetchError}</AlertDescription>
+                </Alert>
+            )}
 
             <Tabs defaultValue="pending" className="w-full">
                 <TabsList className="mb-8 grid w-full grid-cols-4 max-w-3xl bg-muted/50 p-1.5 h-12 rounded-xl">
@@ -331,16 +357,24 @@ export default function BusinessDashboardPage() {
                 </TabsList>
 
                 <TabsContent value="pending" className="animate-in fade-in slide-in-from-bottom-2">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden"><BookingTable list={pendingList} showActions /></Card>
+                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
+                        <BookingTable list={pendingList} showActions />
+                    </Card>
                 </TabsContent>
                 <TabsContent value="confirmed" className="animate-in fade-in slide-in-from-bottom-2">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden"><BookingTable list={confirmedList} isConfirmed /></Card>
+                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
+                        <BookingTable list={confirmedList} isConfirmed />
+                    </Card>
                 </TabsContent>
                 <TabsContent value="completed" className="animate-in fade-in slide-in-from-bottom-2">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden"><BookingTable list={completedList} /></Card>
+                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
+                        <BookingTable list={completedList} isCompleted />
+                    </Card>
                 </TabsContent>
                 <TabsContent value="cancelled" className="animate-in fade-in slide-in-from-bottom-2">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden"><BookingTable list={historyList} /></Card>
+                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
+                        <BookingTable list={historyList} />
+                    </Card>
                 </TabsContent>
             </Tabs>
 
@@ -356,7 +390,7 @@ export default function BusinessDashboardPage() {
                     <CardContent className="text-xs text-muted-foreground leading-relaxed space-y-2 font-medium">
                         <p>1. <strong>Incoming</strong>: Review vehicle type and customer location. Assign a detailer and click Accept.</p>
                         <p>2. <strong>Confirmed</strong>: Booking is live. Your detailer is now accountable. Mark as Finish once the wash is complete.</p>
-                        <p>3. <strong>Done</strong>: Completed jobs are automatically invoiced. Payments can be tracked in the Invoices tab.</p>
+                        <p>3. <strong>Done</strong>: Completed jobs are automatically invoiced. Feedback from customers is displayed here.</p>
                     </CardContent>
                 </Card>
             </div>
