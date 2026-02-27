@@ -88,13 +88,13 @@ export default function BusinessProfilePage() {
       const filePath = `logos/${user.id}-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
-        .from('business-logos')
+        .from('business-assets')
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('business-logos')
+        .from('business-assets')
         .getPublicUrl(filePath);
 
       setLogoUrl(publicUrl);
