@@ -476,7 +476,8 @@ export default function BusinessDashboardPage() {
                         <CardContent className="p-0">
                             <BookingTable list={confirmedList} isConfirmed />
                         </CardContent>
-                    </TabsContent>
+                    </Card>
+                </TabsContent>
 
                 <TabsContent value="completed">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
