@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { User as ProfileUser, Service, Rating } from '@/lib/types';
+import type { User as ProfileUser, Service } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -73,6 +73,8 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                         ...r,
                         createdAt: r.created_at
                     })));
+                } else {
+                    console.error("No business record found for ID:", businessId);
                 }
             } catch (e) {
                 console.error('Error loading business details:', e);
@@ -87,7 +89,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
         return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
     }
 
-    if (!business || !business.access_active) {
+    if (!business || !bizRecord || !business.access_active) {
         return (
             <div className="flex flex-col items-center justify-center h-screen space-y-4 px-4 text-center">
                 <div className="bg-destructive/10 p-6 rounded-full">
@@ -222,7 +224,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                                                 &quot;{review.feedback}&quot;
                                             </p>
                                         )}
-                                        <p className="text-[10px] text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</p>
+                                        <p className="text-[10px] text-muted-foreground">{new Date(review.created_at).toLocaleDateString()}</p>
                                     </div>
                                 )) : (
                                     <div className="text-center py-8">

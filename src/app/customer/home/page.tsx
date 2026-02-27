@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { User as ProfileUser } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -89,7 +88,7 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
-        // Step 1: Fetch verified users
+        // Step 1: Fetch verified users with active access
         const { data: userData, error: userError } = await supabase
           .from('users_with_access')
           .select('*')
@@ -99,19 +98,22 @@ export default function CustomerHomePage() {
         if (userError) throw userError;
 
         // Step 2: Resolve Business Record Mapping (UID -> UUID)
+        // CRITICAL: Filter out users who don't have a business record yet
         const userIds = (userData || []).map(u => u.id);
-        const { data: bizMapData } = await supabase
+        const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select('id, owner_id')
             .in('owner_id', userIds);
         
-        const bizMap = (bizMapData || []).reduce((acc: any, b: any) => {
+        if (bizError) throw bizError;
+
+        const bizMap = (bizData || []).reduce((acc: any, b: any) => {
             acc[b.owner_id] = b.id;
             return acc;
         }, {});
 
         // Step 3: Fetch ratings summary using the Business UUIDs
-        const bizIds = (bizMapData || []).map(b => b.id);
+        const bizIds = (bizData || []).map(b => b.id);
         const { data: ratingsData } = await supabase
           .from('ratings')
           .select('business_id, rating')
@@ -124,18 +126,20 @@ export default function CustomerHomePage() {
           return acc;
         }, {});
         
-        const formatted = (userData || []).map(u => {
-          const bizUuid = bizMap[u.id];
-          const stats = ratingsMap[bizUuid] || { total: 0, count: 0 };
-          
-          return {
-            ...u,
-            avatarUrl: u.avatar_url,
-            accessActive: u.access_active,
-            avg_rating: stats.count > 0 ? (stats.total / stats.count) : 5.0,
-            review_count: stats.count
-          };
-        }) as any[];
+        const formatted = (userData || [])
+          .filter(u => !!bizMap[u.id]) // ONLY show if business record exists
+          .map(u => {
+            const bizUuid = bizMap[u.id];
+            const stats = ratingsMap[bizUuid] || { total: 0, count: 0 };
+            
+            return {
+              ...u,
+              avatarUrl: u.avatar_url,
+              accessActive: u.access_active,
+              avg_rating: stats.count > 0 ? (stats.total / stats.count) : 5.0,
+              review_count: stats.count
+            };
+          }) as any[];
 
         // Step 4: Sort by rating (primary) and count (secondary)
         formatted.sort((a, b) => {

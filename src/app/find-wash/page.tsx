@@ -72,6 +72,7 @@ export default function PublicFindWashPage() {
     const load = async () => {
       setLoading(true);
       try {
+        // Step 1: Fetch verified users
         const { data, error } = await supabase
           .from('users_with_access')
           .select('*')
@@ -79,12 +80,26 @@ export default function PublicFindWashPage() {
           .eq('access_active', true);
         
         if (error) throw error;
+
+        // Step 2: Validate against businesses table to ensure profile completion
+        const userIds = (data || []).map(u => u.id);
+        const { data: bizData } = await supabase
+            .from('businesses')
+            .select('id, owner_id')
+            .in('owner_id', userIds);
         
-        const formatted = (data || []).map(u => ({
-          ...u,
-          avatarUrl: u.avatar_url,
-          accessActive: u.access_active
-        })) as ProfileUser[];
+        const bizMap = (bizData || []).reduce((acc: any, b: any) => {
+            acc[b.owner_id] = b.id;
+            return acc;
+        }, {});
+        
+        const formatted = (data || [])
+          .filter(u => !!bizMap[u.id]) // Only show completed profiles
+          .map(u => ({
+            ...u,
+            avatarUrl: u.avatar_url,
+            accessActive: u.access_active
+          })) as ProfileUser[];
         
         setBusinesses(formatted);
       } catch (e) {
