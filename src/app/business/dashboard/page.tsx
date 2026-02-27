@@ -9,7 +9,6 @@ import {
     Car, 
     Loader2, 
     CheckCircle2, 
-    XCircle, 
     Star, 
     MessageCircle, 
     ShieldCheck, 
@@ -84,7 +83,6 @@ export default function BusinessDashboardPage() {
                 setEmployees(staffData || []);
 
                 // 3. Fetch Bookings with Relational Joins
-                // Explicitly mapping customer_id to user table for 'name'
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -147,15 +145,13 @@ export default function BusinessDashboardPage() {
         }
 
         try {
-            // Update booking status and staff assignment in Supabase
             const { error } = await supabase
                 .from('bookings')
                 .update({ 
                     status: 'confirmed',
                     staff_id: staffId 
                 })
-                .eq('id', bookingId)
-                .select();
+                .eq('id', bookingId);
 
             if (error) throw error;
 
@@ -179,8 +175,7 @@ export default function BusinessDashboardPage() {
             const { error } = await supabase
                 .from('bookings')
                 .update({ status: 'cancelled' })
-                .eq('id', bookingId)
-                .select();
+                .eq('id', bookingId);
 
             if (error) throw error;
 
@@ -199,8 +194,7 @@ export default function BusinessDashboardPage() {
             const { error } = await supabase
                 .from('bookings')
                 .update({ status: 'completed' })
-                .eq('id', bookingId)
-                .select();
+                .eq('id', bookingId);
 
             if (error) throw error;
 
@@ -213,15 +207,6 @@ export default function BusinessDashboardPage() {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
     };
-
-    if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
-    
-    if (!business) return <div className="text-center py-20">Business profile not found. Please complete your profile.</div>;
-
-    const pendingList = bookings.filter(b => b.status === 'pending');
-    const confirmedList = bookings.filter(b => b.status === 'confirmed');
-    const completedList = bookings.filter(b => b.status === 'completed');
-    const historyList = bookings.filter(b => ['cancelled', 'rejected'].includes(b.status));
 
     const BookingTable = ({ list, showActions = false, isConfirmed = false }: { list: any[], showActions?: boolean, isConfirmed?: boolean }) => (
         <Table>
@@ -332,7 +317,7 @@ export default function BusinessDashboardPage() {
                                             className="h-8 text-destructive hover:bg-destructive/10 text-[10px] font-bold"
                                             onClick={() => handleRejectBooking(booking.id)}
                                         >
-                                            <ban className="h-3 w-3 mr-1" /> Reject
+                                            <Ban className="h-3 w-3 mr-1" /> Reject
                                         </Button>
                                     </>
                                 )}
@@ -369,6 +354,15 @@ export default function BusinessDashboardPage() {
             </TableBody>
         </Table>
     );
+
+    if (loading && !business) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
+    
+    if (!business) return <div className="text-center py-20">Business profile not found. Please complete your profile.</div>;
+
+    const pendingList = bookings.filter(b => b.status === 'pending');
+    const confirmedList = bookings.filter(b => b.status === 'confirmed');
+    const completedList = bookings.filter(b => b.status === 'completed');
+    const historyList = bookings.filter(b => ['cancelled', 'rejected'].includes(b.status));
 
     return (
         <div className="space-y-8">
