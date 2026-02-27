@@ -19,6 +19,7 @@ import Image from "next/image";
 
 export default function EmployeeRegistryPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [businessId, setBusinessId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -34,7 +35,7 @@ export default function EmployeeRegistryPage() {
 
     const fetchData = useCallback(async () => {
         if (!isSupabaseConfigured) {
-            setFetchError("Supabase connection not configured.");
+            setFetchError("Database connection not configured.");
             setLoading(false);
             return;
         }
@@ -48,36 +49,42 @@ export default function EmployeeRegistryPage() {
                 return;
             }
 
-            console.log('Logged-in UID:', user.id);
-
-            // 1. Get Business UUID for resilient fetching
-            const { data: biz } = await supabase
+            // 1. Resolve Business UUID for precise filtering
+            const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('id')
                 .eq('owner_id', user.id)
                 .maybeSingle();
             
-            const bizId = biz?.id;
+            if (bizError) throw bizError;
+            
+            const bizUuid = biz?.id;
+            setBusinessId(bizUuid || null);
 
-            // 2. Fetch using resilient OR filter (UID or UUID)
+            if (!bizUuid) {
+                setFetchError("Business profile not found. Please complete your profile setup.");
+                setLoading(false);
+                return;
+            }
+
+            // 2. Fetch staff members linked to this specific business
             const { data, error } = await supabase
                 .from('employees')
                 .select('*')
-                .or(`business_id.eq.${user.id},business_id.eq.${bizId || user.id}`)
-                .order('name');
+                .eq('business_id', bizUuid)
+                .order('name', { ascending: true });
             
             if (error) throw error;
             
-            console.log('Number of employees fetched:', data?.length ?? 0);
             setEmployees(data || []);
 
         } catch (error: any) {
-            console.error(`Unable to fetch employees:`, error);
-            setFetchError("Unable to fetch employees. Please check database connection.");
+            console.error(`Registry fetch error:`, error);
+            setFetchError("Unable to load employees. Please check your connection.");
             toast({ 
                 variant: 'destructive', 
-                title: 'Fetch Error', 
-                description: 'Unable to fetch employees. Please check database connection.' 
+                title: 'Load Error', 
+                description: 'Unable to fetch the employee registry.' 
             });
         } finally {
             setLoading(false);
@@ -105,9 +112,8 @@ export default function EmployeeRegistryPage() {
     const handleAddEmployee = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            toast({ variant: 'destructive', title: 'Session Expired' });
+        if (!businessId) {
+            toast({ variant: 'destructive', title: 'Context Missing', description: 'Business ID not found. Refresh and try again.' });
             return;
         }
 
@@ -117,27 +123,13 @@ export default function EmployeeRegistryPage() {
         }
 
         setSubmitting(true);
-        
-        // 1. Optimistic Update: Add to UI immediately
-        const tempId = crypto.randomUUID();
-        const optimisticEmployee: Employee = {
-            id: tempId,
-            business_id: user.id,
-            name: name.trim(),
-            phone: phone.trim(),
-            id_reference: idReference.trim(),
-            image_url: imagePreview || ''
-        };
-        
-        setEmployees(prev => [optimisticEmployee, ...prev]);
-
         try {
             let uploadedImageUrl = null;
 
             if (imageFile) {
                 const fileExt = imageFile.name.split('.').pop();
                 const fileName = `${Date.now()}.${fileExt}`;
-                const filePath = `employees/${user.id}/${fileName}`;
+                const filePath = `employees/${businessId}/${fileName}`;
                 
                 const { error: uploadError } = await supabase.storage
                     .from('business-assets')
@@ -152,11 +144,11 @@ export default function EmployeeRegistryPage() {
                 uploadedImageUrl = publicUrl;
             }
 
-            // 2. Persistent Insert
+            // Insert new employee record
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
-                    business_id: user.id,
+                    business_id: businessId,
                     name: name.trim(),
                     phone: phone.trim(),
                     id_reference: idReference.trim(),
@@ -165,21 +157,20 @@ export default function EmployeeRegistryPage() {
             
             if (insertError) throw insertError;
 
-            // Reset form
+            // Reset form and UI
             setName(''); setPhone(''); setIdReference('');
             setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
             
-            toast({ title: "Employee Registered", description: "Staff added to team successfully." });
+            toast({ title: "Staff Registered", description: `${name} has been added to the registry.` });
             
-            // 3. Persistent Sync: Re-fetch from Supabase to confirm
-            await fetchData();
+            // Sync with DB
+            fetchData();
         } catch (error: any) {
-            console.error(`[ERROR] Registration Failed:`, error);
-            await fetchData(); // Rollback optimistic state
+            console.error(`Registration failed:`, error);
             toast({
                 variant: 'destructive',
-                title: "Registration Error",
+                title: "Registration Failed",
                 description: error.message,
             });
         } finally {
@@ -191,8 +182,9 @@ export default function EmployeeRegistryPage() {
         try {
             const { error } = await supabase.from('employees').delete().eq('id', id);
             if (error) throw error;
-            toast({ title: 'Employee Removed' });
-            fetchData();
+            
+            toast({ title: 'Employee Removed', description: "The staff member has been deleted from your team." });
+            setEmployees(prev => prev.filter(e => e.id !== id));
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Removal Failed', description: error.message });
         }
@@ -202,8 +194,8 @@ export default function EmployeeRegistryPage() {
         <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-primary">Employee Registry</h1>
-                    <p className="text-muted-foreground">Manage your verified team members and their identification.</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-primary">Staff Registry</h1>
+                    <p className="text-muted-foreground">Manage verified team members and their identification details.</p>
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" size="icon" onClick={() => fetchData()} disabled={loading}>
@@ -212,13 +204,13 @@ export default function EmployeeRegistryPage() {
                     <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                         <DialogTrigger asChild>
                             <Button className="shadow-lg">
-                                <PlusCircle className="mr-2 h-4 w-4" /> Add Employee
+                                <PlusCircle className="mr-2 h-4 w-4" /> Register Staff
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="max-w-md">
                             <DialogHeader>
-                                <DialogTitle>Register New Staff</DialogTitle>
-                                <DialogDescription>Omang/ID is mandatory for safety and insurance verification.</DialogDescription>
+                                <DialogTitle>New Team Member</DialogTitle>
+                                <DialogDescription>Register a new employee. ID/Omang is required for compliance.</DialogDescription>
                             </DialogHeader>
                             <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
                                 <div className="flex justify-center mb-4">
@@ -242,8 +234,8 @@ export default function EmployeeRegistryPage() {
                                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="name">Full Name (as per ID)</Label>
-                                    <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Enter full name" required />
+                                    <Label htmlFor="name">Full Name (per ID)</Label>
+                                    <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Enter full legal name" required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
@@ -252,13 +244,13 @@ export default function EmployeeRegistryPage() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="idref">ID Number (Omang)</Label>
-                                        <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="Enter ID number" required />
+                                        <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="ID number" required />
                                     </div>
                                 </div>
                                 <DialogFooter className="pt-4">
                                     <Button type="submit" className="w-full h-12 text-lg" disabled={submitting}>
                                         {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
-                                        Complete Registration
+                                        Add to Registry
                                     </Button>
                                 </DialogFooter>
                             </form>
@@ -270,10 +262,10 @@ export default function EmployeeRegistryPage() {
             {fetchError && (
                 <Alert variant="destructive" className="bg-destructive/5 border-destructive/20">
                     <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>Connection Alert</AlertTitle>
+                    <AlertTitle>Load Warning</AlertTitle>
                     <AlertDescription className="flex items-center justify-between">
                         <span>{fetchError}</span>
-                        <Button variant="outline" size="sm" onClick={fetchData}>Retry Sync</Button>
+                        <Button variant="outline" size="sm" onClick={fetchData}>Retry</Button>
                     </AlertDescription>
                 </Alert>
             )}
@@ -310,12 +302,7 @@ export default function EmployeeRegistryPage() {
                                                         {employee.name?.charAt(0) || '?'}
                                                     </AvatarFallback>
                                                 </Avatar>
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold">{employee.name}</span>
-                                                    {employee.id.includes('-') && employee.id.length > 20 && (
-                                                        <span className="text-[8px] text-primary/60 font-mono italic">Syncing...</span>
-                                                    )}
-                                                </div>
+                                                <span className="font-bold">{employee.name}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-sm">
