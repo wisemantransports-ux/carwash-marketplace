@@ -120,24 +120,40 @@ export default function AddServicePage() {
 
     setSubmitting(true);
     try {
+        // Log the attempt for better visibility in console
+        console.log("Creating service for business:", business.id);
+
         const { error } = await supabase
           .from('services')
-          .insert({
+          .insert([{
             business_id: business.id,
             name: serviceName.trim(),
             description: description.trim(),
             price: priceVal,
             duration: durationVal,
-            currency_code: currency
-          });
+            currency_code: currency,
+            status: 'active'
+          }]);
 
-        if (error) throw error;
+        if (error) {
+            console.error("Supabase Database Error Details:", {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            throw error;
+        }
 
         toast({ title: 'Service Added', description: `${serviceName} is now in your catalog.` });
         router.push('/business/services');
     } catch (error: any) {
-        console.error("Service Insert Error:", error);
-        toast({ variant: 'destructive', title: 'Creation Failed', description: 'Unable to save service. Please try again.' });
+        console.error("Service Insert Fatal Error:", error.message || error);
+        toast({ 
+            variant: 'destructive', 
+            title: 'Creation Failed', 
+            description: error.message || 'Unable to save service. Please check your connection.' 
+        });
     } finally {
         setSubmitting(false);
     }
