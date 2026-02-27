@@ -26,7 +26,7 @@ export default function ServicesManagementPage() {
                 return;
             }
 
-            // Always fetch the freshest business record
+            // Always fetch the freshest business record from the database
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')

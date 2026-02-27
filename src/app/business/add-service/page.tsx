@@ -35,7 +35,7 @@ export default function AddServicePage() {
         return;
       }
 
-      // Fetch the absolute latest business state to avoid caching issues
+      // Fetch the absolute latest business state directly from the database
       const { data, error } = await supabase
         .from('businesses')
         .select('*')
@@ -44,21 +44,21 @@ export default function AddServicePage() {
 
       if (error) {
         console.error("Business fetch error:", error);
-        toast({ variant: 'destructive', title: 'Load Error', description: 'Could not fetch your business details.' });
+        toast({ variant: 'destructive', title: 'Load Error', description: 'Could not fetch your latest business details.' });
       }
 
       if (data) {
         const typedBiz = data as Business;
         setBusiness(typedBiz);
         
-        // Comprehensive Gate Check
+        // Final Access Gate
         const isVerified = typedBiz.verification_status === 'verified';
         const now = new Date();
         const expiry = typedBiz.sub_end_date ? new Date(typedBiz.sub_end_date) : null;
         const isTrialOrPaid = (typedBiz.subscription_status === 'active') || (expiry && expiry >= now);
 
         if (!isVerified) {
-            router.push('/business/services');
+            router.push('/business/profile');
         } else if (!isTrialOrPaid) {
             router.push('/business/subscription');
         }
@@ -106,20 +106,21 @@ export default function AddServicePage() {
       return;
     }
 
-    // 2. Access Enforcement
-    const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
+    // 2. Strict Access Enforcement
     const now = new Date();
-    const isAccessActive = (business.verification_status === 'verified') && 
-                          ((business.subscription_status === 'active') || (expiry && expiry >= now));
+    const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
+    const hasAccess = (business.verification_status === 'verified') && 
+                     ((business.subscription_status === 'active') || (expiry && expiry >= now));
 
-    if (!isAccessActive) {
-        toast({ variant: 'destructive', title: 'Access Denied', description: 'Your account verification or subscription is not active.' });
+    if (!hasAccess) {
+        toast({ variant: 'destructive', title: 'Access Denied', description: 'Your business account is not authorized to add services yet.' });
         return;
     }
 
     setSubmitting(true);
     try {
-        // IMPORTANT: No 'status' column in services table
+        // IMPORTANT: The services table does NOT have a 'status' column.
+        // We only include valid schema fields.
         const { error } = await supabase
           .from('services')
           .insert([{
@@ -136,11 +137,11 @@ export default function AddServicePage() {
         toast({ title: 'Service Added', description: `${serviceName} has been added to your catalog.` });
         router.push('/business/services');
     } catch (error: any) {
-        console.error("FATAL: Service Creation Error:", error.message || error);
+        console.error("Service Insertion Failed:", error.message || error);
         toast({ 
             variant: 'destructive', 
             title: 'Creation Failed', 
-            description: 'Unable to save service. Please check your internet connection and try again.' 
+            description: 'Unable to save service. Please check your connection and try again.' 
         });
     } finally {
         setSubmitting(false);
