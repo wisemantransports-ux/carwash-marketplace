@@ -76,9 +76,8 @@ export default function BusinessDashboardPage() {
                 const expiry = bizData.sub_end_date ? new Date(bizData.sub_end_date) : null;
                 const isTrialActive = expiry && expiry >= now;
                 const isActive = bizData.subscription_status === 'active';
-                const isRegistered = bizData.business_type === 'registered';
                 
-                const isAccessActive = isVerified && (isRegistered || isActive || isTrialActive);
+                const isAccessActive = isVerified && (isActive || isTrialActive);
 
                 if (isAccessActive) {
                     // 2. Fetch Staff for this Business
@@ -97,7 +96,8 @@ export default function BusinessDashboardPage() {
                             *,
                             car:car_id ( make, model ),
                             staff:staff_id ( id, name, phone ),
-                            service:service_id ( name, price, duration )
+                            service:service_id ( name, price, duration ),
+                            rating:ratings!booking_id ( rating, feedback )
                         `)
                         .eq('business_id', bizData.id)
                         .order('booking_time', { ascending: true });
@@ -183,7 +183,7 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    const BookingTable = ({ list, showActions = false, isActiveTab = false }: { list: any[], showActions?: boolean, isActiveTab?: boolean }) => (
+    const BookingTable = ({ list, showActions = false, isActiveTab = false, showFeedback = false }: { list: any[], showActions?: boolean, isActiveTab?: boolean, showFeedback?: boolean }) => (
         <Table>
             <TableHeader>
                 <TableRow className="bg-muted/50">
@@ -192,6 +192,7 @@ export default function BusinessDashboardPage() {
                     <TableHead className="font-bold">Service Info</TableHead>
                     <TableHead className="font-bold">Timing</TableHead>
                     <TableHead className="font-bold">Staff</TableHead>
+                    {showFeedback && <TableHead className="font-bold">Feedback</TableHead>}
                     <TableHead className="text-right font-bold pr-6">Action</TableHead>
                 </TableRow>
             </TableHeader>
@@ -245,6 +246,22 @@ export default function BusinessDashboardPage() {
                                 </Badge>
                             )}
                         </TableCell>
+                        {showFeedback && (
+                            <TableCell>
+                                {booking.rating && booking.rating.length > 0 ? (
+                                    <div className="flex flex-col gap-1">
+                                        <div className="flex text-yellow-400">
+                                            {Array.from({ length: 5 }).map((_, i) => (
+                                                <Star key={i} className={cn("h-3 w-3", i < booking.rating[0].rating ? "fill-current" : "opacity-20")} />
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground line-clamp-1 italic">"{booking.rating[0].feedback}"</p>
+                                    </div>
+                                ) : (
+                                    <span className="text-[10px] text-muted-foreground italic">No feedback</span>
+                                )}
+                            </TableCell>
+                        )}
                         <TableCell className="text-right pr-6">
                             <div className="flex justify-end gap-2">
                                 {showActions && booking.status === 'requested' && (
@@ -277,7 +294,7 @@ export default function BusinessDashboardPage() {
                     </TableRow>
                 )) : (
                     <TableRow>
-                        <TableCell colSpan={6} className="h-48 text-center text-muted-foreground italic">
+                        <TableCell colSpan={showFeedback ? 7 : 6} className="h-48 text-center text-muted-foreground italic">
                             <div className="flex flex-col items-center gap-2 opacity-40">
                                 <Truck className="h-10 w-10" />
                                 <p>No bookings found.</p>
@@ -292,13 +309,12 @@ export default function BusinessDashboardPage() {
     if (loading) return <div className="flex justify-center py-32"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
     
     const isVerified = business?.verification_status === 'verified';
-    const isRegistered = business?.business_type === 'registered';
     const now = new Date();
     const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
     const isTrialActive = expiry && expiry >= now;
     const isActive = business?.subscription_status === 'active';
     
-    const isAccessActive = isVerified && (isRegistered || isActive || isTrialActive);
+    const isAccessActive = isVerified && (isActive || isTrialActive);
 
     if (!isAccessActive) return (
         <div className="flex flex-col items-center justify-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8 text-center">
@@ -306,8 +322,8 @@ export default function BusinessDashboardPage() {
             <h2 className="text-2xl font-bold">Operations Locked</h2>
             <p className="text-muted-foreground mt-2 max-w-md mx-auto">
                 {business?.verification_status === 'pending'
-                    ? "Your business verification is pending. Please wait for an administrator to review your documents." 
-                    : "Your subscription or trial has expired. Please choose a plan to continue managing bookings."}
+                    ? "Your business verification is pending. Features will unlock once an administrator verifies your documents." 
+                    : "Your professional access has expired. Please choose a plan to continue managing bookings."}
             </p>
             <div className="mt-8 flex gap-4">
                 <Button variant="outline" asChild>
@@ -328,9 +344,14 @@ export default function BusinessDashboardPage() {
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                <div>
-                    <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business.name}</h1>
-                    <p className="text-muted-foreground font-medium">Operations Center • {business.business_type === 'registered' ? 'Registered Entity' : 'Individual Partner'}</p>
+                <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business.name}</h1>
+                        {business.business_type === 'registered' && (
+                            <Badge className="bg-primary text-white font-bold px-3 py-1">CIPA REGISTERED</Badge>
+                        )}
+                    </div>
+                    <p className="text-muted-foreground font-medium">Operations Center • Verified {business.business_type === 'registered' ? 'Entity' : 'Individual Partner'}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button variant="outline" size="sm" onClick={fetchData} className="rounded-full h-10">
@@ -394,7 +415,7 @@ export default function BusinessDashboardPage() {
                             <CardTitle className="text-lg">Completed Services</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <BookingTable list={completedList} />
+                            <BookingTable list={completedList} showFeedback />
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -417,13 +438,13 @@ export default function BusinessDashboardPage() {
                     <CardHeader>
                         <CardTitle className="text-lg flex items-center gap-2">
                             <Info className="h-5 w-5 text-primary" />
-                            Efficiency Tips
+                            Operations Guide
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="text-xs text-muted-foreground leading-relaxed space-y-2 font-medium">
-                        <p>• <strong>Incoming</strong>: Always assign a professional detailer before accepting.</p>
-                        <p>• <strong>Active</strong>: These jobs are in progress. Mark them as Finished when done to generate an invoice.</p>
-                        <p>• <strong>History</strong>: View rejected requests. Frequent rejections may lower your search ranking.</p>
+                        <p>• <strong>Verification</strong>: Both individual and registered businesses get full dashboard access once verified.</p>
+                        <p>• <strong>CIPA Badge</strong>: Only registered entities display the special trust badge to customers.</p>
+                        <p>• <strong>Trial</strong>: All verified partners start with a 14-day professional trial.</p>
                     </CardContent>
                 </Card>
             </div>

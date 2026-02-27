@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
@@ -134,16 +133,16 @@ export default function BusinessProfilePage() {
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-12">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Business Hub</h1>
-        <p className="text-muted-foreground">Manage your credentials and operational settings.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Business Profile</h1>
+        <p className="text-muted-foreground">Manage your credentials, entity type, and branding.</p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <Card className="shadow-lg border-2">
             <CardHeader className="bg-muted/10 border-b">
-              <CardTitle>Core Details</CardTitle>
-              <CardDescription>Visible to customers across the platform.</CardDescription>
+              <CardTitle>Public Identity</CardTitle>
+              <CardDescription>Visible to all customers in the marketplace.</CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
               <form onSubmit={handleSave} className="space-y-6">
@@ -158,20 +157,23 @@ export default function BusinessProfilePage() {
                     )}
                     {uploading && <div className="absolute inset-0 bg-background/60 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                    <Upload className="h-4 w-4 mr-2" /> Change Logo
-                  </Button>
+                  <div className="space-y-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                      <Upload className="h-4 w-4 mr-2" /> Change Branding Logo
+                    </Button>
+                    <p className="text-[10px] text-muted-foreground">PNG or JPG up to 2MB recommended.</p>
+                  </div>
                   <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
                 </div>
 
                 <div className="grid gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Business Name</Label>
+                    <Label htmlFor="name">Business / Trading Name</Label>
                     <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="city">City</Label>
+                      <Label htmlFor="city">Operating City</Label>
                       <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} />
                     </div>
                     <div className="space-y-2">
@@ -179,20 +181,20 @@ export default function BusinessProfilePage() {
                       <Select value={type} onValueChange={setType}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="station">Fixed Station</SelectItem>
-                          <SelectItem value="mobile">Mobile Detailing</SelectItem>
+                          <SelectItem value="station">Fixed Station Only</SelectItem>
+                          <SelectItem value="mobile">Mobile Detailing Service</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="whatsapp">WhatsApp Number</Label>
-                    <Input id="whatsapp" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
+                    <Label htmlFor="whatsapp">WhatsApp Business Number</Label>
+                    <Input id="whatsapp" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="e.g. 77123456" />
                   </div>
                 </div>
 
                 <Button type="submit" className="w-full h-12 shadow-md" disabled={saving}>
-                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Profile
+                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Profile Changes
                 </Button>
               </form>
             </CardContent>
@@ -202,41 +204,48 @@ export default function BusinessProfilePage() {
             <CardHeader className="bg-muted/10 border-b">
               <CardTitle className="text-lg flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-primary" />
-                Identity Verification
+                Legal & Verification
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-6">
                 <div className="flex items-center justify-between p-4 rounded-xl border bg-card">
                   <div className="space-y-1">
-                    <p className="text-xs font-bold text-muted-foreground uppercase">Verification Status</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase">Status</p>
                     <div className="flex items-center gap-2">
                       {profile?.verification_status === 'verified' ? (
-                        <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
-                          <CheckCircle2 className="h-3 w-3 mr-1" /> Verified Partner
+                        <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200 font-bold">
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> VERIFIED
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="animate-pulse">
+                        <Badge variant="outline" className="animate-pulse font-bold">
                           {profile?.verification_status?.toUpperCase() || 'PENDING'}
                         </Badge>
                       )}
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-bold text-muted-foreground uppercase">Entity Type</p>
-                    <p className="text-sm font-bold capitalize">{profile?.business_type || 'Individual'}</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase">Account Tier</p>
+                    <div className="flex flex-col items-end gap-1">
+                        <p className="text-sm font-bold capitalize">{profile?.business_type || 'Micro-Business'}</p>
+                        {profile?.business_type === 'registered' && (
+                            <Badge className="bg-primary text-white text-[10px] font-black">CIPA TRUST SEAL</Badge>
+                        )}
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 rounded-xl border bg-muted/20">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">ID / Reg Number</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">
+                        {profile?.business_type === 'registered' ? 'CIPA Reg Number' : 'Omang / ID Number'}
+                    </p>
                     <p className="font-mono text-sm font-bold">{profile?.id_number || '---'}</p>
                   </div>
                   <div className="p-4 rounded-xl border bg-muted/20 flex items-center justify-between">
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-muted-foreground uppercase">Documents</p>
-                      <p className="text-xs font-bold text-primary">Uploaded</p>
+                      <p className="text-xs font-bold text-primary">Verified</p>
                     </div>
                     <FileText className="h-5 w-5 text-muted-foreground" />
                   </div>
@@ -247,7 +256,7 @@ export default function BusinessProfilePage() {
                     <CheckCircle2 className="h-4 w-4 text-primary" />
                     <AlertTitle className="text-primary font-bold">{profile.special_tag}</AlertTitle>
                     <AlertDescription className="text-xs">
-                      Your CIPA verification is active. This badge is visible to all customers.
+                      Your CIPA verification status is active. Customers see the trust seal on your bookings.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -258,18 +267,22 @@ export default function BusinessProfilePage() {
 
         <div className="space-y-6">
           <ShareBusinessCard businessId={profile?.id || ''} />
-          <Card className="bg-primary/5 border-primary/20">
+          <Card className="bg-primary/5 border-primary/20 overflow-hidden">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Trust Badge</CardTitle>
+              <CardTitle className="text-lg">Trust Badge Info</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col items-center gap-4 text-center py-4">
                 <div className="bg-white p-4 rounded-full shadow-inner border-2 border-primary/20">
-                  <ShieldCheck className="h-12 w-12 text-primary" />
+                  <ShieldCheck className={cn("h-12 w-12", profile?.business_type === 'registered' ? "text-primary" : "text-muted-foreground")} />
                 </div>
-                <div className="space-y-1">
-                  <p className="font-bold">Verified Operator</p>
-                  <p className="text-xs text-muted-foreground">Verification builds trust and increases your booking conversion rate by up to 40%.</p>
+                <div className="space-y-2">
+                  <p className="font-bold">{profile?.business_type === 'registered' ? 'Registered Entity' : 'Verified Individual'}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {profile?.business_type === 'registered' 
+                        ? "Registered businesses receive the CIPA Trust Seal, increasing visibility and credibility in the marketplace." 
+                        : "Micro-businesses are fully verified via Omang. Upgrade to a registered entity anytime to unlock the CIPA Trust Seal."}
+                  </p>
                 </div>
               </div>
             </CardContent>
