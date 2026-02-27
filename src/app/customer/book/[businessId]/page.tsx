@@ -66,6 +66,11 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                 if (session) {
                     const { data: userCars } = await supabase.from('cars').select('*').eq('owner_id', session.user.id);
                     setCars(userCars || []);
+                    
+                    // Pre-select first car if available
+                    if (userCars && userCars.length > 0) {
+                        setSelectedCarId(userCars[0].id);
+                    }
                 }
             } catch (e) {
                 toast({ variant: 'destructive', title: 'Load Error', description: 'Failed to load details.' });
@@ -85,13 +90,35 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             });
             return;
         }
+        
         setSelectedService(service);
+        
+        // Set a default booking time: 2 hours from now
+        const defaultTime = new Date();
+        defaultTime.setHours(defaultTime.getHours() + 2);
+        defaultTime.setMinutes(0);
+        setBookingTime(defaultTime.toISOString().slice(0, 16));
+        
+        // Ensure a car is selected if state is empty
+        if (!selectedCarId && cars.length > 0) {
+            setSelectedCarId(cars[0].id);
+        }
+        
         setBookingOpen(true);
     };
 
     const confirmBooking = async () => {
-        if (!selectedCarId || !bookingTime || !selectedService || !business || !bizRecord) {
-            toast({ variant: 'destructive', title: 'Details Required', description: 'Please pick a car and a valid time.' });
+        // Specific validation messages
+        if (!selectedService || !business || !bizRecord) {
+            toast({ variant: 'destructive', title: 'System Error', description: 'Missing service or business data. Please refresh.' });
+            return;
+        }
+        if (!selectedCarId) {
+            toast({ variant: 'destructive', title: 'Car Required', description: 'Please select a vehicle for this wash.' });
+            return;
+        }
+        if (!bookingTime) {
+            toast({ variant: 'destructive', title: 'Time Required', description: 'Please pick a valid booking date and time.' });
             return;
         }
 
@@ -278,7 +305,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                         <div className="space-y-2">
                             <Label>Choose Your Vehicle</Label>
                             <Select value={selectedCarId} onValueChange={setSelectedCarId}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full bg-white">
                                     <SelectValue placeholder="Select a registered car" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -292,11 +319,11 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                         </div>
                         <div className="space-y-2">
                             <Label>Select Date & Time</Label>
-                            <div className="relative">
-                                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <div className="relative group">
+                                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
                                 <Input 
                                   type="datetime-local" 
-                                  className="pl-10"
+                                  className="pl-10 h-12 bg-white"
                                   value={bookingTime}
                                   onChange={e => setBookingTime(e.target.value)}
                                   min={new Date().toISOString().slice(0, 16)}
@@ -306,8 +333,8 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button className="w-full" size="lg" disabled={submitting} onClick={confirmBooking}>
-                            {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                        <Button className="w-full h-12 text-lg shadow-xl" disabled={submitting} onClick={confirmBooking}>
+                            {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
                             Confirm Request
                         </Button>
                     </DialogFooter>
