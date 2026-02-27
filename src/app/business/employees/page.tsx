@@ -49,7 +49,7 @@ export default function EmployeeRegistryPage() {
                 return;
             }
 
-            // 1. Resolve Business UUID for precise filtering
+            // 1. Get the Business UUID for the current owner
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('id')
@@ -58,20 +58,19 @@ export default function EmployeeRegistryPage() {
             
             if (bizError) throw bizError;
             
-            const bizUuid = biz?.id;
-            setBusinessId(bizUuid || null);
-
-            if (!bizUuid) {
-                setFetchError("Business profile not found. Please complete your profile setup.");
+            if (!biz?.id) {
+                setFetchError("Business profile not found. Please set up your business profile first.");
                 setLoading(false);
                 return;
             }
 
-            // 2. Fetch staff members linked to this specific business
+            setBusinessId(biz.id);
+
+            // 2. Fetch staff members linked to this business
             const { data, error } = await supabase
                 .from('employees')
                 .select('*')
-                .eq('business_id', bizUuid)
+                .eq('business_id', biz.id)
                 .order('name', { ascending: true });
             
             if (error) throw error;
@@ -113,7 +112,7 @@ export default function EmployeeRegistryPage() {
         e.preventDefault();
         
         if (!businessId) {
-            toast({ variant: 'destructive', title: 'Context Missing', description: 'Business ID not found. Refresh and try again.' });
+            toast({ variant: 'destructive', title: 'Context Missing', description: 'Business ID not found.' });
             return;
         }
 
@@ -144,7 +143,6 @@ export default function EmployeeRegistryPage() {
                 uploadedImageUrl = publicUrl;
             }
 
-            // Insert new employee record
             const { error: insertError } = await supabase
                 .from('employees')
                 .insert({
@@ -157,22 +155,15 @@ export default function EmployeeRegistryPage() {
             
             if (insertError) throw insertError;
 
-            // Reset form and UI
+            // Reset form
             setName(''); setPhone(''); setIdReference('');
             setImageFile(null); setImagePreview(null);
             setIsAddOpen(false);
             
-            toast({ title: "Staff Registered", description: `${name} has been added to the registry.` });
-            
-            // Sync with DB
+            toast({ title: "Staff Registered", description: `${name} added successfully.` });
             fetchData();
         } catch (error: any) {
-            console.error(`Registration failed:`, error);
-            toast({
-                variant: 'destructive',
-                title: "Registration Failed",
-                description: error.message,
-            });
+            toast({ variant: 'destructive', title: "Registration Failed", description: error.message });
         } finally {
             setSubmitting(false);
         }
@@ -183,7 +174,7 @@ export default function EmployeeRegistryPage() {
             const { error } = await supabase.from('employees').delete().eq('id', id);
             if (error) throw error;
             
-            toast({ title: 'Employee Removed', description: "The staff member has been deleted from your team." });
+            toast({ title: 'Employee Removed' });
             setEmployees(prev => prev.filter(e => e.id !== id));
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Removal Failed', description: error.message });
@@ -210,11 +201,11 @@ export default function EmployeeRegistryPage() {
                         <DialogContent className="max-w-md">
                             <DialogHeader>
                                 <DialogTitle>New Team Member</DialogTitle>
-                                <DialogDescription>Register a new employee. ID/Omang is required for compliance.</DialogDescription>
+                                <DialogDescription>ID/Omang is required for compliance.</DialogDescription>
                             </DialogHeader>
                             <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
                                 <div className="flex justify-center mb-4">
-                                    <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group cursor-pointer shadow-inner">
+                                    <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group cursor-pointer">
                                         {imagePreview ? (
                                             <Image src={imagePreview} alt="Preview" fill className="object-cover" />
                                         ) : (
@@ -235,20 +226,20 @@ export default function EmployeeRegistryPage() {
 
                                 <div className="space-y-2">
                                     <Label htmlFor="name">Full Name (per ID)</Label>
-                                    <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Enter full legal name" required />
+                                    <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Full legal name" required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="phone">Phone Number</Label>
-                                        <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+267 7XXXXXXX" required />
+                                        <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+267..." required />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="idref">ID Number (Omang)</Label>
+                                        <Label htmlFor="idref">ID (Omang)</Label>
                                         <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="ID number" required />
                                     </div>
                                 </div>
                                 <DialogFooter className="pt-4">
-                                    <Button type="submit" className="w-full h-12 text-lg" disabled={submitting}>
+                                    <Button type="submit" className="w-full h-12" disabled={submitting}>
                                         {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
                                         Add to Registry
                                     </Button>
@@ -260,8 +251,8 @@ export default function EmployeeRegistryPage() {
             </div>
 
             {fetchError && (
-                <Alert variant="destructive" className="bg-destructive/5 border-destructive/20">
-                    <AlertTriangle className="h-4 w-4" />
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Load Warning</AlertTitle>
                     <AlertDescription className="flex items-center justify-between">
                         <span>{fetchError}</span>
@@ -296,7 +287,7 @@ export default function EmployeeRegistryPage() {
                                     <TableRow key={employee.id} className="hover:bg-muted/10 transition-colors">
                                         <TableCell className="pl-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <Avatar className="h-10 w-10 border shadow-sm">
+                                                <Avatar className="h-10 w-10 border">
                                                     <AvatarImage src={employee.image_url} alt={employee.name} className="object-cover" />
                                                     <AvatarFallback className="bg-primary/10 text-primary font-bold">
                                                         {employee.name?.charAt(0) || '?'}
@@ -311,7 +302,7 @@ export default function EmployeeRegistryPage() {
                                                 {employee.phone}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="font-mono text-[10px] font-bold text-primary bg-primary/5 w-fit px-2 py-1 rounded">
+                                        <TableCell className="font-mono text-[10px] font-bold text-primary bg-primary/5 px-2 py-1 rounded w-fit">
                                             {employee.id_reference}
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
