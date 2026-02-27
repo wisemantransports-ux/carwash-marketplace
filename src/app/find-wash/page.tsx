@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -11,14 +10,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
-  const hasLogo = !!business.logo_url;
 
   return (
-    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
-      <div className="relative h-48 w-full group overflow-hidden bg-muted">
+    <Card className="flex flex-col h-[550px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
+      <div className="relative h-40 w-full group overflow-hidden bg-muted">
         {business.logo_url ? (
           <Image
             src={business.logo_url}
@@ -53,33 +52,33 @@ function BusinessCard({ business }: { business: any }) {
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <MapPin className="h-3 w-3" />
-                <span>{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
+                <span>{business.address || 'No address provided'}, {business.city || 'Botswana'}</span>
             </div>
-            {business.whatsapp_number && (
-                <div className="flex items-center gap-2 text-[10px] text-green-600 font-bold">
-                    <Phone className="h-3 w-3" />
-                    <span>{business.whatsapp_number}</span>
-                </div>
-            )}
+            <div className="flex items-center gap-2 text-[10px] text-green-600 font-bold">
+                <Phone className="h-3 w-3" />
+                <span>{business.whatsapp_number || 'No contact provided'}</span>
+            </div>
         </div>
       </CardHeader>
 
-      <CardContent className="flex-grow space-y-4 pb-4">
-        <div className="space-y-2">
+      <CardContent className="flex-grow space-y-4 pb-4 overflow-hidden flex flex-col">
+        <div className="space-y-2 flex-1 flex flex-col min-h-0">
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
                 <Tags className="h-3 w-3" /> Service Catalog
             </p>
-            <div className="space-y-1.5">
-                {business.services?.slice(0, 3).map((svc: any) => (
-                    <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent">
-                        <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
-                        <span className="font-bold text-primary">{svc.currency_code || 'BWP'} {svc.price}</span>
-                    </div>
-                ))}
-            </div>
+            <ScrollArea className="flex-1 pr-2">
+                <div className="space-y-1.5">
+                    {business.services?.map((svc: any) => (
+                        <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent">
+                            <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
+                            <span className="font-bold text-primary">{svc.currency_code || 'BWP'} {Number(svc.price).toFixed(2)}</span>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
         </div>
 
-        <div className="flex items-center gap-1.5 pt-2 border-t border-dashed">
+        <div className="flex items-center gap-1.5 pt-2 border-t border-dashed shrink-0">
           <div className="flex text-yellow-400">
             {[1, 2, 3, 4, 5].map((s) => (
                 <Star key={s} className="h-3 w-3 fill-current" />
@@ -89,7 +88,7 @@ function BusinessCard({ business }: { business: any }) {
         </div>
       </CardContent>
 
-      <CardFooter className="pt-0">
+      <CardFooter className="pt-0 shrink-0">
         <Button asChild className="w-full shadow-md font-bold">
           <Link href={`/find-wash/${business.id}`}>View Services</Link>
         </Button>
@@ -107,34 +106,24 @@ export default function PublicFindWashPage() {
     const load = async () => {
       setLoading(true);
       try {
-        // Step 1: Fetch verified users with access
-        const { data: userData, error: userError } = await supabase
-          .from('users_with_access')
-          .select('*')
-          .eq('role', 'business-owner')
-          .eq('access_active', true);
-        
-        if (userError) throw userError;
-
-        const userIds = (userData || []).map(u => u.id);
-        
-        // Step 2: Fetch verified businesses with their services
+        // Fetch all verified and active businesses with their services
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select('*, services(*)')
-            .in('owner_id', userIds)
-            .eq('verification_status', 'verified');
+            .eq('verification_status', 'verified')
+            .eq('status', 'active');
         
         if (bizError) throw bizError;
         
-        const formatted = bizData
-          .filter(biz => biz.services && biz.services.length > 0)
-          .map(biz => ({
-            ...biz,
-            access_active: true
-          }));
+        // Requirement: Filter by verification_status, status, and services.length > 0
+        // Requirement: Do NOT filter out businesses because of missing optional fields
+        const formatted = (bizData || [])
+          .filter(biz => biz.services && biz.services.length > 0);
 
-        // Requirement 3: Sorting & Prioritization
+        // Requirement: Sorting & Prioritization
+        // 1. Verified businesses with logos first
+        // 2. Within those, prioritize businesses with more services
+        // 3. Alphabetical by name
         formatted.sort((a, b) => {
             const aHasLogo = !!a.logo_url ? 1 : 0;
             const bHasLogo = !!b.logo_url ? 1 : 0;
