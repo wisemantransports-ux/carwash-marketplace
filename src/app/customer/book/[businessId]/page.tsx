@@ -24,7 +24,7 @@ const SPARE_SHOP_PREVIEW = [
 ];
 
 export default function BookingPage({ params }: { params: Promise<{ businessId: string }> }) {
-    const { businessId } = React.use(params);
+    const { businessId } = React.use(params); // This is the OWNER UID from the URL
     const [business, setBusiness] = useState<ProfileUser | null>(null);
     const [bizRecord, setBizRecord] = useState<Business | null>(null);
     const [services, setServices] = useState<Service[]>([]);
@@ -45,7 +45,10 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 
+                // 1. Fetch User Profile (Owner)
                 const { data: userProfile } = await supabase.from('users').select('*').eq('id', businessId).maybeSingle();
+                
+                // 2. Fetch Business Record by Owner UID
                 const { data: bizData } = await supabase.from('businesses').select('*').eq('owner_id', businessId).maybeSingle();
 
                 if (userProfile) {
@@ -57,23 +60,28 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                 }
 
                 if (bizData) {
-                    setBizRecord(bizData as Business);
+                    const typedBiz = bizData as Business;
+                    setBizRecord(typedBiz);
+                    
+                    // 3. Fetch Services using the CORRECT Business Record ID (UUID)
+                    const { data: svcs } = await supabase.from('services').select('*').eq('business_id', typedBiz.id);
+                    setServices(svcs || []);
+                } else {
+                    console.error("No business record found for owner UID:", businessId);
                 }
 
-                const { data: svcs } = await supabase.from('services').select('*').eq('business_id', businessId);
-                setServices(svcs || []);
-
+                // 4. Fetch Customer's Cars
                 if (session) {
                     const { data: userCars } = await supabase.from('cars').select('*').eq('owner_id', session.user.id);
                     setCars(userCars || []);
                     
-                    // Pre-select first car if available
                     if (userCars && userCars.length > 0) {
                         setSelectedCarId(userCars[0].id);
                     }
                 }
             } catch (e) {
-                toast({ variant: 'destructive', title: 'Load Error', description: 'Failed to load details.' });
+                console.error("Load error:", e);
+                toast({ variant: 'destructive', title: 'Load Error', description: 'Failed to load details. Please refresh.' });
             } finally {
                 setLoading(false);
             }
@@ -93,13 +101,11 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
         
         setSelectedService(service);
         
-        // Set a default booking time: 2 hours from now
         const defaultTime = new Date();
         defaultTime.setHours(defaultTime.getHours() + 2);
         defaultTime.setMinutes(0);
         setBookingTime(defaultTime.toISOString().slice(0, 16));
         
-        // Ensure a car is selected if state is empty
         if (!selectedCarId && cars.length > 0) {
             setSelectedCarId(cars[0].id);
         }
@@ -108,9 +114,12 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
     };
 
     const confirmBooking = async () => {
-        // Specific validation messages
-        if (!selectedService || !business || !bizRecord) {
-            toast({ variant: 'destructive', title: 'System Error', description: 'Missing service or business data. Please refresh.' });
+        if (!selectedService || !bizRecord) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'System Error', 
+                description: !bizRecord ? 'Business profile is incomplete. Please choose another partner.' : 'No service selected.' 
+            });
             return;
         }
         if (!selectedCarId) {
@@ -125,7 +134,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
         setSubmitting(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error('Not authenticated');
+            if (!session) throw new Error('Session expired. Please log in again.');
 
             // 1. Prevent Multiple Active Bookings for the Same Car
             const { count, error: countError } = await supabase
@@ -146,10 +155,10 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                 return;
             }
 
-            // 2. Insert Booking
+            // 2. Insert Booking using bizRecord.id (the actual Business Record UUID)
             const { data: newBooking, error } = await supabase.from('bookings').insert({
                 customer_id: session.user.id,
-                business_id: businessId,
+                business_id: bizRecord.id,
                 service_id: selectedService.id,
                 car_id: selectedCarId,
                 booking_time: new Date(bookingTime).toISOString(),
@@ -188,7 +197,14 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
     };
     
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-    if (!business) return <div className="text-center py-20">Business not found.</div>;
+    if (!business || !bizRecord) return (
+        <div className="text-center py-20 bg-muted/10 rounded-3xl border-2 border-dashed">
+            <Store className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-20" />
+            <h3 className="text-xl font-bold">Partner Not Found</h3>
+            <p className="text-muted-foreground mt-2">The business profile you are looking for is currently unavailable.</p>
+            <Button className="mt-6" variant="outline" onClick={() => router.push('/customer/home')}>Back to Marketplace</Button>
+        </div>
+    );
 
     return (
         <div className="grid lg:grid-cols-3 gap-8 pb-12">
@@ -208,7 +224,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                         </div>
                         <h1 className="text-4xl font-extrabold">{business.name}</h1>
                         <p className="text-muted-foreground flex items-center justify-center sm:justify-start gap-2">
-                            <MapPin className="h-4 w-4" /> {business.address || 'Gaborone'}, {business.city || 'Botswana'}
+                            <MapPin className="h-4 w-4" /> {bizRecord.address || 'Gaborone'}, {bizRecord.city || 'Botswana'}
                         </p>
                     </div>
                 </div>
@@ -287,7 +303,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                             Map Preview Area
                         </div>
                         <p className="text-xs text-muted-foreground leading-relaxed italic">
-                            Distance and duration are estimated based on your current registered city ({business.city || 'Gaborone'}).
+                            Distance and duration are estimated based on the business registered city ({bizRecord.city || 'Gaborone'}).
                         </p>
                     </CardContent>
                 </Card>
