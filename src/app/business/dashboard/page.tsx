@@ -85,7 +85,7 @@ export default function BusinessDashboardPage() {
                 
                 setEmployees(staffData || []);
 
-                // 3. Fetch Bookings with Full Context (Joins)
+                // 3. Fetch Bookings with Full Context (Explicit Joins)
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
@@ -94,10 +94,10 @@ export default function BusinessDashboardPage() {
                         status,
                         mobile_status,
                         price,
-                        customer:customer_id ( name, email ),
-                        service:service_id ( name, description, price, duration ),
-                        car:car_id ( make, model ),
-                        staff:staff_id ( name )
+                        customer:users!customer_id ( name, email ),
+                        service:services!service_id ( name, description, price, duration ),
+                        car:cars!car_id ( make, model ),
+                        staff:employees!staff_id ( name )
                     `)
                     .eq('business_id', bizData.id)
                     .order('booking_time', { ascending: true });
@@ -108,7 +108,7 @@ export default function BusinessDashboardPage() {
                 // 4. Fetch Reputation Stats
                 const { data: ratingsData } = await supabase
                     .from('ratings')
-                    .select('*, customer:customer_id(name)')
+                    .select('*, customer:users(name)')
                     .eq('business_id', bizData.id)
                     .order('created_at', { ascending: false });
 
@@ -160,7 +160,7 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    const handleCancelBooking = async (bookingId: string) => {
+    const handleRejectBooking = async (bookingId: string) => {
         try {
             const { error } = await supabase
                 .from('bookings')
@@ -169,7 +169,7 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
 
-            toast({ title: "Booking Cancelled", description: "The request has been marked as cancelled." });
+            toast({ title: "Booking Rejected", description: "The request has been marked as cancelled." });
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -308,9 +308,9 @@ export default function BusinessDashboardPage() {
                                             size="sm" 
                                             variant="ghost" 
                                             className="h-8 text-destructive hover:bg-destructive/10 text-[10px] font-bold"
-                                            onClick={() => handleCancelBooking(booking.id)}
+                                            onClick={() => handleRejectBooking(booking.id)}
                                         >
-                                            <XCircle className="h-3 w-3 mr-1" /> Cancel
+                                            <XCircle className="h-3 w-3 mr-1" /> Reject
                                         </Button>
                                     </>
                                 )}
@@ -434,7 +434,7 @@ export default function BusinessDashboardPage() {
                         Service Done ({completedList.length})
                     </TabsTrigger>
                     <TabsTrigger value="cancelled" className="data-[state=active]:bg-background text-[10px] font-black uppercase">
-                        Cancelled ({historyList.length})
+                        History ({historyList.length})
                     </TabsTrigger>
                 </TabsList>
 
