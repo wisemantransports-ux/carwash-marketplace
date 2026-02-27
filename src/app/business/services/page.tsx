@@ -26,64 +26,47 @@ export default function ServicesManagementPage() {
                 return;
             }
 
-            // 1. Fetch Business Profile Safely
+            // Fetch Fresh Business Data
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
                 .eq('owner_id', session.user.id)
                 .maybeSingle();
             
-            if (bizError) {
-                console.error("Business fetch error:", bizError);
-                throw bizError;
-            }
+            if (bizError) throw bizError;
 
             if (!biz) {
-                toast({
-                    variant: 'destructive',
-                    title: 'Business Not Found',
-                    description: 'You do not have a registered business profile.'
-                });
                 setLoading(false);
                 return;
             }
 
             setBusiness(biz as Business);
 
-            // 2. Access Check Logic
+            // Access Check Logic (Verified AND (Active OR Trial))
             const isVerified = biz.verification_status === 'verified';
-            const isRegistered = biz.business_type === 'registered';
             const now = new Date();
             const expiry = biz.sub_end_date ? new Date(biz.sub_end_date) : null;
             const isTrialActive = expiry && expiry >= now;
             const isActive = biz.subscription_status === 'active';
             
-            const hasAccess = isVerified && (isRegistered || isActive || isTrialActive);
+            const hasAccess = isVerified && (isActive || isTrialActive);
 
-            if (!hasAccess) {
-                setLoading(false);
-                return;
+            if (hasAccess) {
+                const { data: svcs, error: servicesError } = await supabase
+                    .from('services')
+                    .select('*')
+                    .eq('business_id', biz.id);
+
+                if (servicesError) throw servicesError;
+                setServices(svcs || []);
             }
-
-            // 3. Fetch Services for Authorized Business
-            const { data: svcs, error: servicesError } = await supabase
-                .from('services')
-                .select('*')
-                .eq('business_id', biz.id);
-
-            if (servicesError) {
-                console.error("Services fetch error:", servicesError);
-                throw servicesError;
-            }
-
-            setServices(svcs || []);
 
         } catch (e: any) {
             console.error("General fetch error:", e);
             toast({ 
                 variant: 'destructive', 
                 title: 'Load Error', 
-                description: 'Unable to load services. Please try again later.' 
+                description: 'Unable to load services catalog.' 
             });
         } finally {
             setLoading(false);
@@ -104,9 +87,8 @@ export default function ServicesManagementPage() {
             if (error) throw error;
 
             setServices(prev => prev.filter(s => s.id !== id));
-            toast({ title: 'Service Deleted', description: 'The service has been removed from your catalog.' });
+            toast({ title: 'Service Deleted', description: 'The service has been removed.' });
         } catch (e: any) {
-            console.error("Delete service error:", e);
             toast({ variant: 'destructive', title: 'Delete Failed', description: 'Could not remove the service.' });
         }
     };
@@ -114,13 +96,12 @@ export default function ServicesManagementPage() {
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
     const isVerified = business?.verification_status === 'verified';
-    const isRegistered = business?.business_type === 'registered';
     const now = new Date();
     const expiry = business?.sub_end_date ? new Date(business.sub_end_date) : null;
     const isTrialActive = expiry && expiry >= now;
     const isActive = business?.subscription_status === 'active';
     
-    const isAccessLocked = !isVerified || (!isRegistered && !isActive && !isTrialActive);
+    const isAccessLocked = !isVerified || (!isActive && !isTrialActive);
 
     return (
         <div className="space-y-6">
@@ -145,10 +126,10 @@ export default function ServicesManagementPage() {
                     <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <span>
                             {business?.verification_status === 'pending'
-                                ? "Your account is waiting for admin verification. Access will be granted once verified." 
+                                ? "Your business verification is pending. Access will be granted once documents are verified." 
                                 : "Your professional access has expired. Please choose a plan to continue."}
                         </span>
-                        {isVerified && !isActive && !isRegistered && (
+                        {isVerified && !isActive && !isTrialActive && (
                             <Button size="sm" variant="outline" asChild className="border-destructive/20 hover:bg-destructive/10">
                                 <Link href="/business/subscription">Renew Now</Link>
                             </Button>

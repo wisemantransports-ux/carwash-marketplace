@@ -35,18 +35,10 @@ export default function AddServicePage() {
         return;
       }
 
+      // Fetch the latest business data to ensure we have current verification status
       const { data, error } = await supabase
         .from('businesses')
-        .select(`
-            id,
-            owner_id,
-            name,
-            status,
-            verification_status,
-            subscription_status,
-            subscription_plan,
-            sub_end_date
-        `)
+        .select('*')
         .eq('owner_id', session.user.id)
         .maybeSingle();
 
@@ -56,20 +48,21 @@ export default function AddServicePage() {
       }
 
       if (data) {
-        setBusiness(data as Business);
+        const typedBiz = data as Business;
+        setBusiness(typedBiz);
         
-        // Verification and Subscription Checks
-        if (data.verification_status !== 'verified') {
-            toast({ title: 'Verification Pending', description: 'Your account is waiting for admin verification. Access will be granted once verified.' });
+        // Comprehensive Verification & Access Check
+        const isVerified = typedBiz.verification_status === 'verified';
+        const now = new Date();
+        const expiry = typedBiz.sub_end_date ? new Date(typedBiz.sub_end_date) : null;
+        const isTrialOrPaid = (typedBiz.subscription_status === 'active') || (expiry && expiry >= now);
+
+        if (!isVerified) {
+            toast({ title: 'Verification Required', description: 'Features unlock once documents are verified.' });
             router.push('/business/services');
-        } else if (data.subscription_status !== 'active') {
-            // Check if it's currently being activated by the layout
-            const expiry = data.sub_end_date ? new Date(data.sub_end_date) : null;
-            const now = new Date();
-            if (!(expiry && expiry >= now)) {
-                toast({ title: 'Subscription Inactive', description: 'Your subscription is inactive. Please complete payment to continue.' });
-                router.push('/business/services');
-            }
+        } else if (!isTrialOrPaid) {
+            toast({ title: 'Subscription Inactive', description: 'Please choose a plan to continue adding services.' });
+            router.push('/business/subscription');
         }
       } else {
         toast({ variant: 'destructive', title: 'Profile Not Found', description: 'Please set up your business profile first.' });
@@ -106,13 +99,14 @@ export default function AddServicePage() {
       return;
     }
 
+    // Final Gate Check
     const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
     const now = new Date();
-    const isTrialActive = expiry && expiry >= now;
-    const isActive = business.subscription_status === 'active';
+    const isAccessActive = (business.verification_status === 'verified') && 
+                          ((business.subscription_status === 'active') || (expiry && expiry >= now));
 
-    if (business.verification_status !== 'verified' || (!isActive && !isTrialActive)) {
-        toast({ variant: 'destructive', title: 'Access Denied', description: 'Your account must be verified and have an active subscription to add services.' });
+    if (!isAccessActive) {
+        toast({ variant: 'destructive', title: 'Access Denied', description: 'Your account must be verified and have an active subscription.' });
         return;
     }
 
@@ -130,22 +124,20 @@ export default function AddServicePage() {
           .from('services')
           .insert({
             business_id: business.id,
-            name: serviceName,
-            description,
+            name: serviceName.trim(),
+            description: description.trim(),
             price: priceVal,
             duration: durationVal,
             currency_code: currency
           });
 
-        if (error) {
-            console.error("Add service error:", error);
-            throw error;
-        }
+        if (error) throw error;
 
-        toast({ title: 'Service Added', description: `${serviceName} created successfully.` });
+        toast({ title: 'Service Added', description: `${serviceName} is now in your catalog.` });
         router.push('/business/services');
     } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Creation Failed', description: 'Unable to add service. Please try again.' });
+        console.error("Service Insert Error:", error);
+        toast({ variant: 'destructive', title: 'Creation Failed', description: 'Unable to save service. Please try again.' });
     } finally {
         setSubmitting(false);
     }
