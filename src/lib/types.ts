@@ -41,6 +41,8 @@ export type Service = {
 
 export type SubscriptionPlan = 'Starter' | 'Pro' | 'Enterprise' | 'None';
 export type SubscriptionStatus = 'inactive' | 'awaiting_payment' | 'payment_submitted' | 'active' | 'expired' | 'suspended';
+export type BusinessType = 'individual' | 'registered';
+export type VerificationStatus = 'pending' | 'verified' | 'rejected';
 
 export type Business = {
   id: string;
@@ -48,15 +50,21 @@ export type Business = {
   name: string;
   address: string;
   city: string;
-  type: 'station' | 'mobile';
+  type: 'station' | 'mobile'; // Service delivery model
+  business_type: BusinessType; // Entity legal type
   whatsapp_number?: string;
   rating: number;
   review_count: number;
-  status: 'pending' | 'verified' | 'suspended';
+  status: 'pending' | 'verified' | 'suspended'; // Platform access status
+  verification_status: VerificationStatus; // Document verification status
   subscription_plan: SubscriptionPlan;
   subscription_status: SubscriptionStatus;
   sub_end_date?: string;
   logo_url?: string;
+  special_tag?: string; // e.g. "CIPA Verified"
+  id_number?: string; // Omang or Reg Number
+  selfie_url?: string;
+  certificate_url?: string;
 };
 
 export type Employee = {

@@ -1,10 +1,11 @@
+
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Clock, Package, ArrowRight } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Clock, Package, ArrowRight, CheckCircle2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 
 function BusinessCard({ business }: { business: any }) {
-  const trialDays = business.trial_remaining ?? 0;
+  const isCipa = business.special_tag === 'CIPA Verified';
 
   return (
     <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card">
@@ -30,14 +31,14 @@ function BusinessCard({ business }: { business: any }) {
           </div>
         )}
         <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
+          {isCipa && (
+            <Badge className="bg-primary text-white shadow-lg font-bold border-2 border-white/20 px-2 py-1">
+              <CheckCircle2 className="h-3 w-3 mr-1" /> CIPA VERIFIED
+            </Badge>
+          )}
           <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold">
             {business.plan || 'Verified Partner'}
           </Badge>
-          {!business.paid && trialDays > 0 && (
-            <Badge variant="outline" className="backdrop-blur-md bg-orange-50/90 text-orange-700 border-orange-200 text-[10px]">
-              <Clock className="h-3 w-3 mr-1" /> {trialDays}d Trial
-            </Badge>
-          )}
         </div>
       </div>
       <CardHeader className="pb-2">
@@ -88,7 +89,6 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
-        // Step 1: Fetch verified users with active access
         const { data: userData, error: userError } = await supabase
           .from('users_with_access')
           .select('*')
@@ -97,22 +97,17 @@ export default function CustomerHomePage() {
         
         if (userError) throw userError;
 
-        // Step 2: Resolve Business Record Mapping (UID -> UUID)
-        // CRITICAL: Filter out users who don't have a business record yet
         const userIds = (userData || []).map(u => u.id);
-        const { data: bizData, error: bizError } = await supabase
+        const { data: bizData } = await supabase
             .from('businesses')
-            .select('id, owner_id')
+            .select('id, owner_id, special_tag, verification_status')
             .in('owner_id', userIds);
         
-        if (bizError) throw bizError;
-
         const bizMap = (bizData || []).reduce((acc: any, b: any) => {
-            acc[b.owner_id] = b.id;
+            acc[b.owner_id] = b;
             return acc;
         }, {});
 
-        // Step 3: Fetch ratings summary using the Business UUIDs
         const bizIds = (bizData || []).map(b => b.id);
         const { data: ratingsData } = await supabase
           .from('ratings')
@@ -127,29 +122,31 @@ export default function CustomerHomePage() {
         }, {});
         
         const formatted = (userData || [])
-          .filter(u => !!bizMap[u.id]) // ONLY show if business record exists
+          .filter(u => !!bizMap[u.id])
           .map(u => {
-            const bizUuid = bizMap[u.id];
-            const stats = ratingsMap[bizUuid] || { total: 0, count: 0 };
+            const biz = bizMap[u.id];
+            const stats = ratingsMap[biz.id] || { total: 0, count: 0 };
             
             return {
               ...u,
               avatarUrl: u.avatar_url,
               accessActive: u.access_active,
+              special_tag: biz.special_tag,
               avg_rating: stats.count > 0 ? (stats.total / stats.count) : 5.0,
               review_count: stats.count
             };
           }) as any[];
 
-        // Step 4: Sort by rating (primary) and count (secondary)
+        // Sorting: CIPA verified businesses first, then by rating
         formatted.sort((a, b) => {
-            if (b.avg_rating !== a.avg_rating) return b.avg_rating - a.avg_rating;
-            return b.review_count - a.review_count;
+            const aCipa = a.special_tag === 'CIPA Verified' ? 1 : 0;
+            const bCipa = b.special_tag === 'CIPA Verified' ? 1 : 0;
+            if (bCipa !== aCipa) return bCipa - aCipa;
+            return b.avg_rating - a.avg_rating;
         });
         
         setBusinesses(formatted);
       } catch (e: any) {
-        console.error('Error loading businesses:', e);
         toast({ variant: 'destructive', title: 'Load Error', description: 'Could not fetch verified car washes.' });
       } finally {
         setLoading(false);
@@ -169,11 +166,11 @@ export default function CustomerHomePage() {
         <div className="flex-1 space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
             <ShieldCheck className="h-3 w-3" />
-            <span>Top Rated Partners Only</span>
+            <span>Verified Partners Only</span>
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-primary">Discover Top Washes</h1>
           <p className="text-muted-foreground text-lg max-w-2xl">
-            Browse professional mobile detailers and stations. Only businesses with active trust seals and high ratings are shown first.
+            Browse professional mobile detailers and stations. CIPA verified and top-rated partners are featured first.
           </p>
           
           <div className="flex gap-4 max-w-2xl pt-2">
