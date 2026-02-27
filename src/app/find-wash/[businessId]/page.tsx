@@ -9,10 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, Banknote, Loader2, ArrowLeft, ShieldCheck, MapPin, Star, Store, UserCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 export default function PublicBusinessServicesPage({ params }: { params: Promise<{ businessId: string }> }) {
     const { businessId } = React.use(params);
     const [business, setBusiness] = useState<ProfileUser | null>(null);
+    const [bizRecord, setBizRecord] = useState<any>(null);
     const [services, setServices] = useState<Service[]>([]);
     const [ratings, setRatings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -21,40 +23,56 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
         const loadData = async () => {
             setLoading(true);
             try {
-                // Fetch Business Info
-                const { data: bizData } = await supabase
-                    .from('users_with_access')
+                // 1. Resolve Business Record first (handling UUID or UID)
+                const { data: bRec } = await supabase
+                    .from('businesses')
                     .select('*')
-                    .eq('id', businessId)
+                    .or(`id.eq.${businessId},owner_id.eq.${businessId}`)
                     .maybeSingle();
                 
-                if (bizData) {
-                    setBusiness({
-                        ...bizData,
-                        avatarUrl: bizData.avatar_url
-                    } as ProfileUser);
+                if (bRec) {
+                    setBizRecord(bRec);
 
-                    // Fetch Services
+                    // 2. Fetch Owner Info from users_with_access using owner_id
+                    const { data: userData } = await supabase
+                        .from('users_with_access')
+                        .select('*')
+                        .eq('id', bRec.owner_id)
+                        .maybeSingle();
+
+                    if (userData) {
+                        setBusiness({
+                            ...userData,
+                            avatarUrl: userData.avatar_url,
+                            plan: bRec.subscription_plan
+                        } as ProfileUser);
+                    }
+
+                    // 3. Fetch Services using the Business UUID
                     const { data: svcsData } = await supabase
                         .from('services')
                         .select('*')
-                        .eq('business_id', businessId);
+                        .eq('business_id', bRec.id);
                     setServices(svcsData || []);
 
-                    // Fetch Recent Ratings
+                    // 4. Fetch Recent Ratings using the Business UUID
                     const { data: ratingsData } = await supabase
                         .from('ratings')
                         .select(`
                             id,
                             rating,
                             feedback,
-                            createdAt:created_at,
+                            created_at,
                             customer:customer_id ( name )
                         `)
-                        .eq('business_id', businessId)
+                        .eq('business_id', bRec.id)
                         .order('created_at', { ascending: false })
                         .limit(3);
-                    setRatings(ratingsData || []);
+                    
+                    setRatings((ratingsData || []).map(r => ({
+                        ...r,
+                        createdAt: r.created_at
+                    })));
                 }
             } catch (e) {
                 console.error('Error loading business details:', e);
@@ -132,7 +150,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                                 </div>
                                 <h1 className="text-4xl font-extrabold">{business.name}</h1>
                                 <div className="flex flex-col gap-2 text-muted-foreground">
-                                    <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
+                                    <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {bizRecord?.address || 'Gaborone'}, {bizRecord?.city || 'Botswana'}</span>
                                     <div className="flex items-center gap-1.5 pt-1">
                                         <div className="flex">
                                             {[1, 2, 3, 4, 5].map((s) => (

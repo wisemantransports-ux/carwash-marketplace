@@ -89,19 +89,33 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
-        // Step 1: Fetch verified businesses
-        const { data: bizData, error: bizError } = await supabase
+        // Step 1: Fetch verified users
+        const { data: userData, error: userError } = await supabase
           .from('users_with_access')
           .select('*')
           .eq('role', 'business-owner')
           .eq('access_active', true);
         
-        if (bizError) throw bizError;
+        if (userError) throw userError;
 
-        // Step 2: Fetch ratings summary for these businesses
+        // Step 2: Resolve Business Record Mapping (UID -> UUID)
+        const userIds = (userData || []).map(u => u.id);
+        const { data: bizMapData } = await supabase
+            .from('businesses')
+            .select('id, owner_id')
+            .in('owner_id', userIds);
+        
+        const bizMap = (bizMapData || []).reduce((acc: any, b: any) => {
+            acc[b.owner_id] = b.id;
+            return acc;
+        }, {});
+
+        // Step 3: Fetch ratings summary using the Business UUIDs
+        const bizIds = (bizMapData || []).map(b => b.id);
         const { data: ratingsData } = await supabase
           .from('ratings')
-          .select('business_id, rating');
+          .select('business_id, rating')
+          .in('business_id', bizIds);
 
         const ratingsMap = (ratingsData || []).reduce((acc: any, curr: any) => {
           if (!acc[curr.business_id]) acc[curr.business_id] = { total: 0, count: 0 };
@@ -110,15 +124,20 @@ export default function CustomerHomePage() {
           return acc;
         }, {});
         
-        const formatted = (bizData || []).map(u => ({
-          ...u,
-          avatarUrl: u.avatar_url,
-          accessActive: u.access_active,
-          avg_rating: ratingsMap[u.id] ? (ratingsMap[u.id].total / ratingsMap[u.id].count) : 5.0,
-          review_count: ratingsMap[u.id] ? ratingsMap[u.id].count : 0
-        })) as any[];
+        const formatted = (userData || []).map(u => {
+          const bizUuid = bizMap[u.id];
+          const stats = ratingsMap[bizUuid] || { total: 0, count: 0 };
+          
+          return {
+            ...u,
+            avatarUrl: u.avatar_url,
+            accessActive: u.access_active,
+            avg_rating: stats.count > 0 ? (stats.total / stats.count) : 5.0,
+            review_count: stats.count
+          };
+        }) as any[];
 
-        // Step 3: Sort by rating (primary) and count (secondary)
+        // Step 4: Sort by rating (primary) and count (secondary)
         formatted.sort((a, b) => {
             if (b.avg_rating !== a.avg_rating) return b.avg_rating - a.avg_rating;
             return b.review_count - a.review_count;

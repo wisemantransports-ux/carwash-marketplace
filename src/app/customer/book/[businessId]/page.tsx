@@ -24,7 +24,7 @@ const SPARE_SHOP_PREVIEW = [
 ];
 
 export default function BookingPage({ params }: { params: Promise<{ businessId: string }> }) {
-    const { businessId } = React.use(params); // This is the OWNER UID from the URL
+    const { businessId } = React.use(params); // This could be the Owner UID OR Business UUID
     const [business, setBusiness] = useState<ProfileUser | null>(null);
     const [bizRecord, setBizRecord] = useState<Business | null>(null);
     const [services, setServices] = useState<Service[]>([]);
@@ -45,29 +45,40 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 
-                // 1. Fetch User Profile (Owner)
-                const { data: userProfile } = await supabase.from('users').select('*').eq('id', businessId).maybeSingle();
-                
-                // 2. Fetch Business Record by Owner UID
-                const { data: bizData } = await supabase.from('businesses').select('*').eq('owner_id', businessId).maybeSingle();
-
-                if (userProfile) {
-                  setBusiness({ 
-                    ...userProfile, 
-                    avatarUrl: userProfile.avatar_url,
-                    plan: bizData?.subscription_plan || 'None'
-                  } as ProfileUser);
-                }
+                // 1. Resolve the Business Record first (handling both ID types)
+                const { data: bizData } = await supabase
+                    .from('businesses')
+                    .select('*')
+                    .or(`id.eq.${businessId},owner_id.eq.${businessId}`)
+                    .maybeSingle();
 
                 if (bizData) {
                     const typedBiz = bizData as Business;
                     setBizRecord(typedBiz);
                     
-                    // 3. Fetch Services using the CORRECT Business Record ID (UUID)
-                    const { data: svcs } = await supabase.from('services').select('*').eq('business_id', typedBiz.id);
+                    // 2. Fetch User Profile (Owner) using the owner_id from the record
+                    const { data: userProfile } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', typedBiz.owner_id)
+                        .maybeSingle();
+
+                    if (userProfile) {
+                      setBusiness({ 
+                        ...userProfile, 
+                        avatarUrl: userProfile.avatar_url,
+                        plan: typedBiz.subscription_plan || 'None'
+                      } as ProfileUser);
+                    }
+
+                    // 3. Fetch Services using the CORRECT Business UUID
+                    const { data: svcs } = await supabase
+                        .from('services')
+                        .select('*')
+                        .eq('business_id', typedBiz.id);
                     setServices(svcs || []);
                 } else {
-                    console.error("No business record found for owner UID:", businessId);
+                    console.error("No business record found for ID:", businessId);
                 }
 
                 // 4. Fetch Customer's Cars
