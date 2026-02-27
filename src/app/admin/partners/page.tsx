@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Loader2, ShieldCheck, ExternalLink, Mail } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
 export default function AdminPartnersPage() {
     const [partners, setPartners] = useState<any[]>([]);
