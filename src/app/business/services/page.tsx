@@ -26,7 +26,7 @@ export default function ServicesManagementPage() {
                 return;
             }
 
-            // Fetch Fresh Business Data
+            // Always fetch the freshest business record
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -42,7 +42,7 @@ export default function ServicesManagementPage() {
 
             setBusiness(biz as Business);
 
-            // Access Check Logic (Verified AND (Active OR Trial))
+            // Access Check Logic: verified AND (active OR future trial expiry)
             const isVerified = biz.verification_status === 'verified';
             const now = new Date();
             const expiry = biz.sub_end_date ? new Date(biz.sub_end_date) : null;
@@ -62,11 +62,11 @@ export default function ServicesManagementPage() {
             }
 
         } catch (e: any) {
-            console.error("General fetch error:", e);
+            console.error("General catalog fetch error:", e);
             toast({ 
                 variant: 'destructive', 
                 title: 'Load Error', 
-                description: 'Unable to load services catalog.' 
+                description: 'Unable to load your services catalog. Please check your connection.' 
             });
         } finally {
             setLoading(false);
@@ -87,9 +87,9 @@ export default function ServicesManagementPage() {
             if (error) throw error;
 
             setServices(prev => prev.filter(s => s.id !== id));
-            toast({ title: 'Service Deleted', description: 'The service has been removed.' });
+            toast({ title: 'Service Deleted', description: 'The service has been removed from your public catalog.' });
         } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Delete Failed', description: 'Could not remove the service.' });
+            toast({ variant: 'destructive', title: 'Delete Failed', description: 'Could not remove the service package.' });
         }
     };
 
@@ -122,32 +122,32 @@ export default function ServicesManagementPage() {
             {isAccessLocked && (
                 <Alert variant="destructive" className="bg-destructive/5 border-destructive/20 text-destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Action Required</AlertTitle>
+                    <AlertTitle>Catalog Access Locked</AlertTitle>
                     <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <span>
                             {business?.verification_status === 'pending'
-                                ? "Your business verification is pending. Access will be granted once documents are verified." 
-                                : "Your professional access has expired. Please choose a plan to continue."}
+                                ? "Your business verification is currently under review. Features unlock once documents are approved." 
+                                : "Your professional access has expired. Please renew your subscription to continue managing services."}
                         </span>
                         {isVerified && !isActive && !isTrialActive && (
                             <Button size="sm" variant="outline" asChild className="border-destructive/20 hover:bg-destructive/10">
-                                <Link href="/business/subscription">Renew Now</Link>
+                                <Link href="/business/subscription">Renew Plan</Link>
                             </Button>
                         )}
                     </AlertDescription>
                 </Alert>
             )}
 
-            <Card className={cn("overflow-hidden", isAccessLocked && "opacity-60 pointer-events-none")}>
+            <Card className={cn("overflow-hidden shadow-lg", isAccessLocked && "opacity-60 pointer-events-none")}>
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader>
                             <TableRow className="bg-muted/50">
-                                <TableHead>Service Name</TableHead>
-                                <TableHead>Description</TableHead>
-                                <TableHead>Duration</TableHead>
-                                <TableHead>Price</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead className="font-bold">Service Name</TableHead>
+                                <TableHead className="font-bold">Description</TableHead>
+                                <TableHead className="font-bold">Duration</TableHead>
+                                <TableHead className="font-bold">Price</TableHead>
+                                <TableHead className="text-right font-bold">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -166,7 +166,7 @@ export default function ServicesManagementPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48 shadow-lg border-2">
-                                                    <DropdownMenuItem onClick={() => handleDelete(service.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                    <DropdownMenuItem onClick={() => handleDelete(service.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer font-bold">
                                                         Remove Service
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -177,7 +177,7 @@ export default function ServicesManagementPage() {
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
-                                        {isAccessLocked ? "Service management is locked." : "No services yet. Add your first service package above."}
+                                        {isAccessLocked ? "Service management is locked until verification is complete." : "Your catalog is empty. Add your first service package to start receiving bookings."}
                                     </TableCell>
                                 </TableRow>
                             )}

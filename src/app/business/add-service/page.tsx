@@ -35,7 +35,7 @@ export default function AddServicePage() {
         return;
       }
 
-      // Fetch the latest business data to ensure we have current verification status
+      // Fetch the absolute latest business state to avoid caching issues
       const { data, error } = await supabase
         .from('businesses')
         .select('*')
@@ -51,21 +51,18 @@ export default function AddServicePage() {
         const typedBiz = data as Business;
         setBusiness(typedBiz);
         
-        // Comprehensive Verification & Access Check
+        // Comprehensive Gate Check
         const isVerified = typedBiz.verification_status === 'verified';
         const now = new Date();
         const expiry = typedBiz.sub_end_date ? new Date(typedBiz.sub_end_date) : null;
         const isTrialOrPaid = (typedBiz.subscription_status === 'active') || (expiry && expiry >= now);
 
         if (!isVerified) {
-            toast({ title: 'Verification Required', description: 'Features unlock once documents are verified.' });
             router.push('/business/services');
         } else if (!isTrialOrPaid) {
-            toast({ title: 'Subscription Inactive', description: 'Please choose a plan to continue adding services.' });
             router.push('/business/subscription');
         }
       } else {
-        toast({ variant: 'destructive', title: 'Profile Not Found', description: 'Please set up your business profile first.' });
         router.push('/business/profile');
       }
       setLoading(false);
@@ -94,35 +91,35 @@ export default function AddServicePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!serviceName || !description || !price || !duration || !business) {
-      toast({ variant: 'destructive', title: 'Fields Required', description: 'Fill all required fields.' });
+    
+    // 1. Validation
+    if (!serviceName.trim() || !description.trim() || !price || !duration || !business) {
+      toast({ variant: 'destructive', title: 'Fields Required', description: 'Please fill all required fields.' });
       return;
-    }
-
-    // Final Gate Check
-    const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
-    const now = new Date();
-    const isAccessActive = (business.verification_status === 'verified') && 
-                          ((business.subscription_status === 'active') || (expiry && expiry >= now));
-
-    if (!isAccessActive) {
-        toast({ variant: 'destructive', title: 'Access Denied', description: 'Your account must be verified and have an active subscription.' });
-        return;
     }
 
     const priceVal = parseFloat(price);
     const durationVal = parseInt(duration);
 
     if (isNaN(priceVal) || priceVal <= 0 || isNaN(durationVal) || durationVal <= 0) {
-      toast({ variant: 'destructive', title: 'Invalid Input', description: 'Values must be greater than zero.' });
+      toast({ variant: 'destructive', title: 'Invalid Input', description: 'Price and duration must be positive numbers.' });
       return;
+    }
+
+    // 2. Access Enforcement
+    const expiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
+    const now = new Date();
+    const isAccessActive = (business.verification_status === 'verified') && 
+                          ((business.subscription_status === 'active') || (expiry && expiry >= now));
+
+    if (!isAccessActive) {
+        toast({ variant: 'destructive', title: 'Access Denied', description: 'Your account verification or subscription is not active.' });
+        return;
     }
 
     setSubmitting(true);
     try {
-        // Log the attempt for better visibility in console
-        console.log("Creating service for business:", business.id);
-
+        // IMPORTANT: No 'status' column in services table
         const { error } = await supabase
           .from('services')
           .insert([{
@@ -131,28 +128,19 @@ export default function AddServicePage() {
             description: description.trim(),
             price: priceVal,
             duration: durationVal,
-            currency_code: currency,
-            status: 'active'
+            currency_code: currency
           }]);
 
-        if (error) {
-            console.error("Supabase Database Error Details:", {
-                message: error.message,
-                details: error.details,
-                hint: error.hint,
-                code: error.code
-            });
-            throw error;
-        }
+        if (error) throw error;
 
-        toast({ title: 'Service Added', description: `${serviceName} is now in your catalog.` });
+        toast({ title: 'Service Added', description: `${serviceName} has been added to your catalog.` });
         router.push('/business/services');
     } catch (error: any) {
-        console.error("Service Insert Fatal Error:", error.message || error);
+        console.error("FATAL: Service Creation Error:", error.message || error);
         toast({ 
             variant: 'destructive', 
             title: 'Creation Failed', 
-            description: error.message || 'Unable to save service. Please check your connection.' 
+            description: 'Unable to save service. Please check your internet connection and try again.' 
         });
     } finally {
         setSubmitting(false);
@@ -177,7 +165,7 @@ export default function AddServicePage() {
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="sname">Name *</Label>
+              <Label htmlFor="sname">Service Name *</Label>
               <Input 
                 id="sname" 
                 value={serviceName} 
@@ -206,7 +194,7 @@ export default function AddServicePage() {
                 id="sdesc" 
                 value={description} 
                 onChange={(e) => setDescription(e.target.value)} 
-                placeholder="Describe what is included..." 
+                placeholder="Describe what is included in this package..." 
                 className="min-h-[120px]"
                 required 
               />
@@ -259,9 +247,9 @@ export default function AddServicePage() {
               </Select>
             </div>
 
-            <Button type="submit" className="w-full h-12 text-lg" disabled={submitting}>
+            <Button type="submit" className="w-full h-12 text-lg shadow-xl" disabled={submitting}>
               {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <Plus className="mr-2 h-5 w-5" />}
-              Create Service Package
+              Publish Service Package
             </Button>
           </form>
         </CardContent>
