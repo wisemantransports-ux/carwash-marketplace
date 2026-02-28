@@ -31,7 +31,7 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // CRITICAL: Local state ensures dropdown selections "stick" immediately
+    // Local state to ensure selections "stick" immediately and don't flicker
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -93,7 +93,7 @@ export default function BusinessDashboardPage() {
                     .select("id, name")
                     .eq("business_id", bizData.id);
                 
-                if (staffError) throw staffError;
+                if (staffError) console.error("Staff fetch error:", staffError);
                 setStaffList(staffData || []);
 
                 // 4. Fetch Bookings with explicit relational joins
@@ -105,17 +105,14 @@ export default function BusinessDashboardPage() {
                         status,
                         staff_id,
                         customer:users!bookings_customer_id_fkey (
-                            id,
                             name,
                             email
                         ),
                         services!bookings_service_id_fkey (
-                            id,
                             name,
                             price
                         ),
                         cars!bookings_car_id_fkey (
-                            id,
                             make,
                             model
                         )
@@ -130,7 +127,7 @@ export default function BusinessDashboardPage() {
                 setFetchError("Business profile not found. Please complete your profile setup.");
             }
         } catch (error: any) {
-            console.error("[DASHBOARD] Fetch error details:", error);
+            console.error("[DASHBOARD] Fetch error:", error);
             setFetchError(error.message || "A database error occurred while loading your dashboard.");
         } finally {
             setLoading(false);
@@ -163,11 +160,11 @@ export default function BusinessDashboardPage() {
             if (error) throw error;
 
             toast({ 
-                title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Updated", 
-                description: `Request status has been set to ${status}.` 
+                title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Rejected", 
+                description: `Request has been marked as ${status}.` 
             });
             
-            // Clear local assignment for this specific row after status change
+            // Clear local assignment for this row after status change to allow fresh fetch
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -183,7 +180,7 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // Optimistic UI: Update local state immediately
+        // Optimistic UI: Update local state immediately so it "sticks"
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -193,7 +190,10 @@ export default function BusinessDashboardPage() {
                 .eq("id", bookingId);
 
             if (error) throw error;
-            // No notification as requested, update silently
+            
+            toast({ title: "Employee assigned successfully." });
+            // Refresh in background to sync with server
+            await fetchData(true);
         } catch (e: any) {
             // Revert local state on failure
             setLocalStaffAssignments(prev => {
@@ -220,17 +220,17 @@ export default function BusinessDashboardPage() {
             </TableHeader>
             <TableBody>
                 {list.length > 0 ? list.map((booking) => {
-                    const currentStaffId = localStaffAssignments[booking.id] ?? booking.staff_id ?? "";
+                    const currentStaffId = localStaffAssignments[booking.id] || booking.staff_id || "";
                     const isStaffAssigned = !!currentStaffId;
 
                     return (
                         <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
                             <TableCell className="font-bold text-sm">
-                                {booking.customer?.name ?? "Unknown Customer"}
+                                {booking.customer?.name || "Customer"}
                             </TableCell>
 
                             <TableCell className="text-xs text-muted-foreground">
-                                {booking.customer?.email ?? "No email provided"}
+                                {booking.customer?.email || "No email"}
                             </TableCell>
 
                             <TableCell>
@@ -243,7 +243,7 @@ export default function BusinessDashboardPage() {
                             </TableCell>
 
                             <TableCell className="text-sm font-bold">
-                                {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
+                                {booking.cars?.make} {booking.cars?.model}
                             </TableCell>
 
                             <TableCell>
@@ -263,9 +263,9 @@ export default function BusinessDashboardPage() {
 
                             <TableCell className="text-xs">
                                 <div className="font-bold">
-                                    {new Date(booking.booking_time).toLocaleDateString()}
+                                    {new Date(booking.booking_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                 </div>
-                                <div className="text-muted-foreground">
+                                <div className="text-muted-foreground uppercase">
                                     {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </div>
                             </TableCell>
