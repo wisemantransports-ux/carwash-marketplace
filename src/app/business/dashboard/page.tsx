@@ -31,8 +31,7 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // CRITICAL: This local state ensures dropdown selections "stick" immediately 
-    // and are not overwritten by background server refreshes.
+    // CRITICAL: Local state ensures dropdown selections "stick" immediately
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -46,7 +45,6 @@ export default function BusinessDashboardPage() {
         else setRefreshing(true);
         
         setFetchError(null);
-        setIsRestricted(false);
 
         try {
             const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -56,12 +54,14 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. CHECK STATUS FIRST (Prevents recursion/RLS errors by avoiding 'businesses' table if restricted)
-            const { data: profile } = await supabase
+            // 1. PRE-FETCH STATUS CHECK (Prevents recursion/RLS errors)
+            const { data: profile, error: profileError } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
                 .eq('id', authUser.id)
                 .maybeSingle();
+
+            if (profileError) throw profileError;
 
             const isPaid = profile?.paid === true;
             const isTrialValid = profile?.trial_expiry ? new Date(profile.trial_expiry) > new Date() : false;
@@ -73,7 +73,9 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 2. Resolve Business Info (Only if not restricted)
+            setIsRestricted(false);
+
+            // 2. Resolve Business Info
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -86,14 +88,15 @@ export default function BusinessDashboardPage() {
                 setBusiness(bizData);
 
                 // 3. Fetch Staff List
-                const { data: staffData } = await supabase
+                const { data: staffData, error: staffError } = await supabase
                     .from("employees")
                     .select("id, name")
                     .eq("business_id", bizData.id);
                 
+                if (staffError) throw staffError;
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with relations
+                // 4. Fetch Bookings with explicit relational joins
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -106,12 +109,12 @@ export default function BusinessDashboardPage() {
                             name,
                             email
                         ),
-                        services (
+                        services!bookings_service_id_fkey (
                             id,
                             name,
                             price
                         ),
-                        cars (
+                        cars!bookings_car_id_fkey (
                             id,
                             make,
                             model
@@ -127,8 +130,8 @@ export default function BusinessDashboardPage() {
                 setFetchError("Business profile not found. Please complete your profile setup.");
             }
         } catch (error: any) {
-            console.error("[DASHBOARD] Fetch error:", error);
-            setFetchError(error.message || "Unable to load operational data.");
+            console.error("[DASHBOARD] Fetch error details:", error);
+            setFetchError(error.message || "A database error occurred while loading your dashboard.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -138,7 +141,6 @@ export default function BusinessDashboardPage() {
     useEffect(() => {
         fetchData();
 
-        // Real-time listener for seamless updates
         const channel = supabase
             .channel('dashboard-sync')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
@@ -165,7 +167,7 @@ export default function BusinessDashboardPage() {
                 description: `Request status has been set to ${status}.` 
             });
             
-            // Clear local assignment after successful status update to refresh clean
+            // Clear local assignment for this specific row after status change
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -181,19 +183,19 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // 1. STICK IMMEDIATELY: Update local state so UI never flickers
+        // Optimistic UI: Update local state immediately
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
-            // 2. Persist to Supabase silently
             const { error } = await supabase
                 .from("bookings")
                 .update({ staff_id: staffId })
                 .eq("id", bookingId);
 
             if (error) throw error;
+            // No notification as requested, update silently
         } catch (e: any) {
-            // Revert local state on error
+            // Revert local state on failure
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -218,23 +220,19 @@ export default function BusinessDashboardPage() {
             </TableHeader>
             <TableBody>
                 {list.length > 0 ? list.map((booking) => {
-                    // Resolve the current staff ID from local state OR server state
                     const currentStaffId = localStaffAssignments[booking.id] ?? booking.staff_id ?? "";
                     const isStaffAssigned = !!currentStaffId;
 
                     return (
                         <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
-                            {/* 1. CUSTOMER NAME COLUMN */}
                             <TableCell className="font-bold text-sm">
                                 {booking.customer?.name ?? "Unknown Customer"}
                             </TableCell>
 
-                            {/* 2. CUSTOMER EMAIL COLUMN */}
                             <TableCell className="text-xs text-muted-foreground">
                                 {booking.customer?.email ?? "No email provided"}
                             </TableCell>
 
-                            {/* 3. SERVICE INFO COLUMN */}
                             <TableCell>
                                 <div className="text-sm font-medium">
                                     {booking.services?.name}
@@ -244,12 +242,10 @@ export default function BusinessDashboardPage() {
                                 </div>
                             </TableCell>
 
-                            {/* 4. CAR MAKE & MODEL COLUMN */}
                             <TableCell className="text-sm font-bold">
                                 {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
                             </TableCell>
 
-                            {/* 5. STAFF DROPDOWN COLUMN */}
                             <TableCell>
                                 <select
                                     className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
@@ -265,7 +261,6 @@ export default function BusinessDashboardPage() {
                                 </select>
                             </TableCell>
 
-                            {/* 6. TIMING COLUMN */}
                             <TableCell className="text-xs">
                                 <div className="font-bold">
                                     {new Date(booking.booking_time).toLocaleDateString()}
@@ -275,7 +270,6 @@ export default function BusinessDashboardPage() {
                                 </div>
                             </TableCell>
 
-                            {/* 7. ACTION COLUMN */}
                             <TableCell className="text-right pr-6">
                                 {isPending ? (
                                     <div className="flex justify-end gap-2">
