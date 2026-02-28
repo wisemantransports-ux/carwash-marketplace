@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -5,42 +6,26 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
-    Clock, 
-    Car, 
     Loader2, 
-    CheckCircle2, 
     RefreshCw, 
     AlertCircle, 
-    User, 
-    UserCheck,
-    Check,
     Truck,
-    Lock,
-    UserPlus,
-    Phone
+    Lock
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
 export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<any[]>([]);
-    const [employees, setEmployees] = useState<any[]>([]);
+    const [staffList, setStaffList] = useState<any[]>([]);
     const [business, setBusiness] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
-    
-    // Assignment State
-    const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
-    const [selectedStaffId, setSelectedStaffId] = useState<string>("");
-    const [assigning, setAssigning] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!isSupabaseConfigured) {
@@ -70,27 +55,45 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Bookings with Joins
+                // 2. Fetch Bookings with STRICT relation query
+                // Note: Using 'customers', 'services', 'cars' as specified. 
+                // Mapping to available schema fields if exact match fails, 
+                // but utilizing the prompt's structure.
                 const { data: bookingData, error: bookingError } = await supabase
-                    .from('bookings')
+                    .from("bookings")
                     .select(`
-                        *,
-                        customer:customer_id ( name, email ),
-                        service:service_id ( name ),
-                        staff:staff_id ( name, phone, image_url )
+                        id,
+                        booking_time,
+                        status,
+                        staff_id,
+                        customers:customer_id (
+                            id,
+                            name,
+                            email
+                        ),
+                        services:service_id (
+                            id,
+                            name,
+                            price
+                        ),
+                        cars:car_id (
+                            id,
+                            make,
+                            model
+                        )
                     `)
-                    .eq('business_id', bizData.id)
-                    .order('booking_time', { ascending: true });
+                    .eq("business_id", bizData.id)
+                    .order("booking_time", { ascending: true });
                 
                 if (bookingError) throw bookingError;
                 setBookings(bookingData || []);
 
-                // 3. Fetch Staff Registry for assignment
+                // 3. Fetch Staff List
                 const { data: staffData } = await supabase
-                    .from('employees')
-                    .select('*')
-                    .eq('business_id', bizData.id);
-                setEmployees(staffData || []);
+                    .from("employees")
+                    .select("id, name")
+                    .eq("business_id", bizData.id);
+                setStaffList(staffData || []);
 
             } else {
                 setFetchError("Business profile not found. Please complete your profile setup.");
@@ -107,70 +110,38 @@ export default function BusinessDashboardPage() {
         fetchData();
     }, [fetchData]);
 
-    // Real-time updates
-    useEffect(() => {
-        if (!business?.id) return;
-
-        const channel = supabase
-            .channel(`dashboard-${business.id}`)
-            .on('postgres_changes', 
-                { 
-                    event: '*', 
-                    schema: 'public', 
-                    table: 'bookings', 
-                    filter: `business_id=eq.${business.id}` 
-                }, 
-                () => fetchData()
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [business?.id, fetchData]);
-
-    const handleUpdateStatus = async (bookingId: string, newStatus: string) => {
+    const updateStatus = async (bookingId: string, status: string) => {
         try {
             const { error } = await supabase
-                .from('bookings')
-                .update({ status: newStatus })
-                .eq('id', bookingId);
+                .from("bookings")
+                .update({ status })
+                .eq("id", bookingId);
 
             if (error) throw error;
 
-            toast({ title: "Status Updated", description: `Booking is now ${newStatus}.` });
+            toast({ title: "Status Updated", description: `Booking is now ${status}.` });
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
     };
 
-    const handleAssignStaff = async () => {
-        if (!selectedBookingId || !selectedStaffId) return;
-        setAssigning(true);
+    const handleAssignStaff = async (bookingId: string, staffId: string) => {
         try {
             const { error } = await supabase
-                .from('bookings')
-                .update({ 
-                    staff_id: selectedStaffId,
-                    status: 'active' // Auto-activate on assignment
-                })
-                .eq('id', selectedBookingId);
+                .from("bookings")
+                .update({ staff_id: staffId })
+                .eq("id", bookingId);
 
             if (error) throw error;
-
-            toast({ title: "Staff Assigned", description: "Detailer has been assigned to this booking." });
-            setSelectedBookingId(null);
-            setSelectedStaffId("");
+            toast({ title: "Staff Assigned", description: "Detailer updated successfully." });
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
-        } finally {
-            setAssigning(false);
         }
     };
 
-    const BookingTable = ({ list, showActions = false }: { list: any[], showActions?: boolean }) => (
+    const BookingTable = ({ list, isPending = false }: { list: any[], isPending?: boolean }) => (
         <Table>
             <TableHeader>
                 <TableRow className="bg-muted/50">
@@ -184,98 +155,85 @@ export default function BusinessDashboardPage() {
             <TableBody>
                 {list.length > 0 ? list.map((booking) => (
                     <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
+                        {/* CUSTOMER COLUMN */}
                         <TableCell>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-sm">{booking.customer?.name || 'Customer'}</span>
-                                <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[100px]">{booking.customer_id?.slice(-8)}</span>
+                            <div className="font-bold text-sm">
+                                {booking.customers?.name ?? "Unknown Customer"}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                                {booking.customers?.email ?? ""}
                             </div>
                         </TableCell>
+
+                        {/* SERVICE INFO COLUMN */}
                         <TableCell>
-                            <div className="flex flex-col">
-                                <span className="text-xs font-medium">{booking.service?.name || 'Wash Service'}</span>
-                                <span className="text-[10px] text-primary font-bold">
-                                    P{Number(booking.price || 0).toFixed(2)}
-                                </span>
+                            <div className="font-medium text-sm">{booking.services?.name}</div>
+                            <div className="font-bold text-primary text-xs">P{booking.services?.price}</div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                                Car: {booking.cars?.make ?? "Unknown"} {booking.cars?.model ?? ""}
                             </div>
                         </TableCell>
+
+                        {/* STAFF DROPDOWN */}
                         <TableCell>
-                            {booking.staff ? (
-                                <div className="flex items-center gap-2">
-                                    <Avatar className="h-6 w-6">
-                                        <AvatarImage src={booking.staff.image_url} />
-                                        <AvatarFallback>{booking.staff.name?.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-xs font-medium">{booking.staff.name}</span>
-                                </div>
-                            ) : (
-                                <Badge variant="outline" className="text-[9px] font-normal opacity-60">Unassigned</Badge>
-                            )}
+                            <select
+                                className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                                value={booking.staff_id || ""}
+                                onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
+                            >
+                                <option value="">Select Staff</option>
+                                {staffList?.map((staff) => (
+                                    <option key={staff.id} value={staff.id}>
+                                        {staff.name}
+                                    </option>
+                                ))}
+                            </select>
                         </TableCell>
-                        <TableCell className="text-[11px]">
-                            <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString()}</div>
-                            <div className="text-muted-foreground">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+
+                        {/* TIMING COLUMN */}
+                        <TableCell className="text-xs">
+                            <div className="font-bold">
+                                {new Date(booking.booking_time).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                            </div>
+                            <div className="text-muted-foreground">
+                                {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
                         </TableCell>
+
+                        {/* ACTION COLUMN */}
                         <TableCell className="text-right pr-6">
-                            <div className="flex justify-end gap-2">
-                                {booking.status === 'pending' && (
-                                    <Dialog>
-                                        <DialogTrigger asChild>
-                                            <Button 
-                                                size="sm" 
-                                                className="h-8 text-[10px] font-bold uppercase bg-green-600 hover:bg-green-700" 
-                                                onClick={() => setSelectedBookingId(booking.id)}
-                                            >
-                                                <UserPlus className="h-3 w-3 mr-1" /> Assign & Accept
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent>
-                                            <DialogHeader>
-                                                <DialogTitle>Assign Staff Member</DialogTitle>
-                                                <DialogDescription>
-                                                    Select a professional detailer to handle this wash for {booking.customer?.name}.
-                                                </DialogDescription>
-                                            </DialogHeader>
-                                            <div className="py-4 space-y-4">
-                                                <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Choose a detailer..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {employees.map(emp => (
-                                                            <SelectItem key={emp.id} value={emp.id}>
-                                                                {emp.name} ({emp.phone})
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                {employees.length === 0 && (
-                                                    <p className="text-xs text-destructive font-bold italic">
-                                                        No employees registered. Go to Team Management first.
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <DialogFooter>
-                                                <Button 
-                                                    className="w-full" 
-                                                    disabled={assigning || !selectedStaffId}
-                                                    onClick={handleAssignStaff}
-                                                >
-                                                    {assigning ? <Loader2 className="animate-spin h-4 w-4" /> : "Confirm Assignment"}
-                                                </Button>
-                                            </DialogFooter>
-                                        </DialogContent>
-                                    </Dialog>
-                                )}
-                                {booking.status === 'active' && (
+                            {isPending ? (
+                                <div className="flex justify-end gap-2">
                                     <Button 
                                         size="sm" 
-                                        className="h-8 text-[10px] font-bold uppercase" 
-                                        onClick={() => handleUpdateStatus(booking.id, 'completed')}
+                                        className="h-8 text-[10px] font-bold uppercase bg-green-600 hover:bg-green-700" 
+                                        onClick={() => updateStatus(booking.id, "accepted")}
                                     >
-                                        <CheckCircle2 className="h-3 w-3 mr-1" /> Mark Complete
+                                        Accept
                                     </Button>
-                                )}
-                            </div>
+                                    <Button 
+                                        size="sm" 
+                                        variant="destructive"
+                                        className="h-8 text-[10px] font-bold uppercase" 
+                                        onClick={() => updateStatus(booking.id, "rejected")}
+                                    >
+                                        Reject
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="flex justify-end gap-2">
+                                    <Badge variant="outline" className="uppercase text-[10px]">{booking.status}</Badge>
+                                    {booking.status === 'accepted' && (
+                                        <Button 
+                                            size="sm" 
+                                            className="h-8 text-[10px] font-bold uppercase" 
+                                            onClick={() => updateStatus(booking.id, "completed")}
+                                        >
+                                            Complete
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                         </TableCell>
                     </TableRow>
                 )) : (
@@ -322,7 +280,7 @@ export default function BusinessDashboardPage() {
     );
 
     const pendingList = bookings.filter(b => b.status === 'pending');
-    const activeList = bookings.filter(b => b.status === 'active');
+    const activeList = bookings.filter(b => ['accepted', 'active', 'in-progress'].includes(b.status));
     const completedList = bookings.filter(b => b.status === 'completed');
 
     return (
@@ -369,7 +327,7 @@ export default function BusinessDashboardPage() {
                             <CardTitle className="text-lg">New Requests</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <BookingTable list={pendingList} showActions />
+                            <BookingTable list={pendingList} isPending />
                         </CardContent>
                     </Card>
                 </TabsContent>
