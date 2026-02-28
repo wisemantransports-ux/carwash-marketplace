@@ -57,7 +57,7 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Pending Bookings with relations
+                // 2. Fetch Bookings with relations (using full_name for users)
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -67,7 +67,7 @@ export default function BusinessDashboardPage() {
                         staff_id,
                         customer:users!bookings_customer_id_fkey (
                             id,
-                            name,
+                            full_name,
                             email
                         ),
                         services (
@@ -87,10 +87,10 @@ export default function BusinessDashboardPage() {
                 if (bookingError) throw bookingError;
                 setBookings(bookingData || []);
 
-                // 3. Fetch Staff List for assignment
+                // 3. Fetch Staff List for assignment (using full_name)
                 const { data: staffData } = await supabase
                     .from("employees")
-                    .select("id, name")
+                    .select("id, full_name")
                     .eq("business_id", bizData.id);
                 setStaffList(staffData || []);
 
@@ -122,7 +122,7 @@ export default function BusinessDashboardPage() {
                 title: status === 'accepted' ? "Booking Accepted" : "Booking Updated", 
                 description: `Request status has been set to ${status}.` 
             });
-            fetchData();
+            await fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
@@ -137,7 +137,7 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             toast({ title: "Staff Assigned", description: "Detailer choice persisted successfully." });
-            fetchData(); // Reload to make it "stick" and enable Accept button
+            await fetchData(); // Await reload to ensure UI consistency
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
         }
@@ -161,7 +161,7 @@ export default function BusinessDashboardPage() {
                         {/* CUSTOMER */}
                         <TableCell>
                             <div className="font-bold text-sm">
-                                {booking.customer?.name ?? "Unknown Customer"}
+                                {booking.customer?.full_name ?? "Unknown Customer"}
                             </div>
                             <div className="text-[10px] text-muted-foreground">
                                 {booking.customer?.email ?? ""}
@@ -171,7 +171,10 @@ export default function BusinessDashboardPage() {
                         {/* SERVICE INFO */}
                         <TableCell>
                             <div className="text-sm font-medium">
-                                {booking.services?.name} - <span className="font-bold text-primary">BWP {Number(booking.services?.price || 0).toFixed(2)}</span>
+                                {booking.services?.name}
+                            </div>
+                            <div className="text-[10px] font-bold text-primary">
+                                BWP {Number(booking.services?.price || 0).toFixed(2)}
                             </div>
                         </TableCell>
 
@@ -182,7 +185,7 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* STAFF ASSIGNMENT (STICKY DROPDOWN) */}
+                        {/* STAFF ASSIGNMENT DROPDOWN */}
                         <TableCell>
                             <select
                                 className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
@@ -192,7 +195,7 @@ export default function BusinessDashboardPage() {
                                 <option value="">Select Staff</option>
                                 {staffList?.map((staff) => (
                                     <option key={staff.id} value={staff.id}>
-                                        {staff.name}
+                                        {staff.full_name}
                                     </option>
                                 ))}
                             </select>
@@ -208,7 +211,7 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* ACTION (GATED ACCEPT) */}
+                        {/* ACTION */}
                         <TableCell className="text-right pr-6">
                             {isPending ? (
                                 <div className="flex justify-end gap-2">
