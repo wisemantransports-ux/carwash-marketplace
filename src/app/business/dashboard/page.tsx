@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -10,7 +11,9 @@ import {
     AlertCircle, 
     Truck,
     Lock,
-    Star
+    Star,
+    CheckCircle2,
+    XCircle
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -53,7 +56,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Restriction Pre-Check via non-recursive view
+            // 1. Restriction Pre-Check
             const { data: profile, error: profileError } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
@@ -95,7 +98,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with Explicit joins for 7-column layout
+                // 4. Fetch Bookings with Full Relation Mapping
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -117,11 +120,11 @@ export default function BusinessDashboardPage() {
                 setBookings(bookingData || []);
 
             } else {
-                setFetchError("Business profile not found. Please complete your profile setup.");
+                setFetchError("Business profile not found.");
             }
         } catch (error: any) {
             console.error("[DASHBOARD] Fetch Error:", error);
-            setFetchError(error.message || "A database error occurred while loading operational data.");
+            setFetchError(error.message || "A database error occurred.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -153,10 +156,9 @@ export default function BusinessDashboardPage() {
 
             toast({ 
                 title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Rejected ❌",
-                description: status === 'accepted' ? "The service has been moved to the active queue." : "Request removed."
+                description: status === 'accepted' ? "Service moved to active queue." : "Request removed."
             });
             
-            // Clear local tracking for this specific booking
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -172,7 +174,6 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // 1. Update local state immediately for zero-latency response
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -183,11 +184,8 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             toast({ title: "Employee assigned successfully." });
-            
-            // Silently refresh background data
             await fetchData(true);
         } catch (e: any) {
-            // Revert on failure
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -213,20 +211,19 @@ export default function BusinessDashboardPage() {
             <Table>
                 <TableHeader>
                     <TableRow className="bg-muted/50 border-b-2">
-                        <TableHead className="font-bold whitespace-nowrap px-4 py-4">Customer Name</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap px-4">Customer Email</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap px-4">Service Info</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap px-4">Car Make & Model</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap px-4">Staff</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap px-4">Timing</TableHead>
-                        <TableHead className={cn("text-right font-bold pr-6 whitespace-nowrap", isHistory && "text-center")}>
+                        <TableHead className="font-bold px-4 py-4">Customer Name</TableHead>
+                        <TableHead className="font-bold px-4">Customer Email</TableHead>
+                        <TableHead className="font-bold px-4">Service Info</TableHead>
+                        <TableHead className="font-bold px-4">Car Make & Model</TableHead>
+                        <TableHead className="font-bold px-4">Staff</TableHead>
+                        <TableHead className="font-bold px-4">Timing</TableHead>
+                        <TableHead className={cn("text-right font-bold pr-6", isHistory && "text-center")}>
                             {isHistory ? "Feedback" : "Action"}
                         </TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {list.length > 0 ? list.map((booking) => {
-                        // Priority: Local selection -> Database record -> Empty
                         const currentStaffId = localStaffAssignments[booking.id] || booking.staff_id || "";
                         const isStaffAssigned = !!currentStaffId;
                         const rating = booking.rating?.[0];
@@ -274,7 +271,7 @@ export default function BusinessDashboardPage() {
                                                 size="sm" 
                                                 disabled={!isStaffAssigned}
                                                 className={cn(
-                                                    "h-8 text-[10px] font-bold uppercase transition-all shadow-sm", 
+                                                    "h-8 text-[10px] font-bold uppercase shadow-sm", 
                                                     isStaffAssigned ? "bg-green-600 hover:bg-green-700 text-white" : "bg-muted text-muted-foreground"
                                                 )}
                                                 onClick={() => updateStatus(booking.id, "accepted")}
@@ -319,7 +316,7 @@ export default function BusinessDashboardPage() {
     );
 
     const pendingList = bookings.filter(b => b.status === 'pending');
-    const activeList = bookings.filter(b => ['accepted', 'active', 'in-progress'].includes(b.status));
+    const activeList = bookings.filter(b => ['accepted', 'active', 'in-progress', 'confirmed'].includes(b.status));
     const completedList = bookings.filter(b => b.status === 'completed');
 
     return (
@@ -330,7 +327,7 @@ export default function BusinessDashboardPage() {
                     <p className="text-muted-foreground font-medium">Real-time Booking Center</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-6 border-primary/20 hover:bg-primary/5">
+                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-6 border-primary/20">
                         <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Queue
                     </Button>
                     <Badge className="bg-primary text-white font-bold px-4 py-1.5 rounded-full uppercase shadow-sm">
@@ -360,19 +357,19 @@ export default function BusinessDashboardPage() {
                     </TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="pending" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <TabsContent value="pending" className="animate-in fade-in slide-in-from-bottom-2">
                     <Card className="shadow-2xl overflow-hidden border-2 border-primary/5">
                         <BookingTable list={pendingList} isPending />
                     </Card>
                 </TabsContent>
                 
-                <TabsContent value="active" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <TabsContent value="active" className="animate-in fade-in slide-in-from-bottom-2">
                     <Card className="shadow-2xl overflow-hidden border-2 border-primary/5">
                         <BookingTable list={activeList} />
                     </Card>
                 </TabsContent>
                 
-                <TabsContent value="completed" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <TabsContent value="completed" className="animate-in fade-in slide-in-from-bottom-2">
                     <Card className="shadow-2xl overflow-hidden border-2 border-primary/5">
                         <BookingTable list={completedList} isHistory />
                     </Card>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -5,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Package, ArrowRight, CheckCircle2, Phone, Tags, Trophy } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, ArrowRight, CheckCircle2, Phone, Tags, Trophy, Clock } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,8 +16,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
-  const isCipa = business.special_tag === 'CIPA Verified';
-  const hasHighRating = (business.rating || 0) >= 4.5;
+  const isTrial = business.trial_start_date && business.trial_end_date && 
+                  new Date(business.trial_start_date) <= new Date() && 
+                  new Date(business.trial_end_date) >= new Date();
+  
+  const hasHighRating = (business.avg_rating || 0) >= 4.5;
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
@@ -31,18 +35,17 @@ function BusinessCard({ business }: { business: any }) {
         ) : (
           <div className="h-full w-full flex items-center justify-center text-muted-foreground bg-primary/5">
             <Store className="h-16 w-16 opacity-10" />
-            <span className="absolute bottom-4 text-[10px] font-bold uppercase tracking-widest opacity-40">Professional Partner</span>
           </div>
         )}
         <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
-          {hasHighRating && (
-            <Badge className="bg-yellow-500 text-black shadow-lg font-bold border-2 border-white/20 px-2 py-1">
-              <Trophy className="h-3 w-3 mr-1" /> TOP RATED
+          {isTrial && (
+            <Badge className="bg-orange-500 text-white shadow-lg font-bold border-2 border-white/20">
+              <Clock className="h-3 w-3 mr-1" /> TRIAL
             </Badge>
           )}
-          {isCipa && (
-            <Badge className="bg-primary text-white shadow-lg font-bold border-2 border-white/20 px-2 py-1">
-              <CheckCircle2 className="h-3 w-3 mr-1" /> CIPA VERIFIED
+          {hasHighRating && (
+            <Badge className="bg-yellow-500 text-black shadow-lg font-bold border-2 border-white/20">
+              <Trophy className="h-3 w-3 mr-1" /> TOP RATED
             </Badge>
           )}
           <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold">
@@ -61,11 +64,7 @@ function BusinessCard({ business }: { business: any }) {
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <MapPin className="h-3 w-3" />
-                <span className="truncate">{business.address || 'No address'}, {business.city || 'Botswana'}</span>
-            </div>
-            <div className="flex items-center gap-2 text-[10px] text-green-600 font-bold">
-                <Phone className="h-3 w-3" />
-                <span>{business.whatsapp_number || 'Contact ready'}</span>
+                <span className="truncate">{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
             </div>
         </div>
       </CardHeader>
@@ -96,14 +95,14 @@ function BusinessCard({ business }: { business: any }) {
                 key={s} 
                 className={cn(
                   "h-3.5 w-3.5", 
-                  s <= Math.round(business.rating || 0) ? "fill-current" : "text-gray-200"
+                  s <= Math.round(business.avg_rating || 0) ? "fill-current" : "text-gray-200"
                 )} 
               />
             ))}
           </div>
-          <span className="text-sm font-bold">{(business.rating || 0).toFixed(1)}</span>
+          <span className="text-sm font-bold">{(business.avg_rating || 0).toFixed(1)}</span>
           <span className="text-[10px] text-muted-foreground ml-auto uppercase font-bold tracking-widest">
-            {business.review_count || 0} Verified Reviews
+            {business.review_count || 0} Reviews
           </span>
         </div>
       </CardContent>
@@ -130,20 +129,40 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
+        const now = new Date().toISOString();
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select(`
               *,
-              services(*)
-            `)
-            .eq('verification_status', 'verified');
+              services(*),
+              bookings(
+                status,
+                ratings(rating)
+              )
+            `);
         
         if (bizError) throw bizError;
         
-        const sorted = (bizData || []).sort((a, b) => (b.rating - a.rating) || a.name.localeCompare(b.name));
-        setBusinesses(sorted);
+        const processed = (bizData || [])
+            .filter(b => 
+                b.verification_status === 'verified' || 
+                (b.trial_start_date && b.trial_end_date && b.trial_start_date <= now && b.trial_end_date >= now)
+            )
+            .map(b => {
+                const completedBookings = (b.bookings || []).filter((bk: any) => bk.status === 'completed');
+                const ratings = completedBookings.flatMap((bk: any) => bk.ratings || []).filter(r => r.rating);
+                const avg = ratings.length > 0 ? ratings.reduce((acc, r) => acc + r.rating, 0) / ratings.length : 0;
+                
+                return {
+                    ...b,
+                    avg_rating: avg,
+                    review_count: ratings.length
+                };
+            })
+            .sort((a, b) => (b.avg_rating - a.avg_rating) || a.name.localeCompare(b.name));
+
+        setBusinesses(processed);
       } catch (e: any) {
-        console.error("Marketplace Load Error:", e);
         toast({ variant: 'destructive', title: 'Marketplace Error', description: 'Could not load partners.' });
       } finally {
         setLoading(false);
@@ -167,10 +186,7 @@ export default function CustomerHomePage() {
             <ShieldCheck className="h-3 w-3" />
             <span>Verified Platform Partners</span>
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Discover Top Washes</h1>
-          <p className="text-muted-foreground text-lg max-w-2xl">
-            Professional car wash businesses verified for your peace of mind.
-          </p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Find Your Perfect Wash</h1>
           
           <div className="relative max-w-2xl pt-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -182,28 +198,6 @@ export default function CustomerHomePage() {
             />
           </div>
         </div>
-
-        <Card className="w-full lg:w-80 bg-primary/5 border-primary/20 border-dashed shrink-0">
-          <CardHeader className="pb-3">
-            <div className="flex justify-between items-start">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Package className="h-5 w-5 text-primary" />
-              </div>
-              <Badge variant="secondary" className="text-[10px]">ROADMAP</Badge>
-            </div>
-            <CardTitle className="text-lg pt-2">Spare Shop</CardTitle>
-          </CardHeader>
-          <CardContent className="pb-4">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Add accessories and parts to your wash booking soon.
-            </p>
-          </CardContent>
-          <CardFooter>
-            <Button variant="ghost" size="sm" className="w-full text-[10px] h-8 text-muted-foreground cursor-not-allowed">
-              Coming Soon <ArrowRight className="ml-2 h-3 w-3" />
-            </Button>
-          </CardFooter>
-        </Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -225,7 +219,6 @@ export default function CustomerHomePage() {
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
             <p className="text-xl font-bold">No verified partners found.</p>
-            <p className="text-muted-foreground text-sm">Adjust your search or check back later for new partners.</p>
             <Button variant="outline" className="mt-4" onClick={() => setSearch('')}>Clear Search</Button>
           </div>
         )}

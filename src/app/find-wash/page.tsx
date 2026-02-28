@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -5,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, CheckCircle2, Phone, Tags, Trophy } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, CheckCircle2, Phone, Tags, Trophy, Clock } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,8 +15,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
-  const isCipa = business.special_tag === 'CIPA Verified';
-  const hasHighRating = (business.rating || 0) >= 4.5;
+  const isTrial = business.trial_start_date && business.trial_end_date && 
+                  new Date(business.trial_start_date) <= new Date() && 
+                  new Date(business.trial_end_date) >= new Date();
+  
+  const hasHighRating = (business.avg_rating || 0) >= 4.5;
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
@@ -33,17 +37,17 @@ function BusinessCard({ business }: { business: any }) {
           </div>
         )}
         <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
+          {isTrial && (
+            <Badge className="bg-orange-500 text-white shadow-lg font-bold border-2 border-white/20">
+              <Clock className="h-3 w-3 mr-1" /> NEW TRIAL
+            </Badge>
+          )}
           {hasHighRating && (
-            <Badge className="bg-yellow-500 text-black shadow-lg font-bold border-2 border-white/20 px-2 py-1">
+            <Badge className="bg-yellow-500 text-black shadow-lg font-bold border-2 border-white/20">
               <Trophy className="h-3 w-3 mr-1" /> TOP RATED
             </Badge>
           )}
-          {isCipa && (
-            <Badge className="bg-primary text-white shadow-lg font-bold border-2 border-white/20 px-2 py-1">
-              <CheckCircle2 className="h-3 w-3 mr-1" /> CIPA VERIFIED
-            </Badge>
-          )}
-          <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold">
+          <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold uppercase text-[10px]">
             {business.services?.length || 0} Packages
           </Badge>
         </div>
@@ -59,11 +63,7 @@ function BusinessCard({ business }: { business: any }) {
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <MapPin className="h-3 w-3" />
-                <span className="truncate">{business.address || 'No address'}, {business.city || 'Botswana'}</span>
-            </div>
-            <div className="flex items-center gap-2 text-[10px] text-green-600 font-bold">
-                <Phone className="h-3 w-3" />
-                <span>{business.whatsapp_number || 'Contact ready'}</span>
+                <span className="truncate">{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
             </div>
         </div>
       </CardHeader>
@@ -94,19 +94,19 @@ function BusinessCard({ business }: { business: any }) {
                   key={s} 
                   className={cn(
                     "h-3.5 w-3.5", 
-                    s <= Math.round(business.rating || 0) ? "fill-current" : "text-gray-200"
+                    s <= Math.round(business.avg_rating || 0) ? "fill-current" : "text-gray-200"
                   )} 
                 />
             ))}
           </div>
-          <span className="text-sm font-bold">{(business.rating || 0).toFixed(1)}</span>
-          <span className="text-[10px] text-muted-foreground">({business.review_count || 0} reviews)</span>
+          <span className="text-sm font-bold">{(business.avg_rating || 0).toFixed(1)}</span>
+          <span className="text-[10px] text-muted-foreground">({business.review_count || 0} verified reviews)</span>
         </div>
       </CardContent>
 
       <CardFooter className="pt-0 shrink-0">
         <Button asChild className="w-full shadow-md font-bold">
-          <Link href={`/find-wash/${business.id}`}>View Services</Link>
+          <Link href={`/find-wash/${business.id}`}>View Services & Reviews</Link>
         </Button>
       </CardFooter>
     </Card>
@@ -124,20 +124,44 @@ export default function PublicFindWashPage() {
     const load = async () => {
       setLoading(true);
       try {
+        const now = new Date().toISOString();
+        
+        // Complex join to satisfy marketplace query requirements
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select(`
               *,
-              services(*)
-            `)
-            .eq('verification_status', 'verified');
+              services(*),
+              bookings(
+                status,
+                ratings(rating)
+              )
+            `);
         
         if (bizError) throw bizError;
-        
-        const sorted = (bizData || []).sort((a, b) => (b.rating - a.rating) || a.name.localeCompare(b.name));
-        setBusinesses(sorted);
+
+        // Process aggregations and visibility filters in memory for stability
+        const processed = (bizData || [])
+            .filter(b => 
+                b.verification_status === 'verified' || 
+                (b.trial_start_date && b.trial_end_date && b.trial_start_date <= now && b.trial_end_date >= now)
+            )
+            .map(b => {
+                const completedBookings = (b.bookings || []).filter((bk: any) => bk.status === 'completed');
+                const ratings = completedBookings.flatMap((bk: any) => bk.ratings || []).filter(r => r.rating);
+                const avg = ratings.length > 0 ? ratings.reduce((acc, r) => acc + r.rating, 0) / ratings.length : 0;
+                
+                return {
+                    ...b,
+                    avg_rating: avg,
+                    review_count: ratings.length
+                };
+            })
+            .sort((a, b) => (b.avg_rating - a.avg_rating) || a.name.localeCompare(b.name));
+
+        setBusinesses(processed);
       } catch (e: any) {
-        console.error('Marketplace Load Failure:', e);
+        console.error('Marketplace Fetch Failure:', e);
       } finally {
         setLoading(false);
       }
@@ -162,7 +186,7 @@ export default function PublicFindWashPage() {
           </Link>
           <div className="flex items-center gap-2">
              <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-[10px]">CWM</div>
-            <span className="text-sm font-bold text-primary tracking-tight text-nowrap">Carwash Marketplace</span>
+            <span className="text-sm font-bold text-primary tracking-tight">Carwash Marketplace</span>
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild><Link href="/login">Sign In</Link></Button>
@@ -175,9 +199,9 @@ export default function PublicFindWashPage() {
         <div className="space-y-4 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
             <ShieldCheck className="h-3 w-3" />
-            <span>Trust Seal Partners Only</span>
+            <span>Trust Seal Partners & Verified Trials</span>
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight">Verified Partners</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight">Discover Top Washes</h1>
           <p className="text-muted-foreground text-lg">Browse professional car wash businesses verified for quality and reliability.</p>
           
           <div className="relative max-w-2xl pt-4">
@@ -215,12 +239,6 @@ export default function PublicFindWashPage() {
           )}
         </div>
       </main>
-
-      <footer className="py-12 border-t mt-20 bg-muted/30">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-sm text-muted-foreground">Are you a business owner? <Link href="/signup" className="text-primary font-bold hover:underline">Get verified today</Link></p>
-        </div>
-      </footer>
     </div>
   );
 }

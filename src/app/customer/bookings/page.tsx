@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useCallback } from "react";
@@ -67,7 +68,7 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Unauthorized");
 
-      // 1. Update Booking Status
+      // Transactional logic: Update booking status and upsert rating
       const { error: bookingError } = await supabase
         .from('bookings')
         .update({ status: 'completed' })
@@ -75,7 +76,6 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
       
       if (bookingError) throw bookingError;
 
-      // 2. Upsert Rating (ON CONFLICT booking_id)
       const { error: ratingError } = await supabase.from('ratings').upsert({
         booking_id: booking.booking_id,
         customer_id: session.user.id,
@@ -107,15 +107,15 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
             </Avatar>
             <div>
               <CardTitle className="text-base">{booking.business_name || 'Partner'}</CardTitle>
-              <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-                <MapPin className="h-3 w-3" /> {booking.city || 'Gaborone'}
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase font-bold">
+                <MapPin className="h-3 w-3" /> {booking.city}
               </div>
             </div>
           </div>
           <Badge 
             variant={
               booking.status === 'completed' ? 'secondary' : 
-              booking.status === 'cancelled' || booking.status === 'rejected' ? 'destructive' : 'default'
+              ['cancelled', 'rejected'].includes(booking.status) ? 'destructive' : 'default'
             }
             className="uppercase text-[10px]"
           >
@@ -125,22 +125,19 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
       </CardHeader>
       <CardContent className="space-y-4 pb-4 flex-grow">
         <div className="bg-muted/30 p-3 rounded-lg space-y-2">
-            <div className="flex justify-between items-center text-sm">
-                <span className="font-semibold text-primary">{booking.service_name}</span>
-                <span className="font-bold">P{Number(booking.price || 0).toFixed(2)}</span>
+            <div className="flex justify-between items-center text-sm font-bold">
+                <span className="text-primary">{booking.service_name}</span>
+                <span>P{Number(booking.price || 0).toFixed(2)}</span>
             </div>
-            <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {booking.service_duration} mins</span>
+            <div className="flex items-center gap-4 text-[11px] text-muted-foreground font-medium">
                 <span className="flex items-center gap-1"><CarIcon className="h-3.5 w-3.5" /> {booking.car_details}</span>
             </div>
         </div>
 
-        <div className="flex items-center gap-2 font-medium text-sm">
-            <Calendar className="h-4 w-4 text-primary" /> 
-            <span>{dateStr}</span>
-            <span className="text-muted-foreground">•</span>
-            <Clock className="h-4 w-4 text-primary" />
-            <span>{timeStr}</span>
+        <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-widest text-muted-foreground">
+            <Calendar className="h-3.5 w-3.5 text-primary" /> {dateStr}
+            <span className="mx-1">•</span>
+            <Clock className="h-3.5 w-3.5 text-primary" /> {timeStr}
         </div>
 
         {booking.status === 'completed' && booking.hasRating && (
@@ -157,15 +154,12 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
         <div className="mt-4 pt-4 border-t">
             {booking.staff ? (
                 <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9 border-2 border-primary/10">
+                    <Avatar className="h-9 w-9">
                         <AvatarImage src={booking.staff.image_url} alt={booking.staff.name} className="object-cover" />
                         <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-bold">{booking.staff.name?.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col">
-                        <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold">{booking.staff.name}</span>
-                            <Badge variant="outline" className="text-[8px] h-4 px-1 border-primary/20 text-primary">Detailer</Badge>
-                        </div>
+                        <span className="text-xs font-bold">{booking.staff.name}</span>
                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
                             <Phone className="h-2.5 w-2.5" /> {booking.staff.phone}
                         </div>
@@ -174,82 +168,68 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
             ) : (
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground italic">
                     <UserCheck className="h-3 w-3 opacity-50" />
-                    {['cancelled', 'rejected'].includes(booking.status) ? "No detailer assigned" : "Staff not yet assigned."}
+                    {['cancelled', 'rejected'].includes(booking.status) ? "No detailer" : "Detailer assignment pending."}
                 </div>
             )}
         </div>
       </CardContent>
       <CardFooter className="flex justify-between gap-2 border-t pt-3 bg-muted/5">
-        <div className="flex gap-2">
-            {isConfirmed && (
-                <Dialog open={isFinishingOpen} onOpenChange={setIsFinishingOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="default" size="sm" className="h-8 text-xs bg-green-600 hover:bg-green-700">
-                            <CheckCircle2 className="mr-1 h-3 w-3" /> Finish & Rate
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Service Completed?</DialogTitle>
-                            <DialogDescription>Confirm the wash is finished and let the business know how they did.</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-6 py-4">
-                            <div className="text-center space-y-3">
-                                <Label>How was the experience?</Label>
-                                <div className="flex justify-center gap-2">
-                                    {[1, 2, 3, 4, 5].map((star) => (
-                                        <Star
-                                            key={star}
-                                            className={cn(
-                                                "h-8 w-8 cursor-pointer transition-all hover:scale-110",
-                                                rating >= star ? "text-yellow-400 fill-yellow-400" : "text-gray-200"
-                                            )}
-                                            onClick={() => setRating(star)}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Optional Feedback</Label>
-                                <Textarea 
-                                    placeholder="Tell us what was great..." 
-                                    value={feedback}
-                                    onChange={(e) => setFeedback(e.target.value)}
-                                />
+        {isConfirmed && (
+            <Dialog open={isFinishingOpen} onOpenChange={setIsFinishingOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="default" size="sm" className="h-8 text-xs bg-green-600 hover:bg-green-700">
+                        <CheckCircle2 className="mr-1 h-3 w-3" /> Finish & Rate
+                    </Button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Service Completed?</DialogTitle>
+                        <DialogDescription>Confirm the wash is finished and let the business know how they did.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-6 py-4">
+                        <div className="text-center space-y-3">
+                            <Label className="font-bold">Rate Your Experience</Label>
+                            <div className="flex justify-center gap-2">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                    <Star
+                                        key={star}
+                                        className={cn(
+                                            "h-8 w-8 cursor-pointer transition-all hover:scale-110",
+                                            rating >= star ? "text-yellow-400 fill-yellow-400" : "text-gray-200"
+                                        )}
+                                        onClick={() => setRating(star)}
+                                    />
+                                ))}
                             </div>
                         </div>
-                        <DialogFooter>
-                            <Button className="w-full bg-green-600 h-12 text-lg shadow-lg" onClick={handleFinishAndRate} disabled={finishing || rating === 0}>
-                                {finishing ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : null}
-                                Confirm Completion
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            )}
-        </div>
-        
-        <div className="flex gap-2">
-            {canCancel && (
-                <Dialog>
-                    <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-8 text-xs text-destructive hover:text-destructive">
-                            <XCircle className="mr-1 h-3 w-3" /> Cancel
+                        <div className="space-y-2">
+                            <Label className="font-bold">Feedback (Optional)</Label>
+                            <Textarea 
+                                placeholder="What stood out during your service?" 
+                                value={feedback}
+                                onChange={(e) => setFeedback(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button className="w-full bg-green-600 h-12 text-lg shadow-lg font-bold" onClick={handleFinishAndRate} disabled={finishing || rating === 0}>
+                            {finishing && <Loader2 className="animate-spin mr-2 h-5 w-5" />}
+                            Confirm Completion
                         </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader><DialogTitle>Cancel Booking?</DialogTitle><DialogDescription>This action cannot be undone.</DialogDescription></DialogHeader>
-                        <DialogFooter>
-                            <Button variant="destructive" onClick={handleCancel} disabled={cancelling}>
-                                {cancelling && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
-                                Confirm Cancellation
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        )}
+        
+        <div className="flex gap-2 ml-auto">
+            {canCancel && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:bg-destructive/5" onClick={handleCancel} disabled={cancelling}>
+                    {cancelling ? <Loader2 className="animate-spin h-3 w-3" /> : <XCircle className="h-3 w-3 mr-1" />}
+                    Cancel
+                </Button>
             )}
             {!isUpcoming && (
-                <Button size="sm" className="h-8 text-xs" asChild>
+                <Button size="sm" variant="outline" className="h-8 text-xs font-bold" asChild>
                     <Link href={`/customer/book/${booking.business_id}`}>
                         <Repeat className="mr-1 h-3 w-3" /> Rebook
                     </Link>
@@ -280,7 +260,7 @@ export default function BookingHistoryPage() {
                     service:service_id ( name, duration ),
                     car:car_id ( make, model ),
                     staff:staff_id ( name, phone, image_url ),
-                    rating:ratings!booking_id ( id, rating, feedback )
+                    rating:ratings!booking_id ( rating, feedback )
                 `)
                 .eq('customer_id', session.user.id)
                 .order('booking_time', { ascending: false });
@@ -297,8 +277,7 @@ export default function BookingHistoryPage() {
                 city: b.business?.city || 'Gaborone',
                 business_avatar: b.business?.logo_url,
                 service_name: b.service?.name || 'Wash Service',
-                service_duration: b.service?.duration,
-                car_details: b.car ? `${b.car.make} ${b.car.model}` : 'Registered Vehicle',
+                car_details: b.car ? `${b.car.make} ${b.car.model}` : 'Vehicle',
                 staff: b.staff,
                 hasRating: b.rating && b.rating.length > 0,
                 ratingValue: b.rating?.[0]?.rating || 0,
@@ -325,30 +304,22 @@ export default function BookingHistoryPage() {
 
     return (
         <div className="space-y-8 max-w-6xl mx-auto pb-12">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                    <h1 className="text-3xl font-bold tracking-tight">My Bookings</h1>
-                    <p className="text-muted-foreground">Manage your wash requests and feedback.</p>
-                </div>
+            <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold tracking-tight">My Bookings</h1>
                 <Button variant="outline" size="sm" onClick={() => fetchBookings()} disabled={loading}>
-                    <Loader2 className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
+                    <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
                     Refresh
                 </Button>
             </div>
 
             <Tabs defaultValue="upcoming" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-md">
-                    <TabsTrigger value="upcoming">Upcoming ({upcomingBookings.length})</TabsTrigger>
-                    <TabsTrigger value="past">History ({pastBookings.length})</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 max-w-md bg-muted/50 p-1 rounded-xl">
+                    <TabsTrigger value="upcoming" className="rounded-lg font-bold">Upcoming ({upcomingBookings.length})</TabsTrigger>
+                    <TabsTrigger value="past" className="rounded-lg font-bold">History ({pastBookings.length})</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="upcoming" className="mt-8">
-                    {loading ? (
-                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                            <Skeleton className="h-[280px] w-full rounded-xl" />
-                            <Skeleton className="h-[280px] w-full rounded-xl" />
-                        </div>
-                    ) : upcomingBookings.length > 0 ? (
+                <TabsContent value="upcoming" className="mt-8 animate-in fade-in">
+                    {upcomingBookings.length > 0 ? (
                         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                             {upcomingBookings.map(b => (
                                 <BookingCard key={b.booking_id} booking={b} onRefresh={fetchBookings} />
@@ -356,13 +327,13 @@ export default function BookingHistoryPage() {
                         </div>
                     ) : (
                         <div className="text-center py-24 border-2 border-dashed rounded-3xl bg-muted/10">
-                            <p className="text-xl font-bold">No upcoming bookings</p>
-                            <Button asChild className="mt-4"><Link href="/customer/home">Discover Washes</Link></Button>
+                            <p className="text-lg font-bold text-muted-foreground">No upcoming bookings found.</p>
+                            <Button asChild className="mt-4 shadow-lg"><Link href="/customer/home">Book a Wash Now</Link></Button>
                         </div>
                     )}
                 </TabsContent>
 
-                <TabsContent value="past" className="mt-8">
+                <TabsContent value="past" className="mt-8 animate-in fade-in">
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {pastBookings.map(b => (
                             <BookingCard key={b.booking_id} booking={b} onRefresh={fetchBookings} />
@@ -372,4 +343,27 @@ export default function BookingHistoryPage() {
             </Tabs>
         </div>
     );
+}
+
+function RefreshCw({ className, ...props }: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      {...props}
+    >
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M3 21v-5h5" />
+    </svg>
+  )
 }

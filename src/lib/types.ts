@@ -65,6 +65,8 @@ export type Business = {
   id_number?: string; // Omang or Reg Number
   selfie_url?: string;
   certificate_url?: string;
+  trial_start_date?: string;
+  trial_end_date?: string;
 };
 
 export type Employee = {
