@@ -5,19 +5,22 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, CheckCircle2, Phone, Tags } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, CheckCircle2, Phone, Tags, Trophy, Award } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
+  const hasHighRating = business.avgRating >= 4.5;
+  const isTrusted = business.reviewCount >= 5;
 
   return (
-    <Card className="flex flex-col h-[550px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
-      <div className="relative h-40 w-full group overflow-hidden bg-muted">
+    <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
+      <div className="relative h-44 w-full group overflow-hidden bg-muted">
         {business.logo_url ? (
           <Image
             src={business.logo_url}
@@ -31,6 +34,11 @@ function BusinessCard({ business }: { business: any }) {
           </div>
         )}
         <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
+          {hasHighRating && (
+            <Badge className="bg-yellow-500 text-black shadow-lg font-bold border-2 border-white/20 px-2 py-1">
+              <Trophy className="h-3 w-3 mr-1" /> TOP RATED
+            </Badge>
+          )}
           {isCipa && (
             <Badge className="bg-primary text-white shadow-lg font-bold border-2 border-white/20 px-2 py-1">
               <CheckCircle2 className="h-3 w-3 mr-1" /> CIPA VERIFIED
@@ -71,20 +79,33 @@ function BusinessCard({ business }: { business: any }) {
                     {business.services?.map((svc: any) => (
                         <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent hover:border-primary/20 transition-colors">
                             <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
-                            <span className="font-bold text-primary">{svc.currency_code || 'BWP'} {Number(svc.price).toFixed(2)}</span>
+                            <span className="font-bold text-primary">BWP {Number(svc.price).toFixed(2)}</span>
                         </div>
                     ))}
                 </div>
             </ScrollArea>
         </div>
 
-        <div className="flex items-center gap-1.5 pt-2 border-t border-dashed shrink-0">
+        <div className="flex items-center gap-2 pt-2 border-t border-dashed shrink-0">
           <div className="flex text-yellow-400">
             {[1, 2, 3, 4, 5].map((s) => (
-                <Star key={s} className="h-3 w-3 fill-current" />
+                <Star 
+                  key={s} 
+                  className={cn(
+                    "h-3.5 w-3.5", 
+                    s <= Math.round(business.avgRating) ? "fill-current" : "text-gray-200"
+                  )} 
+                />
             ))}
           </div>
-          <span className="text-xs font-bold">5.0</span>
+          <span className="text-sm font-bold">{business.avgRating.toFixed(1)}</span>
+          <span className="text-[10px] text-muted-foreground">({business.reviewCount} reviews)</span>
+          
+          {isTrusted && (
+            <Badge variant="outline" className="ml-auto text-[8px] font-bold border-blue-200 bg-blue-50 text-blue-700">
+              <Award className="h-2.5 w-2.5 mr-1" /> TRUSTED
+            </Badge>
+          )}
         </div>
       </CardContent>
 
@@ -101,34 +122,49 @@ export default function PublicFindWashPage() {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const load = async () => {
       setLoading(true);
       try {
+        // SQL Requirement Implementation: 
+        // verification_status = 'verified'
+        // Include reviews from completed bookings via deep join
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
-            .select('*, services(*)')
-            .eq('verification_status', 'verified')
-            .eq('subscription_status', 'active');
+            .select(`
+              *,
+              services(*),
+              bookings(
+                status,
+                ratings(rating)
+              )
+            `)
+            .eq('verification_status', 'verified');
         
         if (bizError) throw bizError;
         
-        console.log(`[Public Marketplace Debug] Fetched ${bizData?.length || 0} verified active businesses.`);
+        const formatted = (bizData || []).map(biz => {
+          // Calculate avg_rating and review_count based only on completed bookings
+          const completedBookings = (biz.bookings || []).filter((b: any) => b.status === 'completed');
+          const ratings = completedBookings.flatMap((b: any) => b.ratings || []);
+          
+          const totalStars = ratings.reduce((acc: number, curr: any) => acc + (curr.rating || 0), 0);
+          const reviewCount = ratings.length;
+          const avgRating = reviewCount > 0 ? totalStars / reviewCount : 0;
 
-        const formatted = (bizData || [])
-          .filter(biz => biz.services && biz.services.length > 0);
+          return {
+            ...biz,
+            avgRating,
+            reviewCount
+          };
+        });
 
+        // Sorting Logic: avg_rating DESC, name ASC
         formatted.sort((a, b) => {
-            const aHasLogo = !!a.logo_url ? 1 : 0;
-            const bHasLogo = !!b.logo_url ? 1 : 0;
-            
-            if (bHasLogo !== aHasLogo) return bHasLogo - aHasLogo;
-            
-            const aSvcCount = a.services?.length || 0;
-            const bSvcCount = b.services?.length || 0;
-            if (bSvcCount !== aSvcCount) return bSvcCount - aSvcCount;
-            
+            if (b.avgRating !== a.avgRating) return b.avgRating - a.avgRating;
             return a.name.localeCompare(b.name);
         });
         
@@ -146,6 +182,8 @@ export default function PublicFindWashPage() {
     b.name.toLowerCase().includes(search.toLowerCase()) || 
     (b.city && b.city.toLowerCase().includes(search.toLowerCase()))
   );
+
+  if (!mounted) return null;
 
   return (
     <div className="min-h-screen bg-background">
