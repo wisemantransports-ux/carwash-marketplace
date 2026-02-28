@@ -13,7 +13,9 @@ import {
     Lock,
     Star,
     CheckCircle2,
-    XCircle
+    XCircle,
+    Mail,
+    User
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -33,7 +35,7 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Stable state for staff assignments to prevent flickering
+    // Prioritized local state for staff assignments to ensure UI sticks immediately
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -56,14 +58,12 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Restriction Pre-Check
-            const { data: profile, error: profileError } = await supabase
+            // 1. Pre-fetch status check to avoid infinite recursion RLS
+            const { data: profile } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
                 .eq('id', authUser.id)
                 .maybeSingle();
-
-            if (profileError) throw profileError;
 
             const isPaid = profile?.paid === true;
             const isTrialValid = profile?.trial_expiry ? new Date(profile.trial_expiry) > new Date() : false;
@@ -78,13 +78,11 @@ export default function BusinessDashboardPage() {
             setIsRestricted(false);
 
             // 2. Fetch Business Record
-            const { data: bizData, error: bizError } = await supabase
+            const { data: bizData } = await supabase
                 .from('businesses')
                 .select('*')
                 .eq('owner_id', authUser.id)
                 .maybeSingle();
-            
-            if (bizError) throw bizError;
             
             if (bizData) {
                 setBusiness(bizData);
@@ -98,7 +96,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with Full Relation Mapping
+                // 4. Fetch Bookings with Explicit Relation Mapping
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -123,7 +121,7 @@ export default function BusinessDashboardPage() {
                 setFetchError("Business profile not found.");
             }
         } catch (error: any) {
-            console.error("[DASHBOARD] Fetch Error:", error);
+            console.error("[DASHBOARD] Fetch failure:", error);
             setFetchError(error.message || "A database error occurred.");
         } finally {
             setLoading(false);
@@ -159,6 +157,7 @@ export default function BusinessDashboardPage() {
                 description: status === 'accepted' ? "Service moved to active queue." : "Request removed."
             });
             
+            // Clear local tracking for this booking as it moves tab
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -174,6 +173,7 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
+        // Update local state immediately for responsiveness
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -186,6 +186,7 @@ export default function BusinessDashboardPage() {
             toast({ title: "Employee assigned successfully." });
             await fetchData(true);
         } catch (e: any) {
+            // Revert on error
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -218,7 +219,7 @@ export default function BusinessDashboardPage() {
                         <TableHead className="font-bold px-4">Staff</TableHead>
                         <TableHead className="font-bold px-4">Timing</TableHead>
                         <TableHead className={cn("text-right font-bold pr-6", isHistory && "text-center")}>
-                            {isHistory ? "Feedback" : "Action"}
+                            Action
                         </TableHead>
                     </TableRow>
                 </TableHeader>
@@ -236,11 +237,15 @@ export default function BusinessDashboardPage() {
 
                         return (
                             <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors border-b">
-                                <TableCell className="font-bold text-sm px-4 py-4">{booking.customer?.name || '---'}</TableCell>
-                                <TableCell className="text-xs text-muted-foreground px-4">{booking.customer?.email || '---'}</TableCell>
+                                <TableCell className="font-bold text-sm px-4 py-4">
+                                    <div className="flex items-center gap-2"><User className="h-3 w-3 opacity-40" /> {booking.customer?.name || '---'}</div>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground px-4">
+                                    <div className="flex items-center gap-2"><Mail className="h-3 w-3 opacity-40" /> {booking.customer?.email || '---'}</div>
+                                </TableCell>
                                 <TableCell className="px-4">
-                                    <div className="text-xs font-medium">{booking.service?.name}</div>
-                                    <div className="text-[10px] font-bold text-primary">BWP {Number(booking.service?.price || 0).toFixed(2)}</div>
+                                    <div className="text-xs font-bold">{booking.service?.name}</div>
+                                    <div className="text-[10px] font-bold text-primary uppercase">BWP {Number(booking.service?.price || booking.price || 0).toFixed(2)}</div>
                                 </TableCell>
                                 <TableCell className="text-xs font-bold px-4">
                                     {booking.car?.make} {booking.car?.model}

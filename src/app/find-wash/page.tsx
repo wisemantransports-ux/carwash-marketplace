@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, CheckCircle2, Phone, Tags, Trophy, Clock } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Clock, Trophy, Tags } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -39,7 +39,7 @@ function BusinessCard({ business }: { business: any }) {
         <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
           {isTrial && (
             <Badge className="bg-orange-500 text-white shadow-lg font-bold border-2 border-white/20">
-              <Clock className="h-3 w-3 mr-1" /> NEW TRIAL
+              <Clock className="h-3 w-3 mr-1" /> TRIAL
             </Badge>
           )}
           {hasHighRating && (
@@ -60,18 +60,16 @@ function BusinessCard({ business }: { business: any }) {
             <ShieldCheck className="h-3 w-3 mr-1" /> Verified
           </Badge>
         </div>
-        <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                <span className="truncate">{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
-            </div>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+            <MapPin className="h-3 w-3" />
+            <span className="truncate">{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
         </div>
       </CardHeader>
 
       <CardContent className="flex-grow space-y-4 pb-4 overflow-hidden flex flex-col">
         <div className="space-y-2 flex-1 flex flex-col min-h-0">
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
-                <Tags className="h-3 w-3" /> Catalog Preview
+                <Tags className="h-3 w-3" /> Service Preview
             </p>
             <ScrollArea className="flex-1 pr-2">
                 <div className="space-y-1.5">
@@ -100,13 +98,13 @@ function BusinessCard({ business }: { business: any }) {
             ))}
           </div>
           <span className="text-sm font-bold">{(business.avg_rating || 0).toFixed(1)}</span>
-          <span className="text-[10px] text-muted-foreground">({business.review_count || 0} verified reviews)</span>
+          <span className="text-[10px] text-muted-foreground">({business.review_count || 0} reviews)</span>
         </div>
       </CardContent>
 
       <CardFooter className="pt-0 shrink-0">
         <Button asChild className="w-full shadow-md font-bold">
-          <Link href={`/find-wash/${business.id}`}>View Services & Reviews</Link>
+          <Link href={`/find-wash/${business.id}`}>View Details & Book</Link>
         </Button>
       </CardFooter>
     </Card>
@@ -125,8 +123,6 @@ export default function PublicFindWashPage() {
       setLoading(true);
       try {
         const now = new Date().toISOString();
-        
-        // Complex join to satisfy marketplace query requirements
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select(`
@@ -140,7 +136,6 @@ export default function PublicFindWashPage() {
         
         if (bizError) throw bizError;
 
-        // Process aggregations and visibility filters in memory for stability
         const processed = (bizData || [])
             .filter(b => 
                 b.verification_status === 'verified' || 
@@ -150,17 +145,12 @@ export default function PublicFindWashPage() {
                 const completedBookings = (b.bookings || []).filter((bk: any) => bk.status === 'completed');
                 const ratings = completedBookings.flatMap((bk: any) => bk.ratings || []).filter(r => r.rating);
                 const avg = ratings.length > 0 ? ratings.reduce((acc, r) => acc + r.rating, 0) / ratings.length : 0;
-                
-                return {
-                    ...b,
-                    avg_rating: avg,
-                    review_count: ratings.length
-                };
+                return { ...b, avg_rating: avg, review_count: ratings.length };
             })
             .sort((a, b) => (b.avg_rating - a.avg_rating) || a.name.localeCompare(b.name));
 
         setBusinesses(processed);
-      } catch (e: any) {
+      } catch (e) {
         console.error('Marketplace Fetch Failure:', e);
       } finally {
         setLoading(false);
@@ -199,15 +189,14 @@ export default function PublicFindWashPage() {
         <div className="space-y-4 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
             <ShieldCheck className="h-3 w-3" />
-            <span>Trust Seal Partners & Verified Trials</span>
+            <span>Verified Partners & Active Trials</span>
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight">Discover Top Washes</h1>
-          <p className="text-muted-foreground text-lg">Browse professional car wash businesses verified for quality and reliability.</p>
-          
+          <h1 className="text-4xl font-extrabold tracking-tight">Find a Professional Wash</h1>
+          <p className="text-muted-foreground text-lg">Browse car wash businesses verified for quality and reliability.</p>
           <div className="relative max-w-2xl pt-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Search by name or operating city..." 
+                placeholder="Search by name or city..." 
                 className="pl-10 h-12 bg-card border-2"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
