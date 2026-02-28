@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,21 +27,26 @@ export default function BusinessDashboardPage() {
     const [staffList, setStaffList] = useState<any[]>([]);
     const [business, setBusiness] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    const updatingRef = useRef<Record<string, boolean>>({});
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (isSilent = false) => {
         if (!isSupabaseConfigured) {
             setFetchError("Supabase Configuration Missing");
             setLoading(false);
             return;
         }
 
-        setLoading(true);
+        if (!isSilent) setLoading(true);
+        else setRefreshing(true);
+        
         setFetchError(null);
         try {
             const { data: { user: authUser } } = await supabase.auth.getUser();
             if (!authUser) {
                 setLoading(false);
+                setRefreshing(false);
                 return;
             }
 
@@ -63,7 +68,7 @@ export default function BusinessDashboardPage() {
                     .select("id, name")
                     .eq("business_id", bizData.id);
                 
-                if (staffError) console.error("Staff list fetch error:", staffError);
+                if (staffError) console.error("Staff fetch error:", staffError);
                 setStaffList(staffData || []);
 
                 // 3. Fetch Bookings with strict relational data
@@ -94,7 +99,18 @@ export default function BusinessDashboardPage() {
                     .order("booking_time", { ascending: true });
                 
                 if (bookingError) throw bookingError;
-                setBookings(bookingData || []);
+
+                // Merge updates: If we are currently updating a row locally, preserve that local state
+                // to prevent the "flicker/revert" issue described by user
+                const mergedBookings = (bookingData || []).map(newB => {
+                    if (updatingRef.current[newB.id]) {
+                        const existing = bookings.find(b => b.id === newB.id);
+                        return existing ? { ...newB, staff_id: existing.staff_id } : newB;
+                    }
+                    return newB;
+                });
+
+                setBookings(mergedBookings);
 
             } else {
                 setFetchError("Business profile not found. Please complete your profile setup.");
@@ -104,24 +120,29 @@ export default function BusinessDashboardPage() {
             setFetchError(error.message || "Unable to load operational data. Check connection.");
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
-    }, []);
+    }, [bookings]);
 
     useEffect(() => {
+        // Initial load
         fetchData();
 
         // Realtime subscription for instant updates
         const channel = supabase
             .channel('dashboard-sync')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
-                fetchData();
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, (payload) => {
+                // If the change wasn't from our own active update, refresh
+                if (!updatingRef.current[payload.new?.id]) {
+                    fetchData(true);
+                }
             })
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [fetchData]);
+    }, []); // Only run on mount
 
     const updateStatus = async (bookingId: string, status: string) => {
         try {
@@ -136,7 +157,7 @@ export default function BusinessDashboardPage() {
                 title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Updated", 
                 description: `Request status has been set to ${status}.` 
             });
-            await fetchData();
+            await fetchData(true);
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
         }
@@ -145,7 +166,10 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // OPTIMISTIC UPDATE: Change local state immediately so it "sticks" visually
+        // Lock this row to prevent background refresh from reverting it
+        updatingRef.current[bookingId] = true;
+
+        // OPTIMISTIC UPDATE: Change local state immediately
         setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, staff_id: staffId } : b));
 
         try {
@@ -157,11 +181,16 @@ export default function BusinessDashboardPage() {
             if (error) throw error;
             
             toast({ title: "Employee assigned", description: "The staff member has been linked to this booking." });
-            // Sync with server state
-            await fetchData();
+            
+            // Allow background sync to take over after a small delay to ensure DB consistency
+            setTimeout(() => {
+                updatingRef.current[bookingId] = false;
+                fetchData(true);
+            }, 1000);
+
         } catch (e: any) {
-            // Revert on error
-            await fetchData();
+            updatingRef.current[bookingId] = false;
+            await fetchData(true);
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
         }
     };
@@ -181,7 +210,6 @@ export default function BusinessDashboardPage() {
             <TableBody>
                 {list.length > 0 ? list.map((booking) => (
                     <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
-                        {/* 1. CUSTOMER */}
                         <TableCell>
                             <div className="font-bold text-sm">
                                 {booking.customer?.name ?? "Unknown Customer"}
@@ -191,7 +219,6 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* 2. SERVICE INFO */}
                         <TableCell>
                             <div className="text-sm font-medium">
                                 {booking.services?.name}
@@ -201,14 +228,12 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* 3. CAR */}
                         <TableCell>
                             <div className="text-sm font-bold">
                                 {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
                             </div>
                         </TableCell>
 
-                        {/* 4. STAFF (STABLE DROPDOWN) */}
                         <TableCell>
                             <select
                                 className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
@@ -224,7 +249,6 @@ export default function BusinessDashboardPage() {
                             </select>
                         </TableCell>
 
-                        {/* 5. TIMING */}
                         <TableCell className="text-xs">
                             <div className="font-bold">
                                 {new Date(booking.booking_time).toLocaleDateString(undefined, { dateStyle: 'medium' })}
@@ -234,7 +258,6 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* 6. ACTION (GATED ACCEPT) */}
                         <TableCell className="text-right pr-6">
                             {isPending ? (
                                 <div className="flex justify-end gap-2">
@@ -331,8 +354,8 @@ export default function BusinessDashboardPage() {
                     <p className="text-muted-foreground font-medium">Operations Center</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={fetchData} className="rounded-full h-10">
-                        <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} /> Refresh Queue
+                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10">
+                        <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Queue
                     </Button>
                     <Badge className="bg-primary hover:bg-primary font-bold px-4 py-1.5 rounded-full uppercase tracking-tighter">
                         {business?.subscription_status?.replace('_', ' ')}
