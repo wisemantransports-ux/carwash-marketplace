@@ -57,14 +57,14 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff List for assignment (using 'name' column from schema)
+                // 2. Fetch Staff List for assignment (using 'name' column)
                 const { data: staffData, error: staffError } = await supabase
                     .from("employees")
                     .select("id, name")
                     .eq("business_id", bizData.id);
                 
                 if (staffError) {
-                    console.error("Staff fetch error details:", staffError);
+                    console.error("Staff fetch error:", staffError);
                 }
                 setStaffList(staffData || []);
 
@@ -123,7 +123,7 @@ export default function BusinessDashboardPage() {
             if (error) throw error;
 
             toast({ 
-                title: status === 'accepted' ? "Booking Accepted" : "Booking Updated", 
+                title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Updated", 
                 description: `Request status has been set to ${status}.` 
             });
             await fetchData();
@@ -133,14 +133,17 @@ export default function BusinessDashboardPage() {
     };
 
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
+        if (!staffId) return;
+        
         try {
             const { error } = await supabase
                 .from("bookings")
-                .update({ staff_id: staffId || null })
+                .update({ staff_id: staffId })
                 .eq("id", bookingId);
 
             if (error) throw error;
-            toast({ title: "Staff Assigned", description: "Detailer choice persisted successfully." });
+            
+            toast({ title: "Employee assigned", description: "The staff member has been linked to this booking." });
             await fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
@@ -189,7 +192,7 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* 4. STAFF (DROP DOWN) */}
+                        {/* 4. STAFF (DROPDOWN) */}
                         <TableCell>
                             <select
                                 className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
@@ -230,7 +233,7 @@ export default function BusinessDashboardPage() {
                                         )}
                                         onClick={() => updateStatus(booking.id, "accepted")}
                                     >
-                                        <CheckCircle2 className="h-3 w-3" /> Accept ✅
+                                        Accept ✅
                                     </Button>
                                     <Button 
                                         size="sm" 
@@ -238,7 +241,7 @@ export default function BusinessDashboardPage() {
                                         className="h-8 text-[10px] font-bold uppercase gap-1.5" 
                                         onClick={() => updateStatus(booking.id, "rejected")}
                                     >
-                                        <XCircle className="h-3 w-3" /> Reject ❌
+                                        Reject ❌
                                     </Button>
                                 </div>
                             ) : (
