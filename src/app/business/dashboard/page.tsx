@@ -56,9 +56,7 @@ export default function BusinessDashboardPage() {
                 setBusiness(bizData);
 
                 // 2. Fetch Bookings with STRICT relation query
-                // Note: Using 'customers', 'services', 'cars' as specified. 
-                // Mapping to available schema fields if exact match fails, 
-                // but utilizing the prompt's structure.
+                // Note: Joining users table via customer_id foreign key
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -66,7 +64,7 @@ export default function BusinessDashboardPage() {
                         booking_time,
                         status,
                         staff_id,
-                        customers:customer_id (
+                        users:customer_id (
                             id,
                             name,
                             email
@@ -158,10 +156,10 @@ export default function BusinessDashboardPage() {
                         {/* CUSTOMER COLUMN */}
                         <TableCell>
                             <div className="font-bold text-sm">
-                                {booking.customers?.name ?? "Unknown Customer"}
+                                {booking.users?.name ?? "Unknown Customer"}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                                {booking.customers?.email ?? ""}
+                                {booking.users?.email ?? ""}
                             </div>
                         </TableCell>
 
@@ -206,7 +204,13 @@ export default function BusinessDashboardPage() {
                                 <div className="flex justify-end gap-2">
                                     <Button 
                                         size="sm" 
-                                        className="h-8 text-[10px] font-bold uppercase bg-green-600 hover:bg-green-700" 
+                                        disabled={!booking.staff_id}
+                                        className={cn(
+                                            "h-8 text-[10px] font-bold uppercase",
+                                            booking.staff_id 
+                                                ? "bg-green-600 hover:bg-green-700" 
+                                                : "bg-muted text-muted-foreground cursor-not-allowed"
+                                        )}
                                         onClick={() => updateStatus(booking.id, "accepted")}
                                     >
                                         Accept
@@ -356,4 +360,27 @@ export default function BusinessDashboardPage() {
             </Tabs>
         </div>
     );
+}
+
+// Helper refresh icon
+function RefreshCw(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M3 21v-5h5" />
+    </svg>
+  )
 }
