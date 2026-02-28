@@ -30,6 +30,7 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
+    // Stable state for staff assignments to prevent flickering
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -52,17 +53,14 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Restriction Pre-Check via users_with_access view
+            // 1. Restriction Pre-Check via non-recursive view
             const { data: profile, error: profileError } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
                 .eq('id', authUser.id)
                 .maybeSingle();
 
-            if (profileError) {
-                console.error("[DASHBOARD] Profile Check Error:", JSON.stringify(profileError, null, 2));
-                throw profileError;
-            }
+            if (profileError) throw profileError;
 
             const isPaid = profile?.paid === true;
             const isTrialValid = profile?.trial_expiry ? new Date(profile.trial_expiry) > new Date() : false;
@@ -83,10 +81,7 @@ export default function BusinessDashboardPage() {
                 .eq('owner_id', authUser.id)
                 .maybeSingle();
             
-            if (bizError) {
-                console.error("[DASHBOARD] Business Record Error:", JSON.stringify(bizError, null, 2));
-                throw bizError;
-            }
+            if (bizError) throw bizError;
             
             if (bizData) {
                 setBusiness(bizData);
@@ -100,7 +95,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with Explicit Relationship Naming
+                // 4. Fetch Bookings with Explicit joins for 7-column layout
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -118,17 +113,14 @@ export default function BusinessDashboardPage() {
                     .eq("business_id", bizData.id)
                     .order("booking_time", { ascending: true });
                 
-                if (bookingError) {
-                    console.error("[DASHBOARD] Booking Fetch Error:", JSON.stringify(bookingError, null, 2));
-                    throw bookingError;
-                }
-                
+                if (bookingError) throw bookingError;
                 setBookings(bookingData || []);
 
             } else {
                 setFetchError("Business profile not found. Please complete your profile setup.");
             }
         } catch (error: any) {
+            console.error("[DASHBOARD] Fetch Error:", error);
             setFetchError(error.message || "A database error occurred while loading operational data.");
         } finally {
             setLoading(false);
@@ -161,9 +153,10 @@ export default function BusinessDashboardPage() {
 
             toast({ 
                 title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Rejected ❌",
-                description: status === 'accepted' ? "Invoice generated automatically." : "Request removed."
+                description: status === 'accepted' ? "The service has been moved to the active queue." : "Request removed."
             });
             
+            // Clear local tracking for this specific booking
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -179,6 +172,7 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
+        // 1. Update local state immediately for zero-latency response
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -188,8 +182,12 @@ export default function BusinessDashboardPage() {
                 .eq("id", bookingId);
 
             if (error) throw error;
+            toast({ title: "Employee assigned successfully." });
+            
+            // Silently refresh background data
             await fetchData(true);
         } catch (e: any) {
+            // Revert on failure
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -228,6 +226,7 @@ export default function BusinessDashboardPage() {
                 </TableHeader>
                 <TableBody>
                     {list.length > 0 ? list.map((booking) => {
+                        // Priority: Local selection -> Database record -> Empty
                         const currentStaffId = localStaffAssignments[booking.id] || booking.staff_id || "";
                         const isStaffAssigned = !!currentStaffId;
                         const rating = booking.rating?.[0];

@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
-  const hasHighRating = (business.avgRating || 0) >= 4.5;
+  const hasHighRating = (business.rating || 0) >= 4.5;
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
@@ -96,14 +96,14 @@ function BusinessCard({ business }: { business: any }) {
                 key={s} 
                 className={cn(
                   "h-3.5 w-3.5", 
-                  s <= Math.round(business.avgRating || 0) ? "fill-current" : "text-gray-200"
+                  s <= Math.round(business.rating || 0) ? "fill-current" : "text-gray-200"
                 )} 
               />
             ))}
           </div>
-          <span className="text-sm font-bold">{(business.avgRating || 0).toFixed(1)}</span>
+          <span className="text-sm font-bold">{(business.rating || 0).toFixed(1)}</span>
           <span className="text-[10px] text-muted-foreground ml-auto uppercase font-bold tracking-widest">
-            {business.reviewCount || 0} Verified Reviews
+            {business.review_count || 0} Verified Reviews
           </span>
         </div>
       </CardContent>
@@ -130,41 +130,20 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
-        // Simple robust fetch to ensure businesses appear even if joins fail permissions
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select(`
               *,
-              services(*),
-              bookings(
-                status,
-                ratings(rating)
-              )
+              services(*)
             `)
             .eq('verification_status', 'verified');
         
-        if (bizError) {
-            console.error("Marketplace Fetch Error:", JSON.stringify(bizError, null, 2));
-            throw bizError;
-        }
-
-        const formatted = (bizData || []).map(biz => {
-            const completedBookings = (biz.bookings || []).filter((b: any) => b.status === 'completed');
-            const ratings = completedBookings.flatMap((b: any) => b.ratings || []);
-            const totalStars = ratings.reduce((acc: number, curr: any) => acc + (curr.rating || 0), 0);
-            const reviewCount = ratings.length;
-            const avgRating = reviewCount > 0 ? totalStars / reviewCount : 0;
-
-            return {
-              ...biz,
-              avgRating,
-              reviewCount
-            };
-        });
-
-        formatted.sort((a, b) => (b.avgRating - a.avgRating) || a.name.localeCompare(b.name));
-        setBusinesses(formatted);
+        if (bizError) throw bizError;
+        
+        const sorted = (bizData || []).sort((a, b) => (b.rating - a.rating) || a.name.localeCompare(b.name));
+        setBusinesses(sorted);
       } catch (e: any) {
+        console.error("Marketplace Load Error:", e);
         toast({ variant: 'destructive', title: 'Marketplace Error', description: 'Could not load partners.' });
       } finally {
         setLoading(false);
@@ -245,7 +224,7 @@ export default function CustomerHomePage() {
         ) : (
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-            <p className="text-xl font-bold">No verified washes found</p>
+            <p className="text-xl font-bold">No verified partners found.</p>
             <p className="text-muted-foreground text-sm">Adjust your search or check back later for new partners.</p>
             <Button variant="outline" className="mt-4" onClick={() => setSearch('')}>Clear Search</Button>
           </div>

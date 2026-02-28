@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
-  const hasHighRating = (business.avgRating || 0) >= 4.5;
+  const hasHighRating = (business.rating || 0) >= 4.5;
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
@@ -94,13 +94,13 @@ function BusinessCard({ business }: { business: any }) {
                   key={s} 
                   className={cn(
                     "h-3.5 w-3.5", 
-                    s <= Math.round(business.avgRating || 0) ? "fill-current" : "text-gray-200"
+                    s <= Math.round(business.rating || 0) ? "fill-current" : "text-gray-200"
                   )} 
                 />
             ))}
           </div>
-          <span className="text-sm font-bold">{(business.avgRating || 0).toFixed(1)}</span>
-          <span className="text-[10px] text-muted-foreground">({business.reviewCount || 0} reviews)</span>
+          <span className="text-sm font-bold">{(business.rating || 0).toFixed(1)}</span>
+          <span className="text-[10px] text-muted-foreground">({business.review_count || 0} reviews)</span>
         </div>
       </CardContent>
 
@@ -128,36 +128,15 @@ export default function PublicFindWashPage() {
             .from('businesses')
             .select(`
               *,
-              services(*),
-              bookings(
-                status,
-                ratings(rating)
-              )
+              services(*)
             `)
             .eq('verification_status', 'verified');
         
-        if (bizError) {
-            console.error("Public Marketplace Error:", JSON.stringify(bizError, null, 2));
-            throw bizError;
-        }
+        if (bizError) throw bizError;
         
-        const formatted = (bizData || []).map(biz => {
-          const completedBookings = (biz.bookings || []).filter((b: any) => b.status === 'completed');
-          const ratings = completedBookings.flatMap((b: any) => b.ratings || []);
-          const totalStars = ratings.reduce((acc: number, curr: any) => acc + (curr.rating || 0), 0);
-          const reviewCount = ratings.length;
-          const avgRating = reviewCount > 0 ? totalStars / reviewCount : 0;
-
-          return {
-            ...biz,
-            avgRating,
-            reviewCount
-          };
-        });
-
-        formatted.sort((a, b) => (b.avgRating - a.avgRating) || a.name.localeCompare(b.name));
-        setBusinesses(formatted);
-      } catch (e) {
+        const sorted = (bizData || []).sort((a, b) => (b.rating - a.rating) || a.name.localeCompare(b.name));
+        setBusinesses(sorted);
+      } catch (e: any) {
         console.error('Marketplace Load Failure:', e);
       } finally {
         setLoading(false);
