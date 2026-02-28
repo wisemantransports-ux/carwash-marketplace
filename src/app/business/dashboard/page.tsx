@@ -31,7 +31,7 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Local state to ensure selections "stick" immediately and don't flicker
+    // Use local state to make selection "stick" immediately
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -54,7 +54,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. PRE-FETCH STATUS CHECK (Prevents recursion/RLS errors)
+            // 1. Pre-fetch status check to avoid RLS recursion
             const { data: profile, error: profileError } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
@@ -75,7 +75,7 @@ export default function BusinessDashboardPage() {
 
             setIsRestricted(false);
 
-            // 2. Resolve Business Info
+            // 2. Fetch Business Identity
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -91,12 +91,13 @@ export default function BusinessDashboardPage() {
                 const { data: staffData, error: staffError } = await supabase
                     .from("employees")
                     .select("id, name")
-                    .eq("business_id", bizData.id);
+                    .eq("business_id", bizData.id)
+                    .order('name');
                 
                 if (staffError) console.error("Staff fetch error:", staffError);
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with explicit relational joins
+                // 4. Fetch Bookings with Explicit Joins
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -124,11 +125,11 @@ export default function BusinessDashboardPage() {
                 setBookings(bookingData || []);
 
             } else {
-                setFetchError("Business profile not found. Please complete your profile setup.");
+                setFetchError("Business profile not found.");
             }
         } catch (error: any) {
             console.error("[DASHBOARD] Fetch error:", error);
-            setFetchError(error.message || "A database error occurred while loading your dashboard.");
+            setFetchError(error.message || "A database error occurred.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -139,7 +140,7 @@ export default function BusinessDashboardPage() {
         fetchData();
 
         const channel = supabase
-            .channel('dashboard-sync')
+            .channel('dashboard-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
                 fetchData(true);
             })
@@ -164,7 +165,7 @@ export default function BusinessDashboardPage() {
                 description: `Request has been marked as ${status}.` 
             });
             
-            // Clear local assignment for this row after status change to allow fresh fetch
+            // Clear local state for this row
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -180,7 +181,7 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // Optimistic UI: Update local state immediately so it "sticks"
+        // Optimistic UI update
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -192,7 +193,6 @@ export default function BusinessDashboardPage() {
             if (error) throw error;
             
             toast({ title: "Employee assigned successfully." });
-            // Refresh in background to sync with server
             await fetchData(true);
         } catch (e: any) {
             // Revert local state on failure
@@ -263,7 +263,7 @@ export default function BusinessDashboardPage() {
 
                             <TableCell className="text-xs">
                                 <div className="font-bold">
-                                    {new Date(booking.booking_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                    {new Date(booking.booking_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                 </div>
                                 <div className="text-muted-foreground uppercase">
                                     {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
