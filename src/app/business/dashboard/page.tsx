@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -56,7 +57,7 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Pending Bookings with EXACT relations requested
+                // 2. Fetch Pending Bookings with relations
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -86,7 +87,7 @@ export default function BusinessDashboardPage() {
                 if (bookingError) throw bookingError;
                 setBookings(bookingData || []);
 
-                // 3. Fetch Staff List
+                // 3. Fetch Staff List for assignment
                 const { data: staffData } = await supabase
                     .from("employees")
                     .select("id, name")
@@ -118,8 +119,8 @@ export default function BusinessDashboardPage() {
             if (error) throw error;
 
             toast({ 
-                title: status === 'accepted' ? "Booking Accepted" : "Booking Rejected", 
-                description: `Request has been marked as ${status}.` 
+                title: status === 'accepted' ? "Booking Accepted" : "Booking Updated", 
+                description: `Request status has been set to ${status}.` 
             });
             fetchData();
         } catch (e: any) {
@@ -135,8 +136,8 @@ export default function BusinessDashboardPage() {
                 .eq("id", bookingId);
 
             if (error) throw error;
-            toast({ title: "Staff Assigned", description: "Detailer updated successfully." });
-            fetchData();
+            toast({ title: "Staff Assigned", description: "Detailer choice persisted successfully." });
+            fetchData(); // Reload to make it "stick" and enable Accept button
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
         }
@@ -157,7 +158,7 @@ export default function BusinessDashboardPage() {
             <TableBody>
                 {list.length > 0 ? list.map((booking) => (
                     <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
-                        {/* CUSTOMER COLUMN */}
+                        {/* CUSTOMER */}
                         <TableCell>
                             <div className="font-bold text-sm">
                                 {booking.customer?.name ?? "Unknown Customer"}
@@ -167,24 +168,24 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* SERVICE INFO COLUMN */}
+                        {/* SERVICE INFO */}
                         <TableCell>
                             <div className="text-sm font-medium">
                                 {booking.services?.name} - <span className="font-bold text-primary">BWP {Number(booking.services?.price || 0).toFixed(2)}</span>
                             </div>
                         </TableCell>
 
-                        {/* CAR COLUMN */}
+                        {/* CAR */}
                         <TableCell>
                             <div className="text-sm font-bold">
                                 {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
                             </div>
                         </TableCell>
 
-                        {/* STAFF DROPDOWN */}
+                        {/* STAFF ASSIGNMENT (STICKY DROPDOWN) */}
                         <TableCell>
                             <select
-                                className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                                className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
                                 value={booking.staff_id || ""}
                                 onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
                             >
@@ -197,7 +198,7 @@ export default function BusinessDashboardPage() {
                             </select>
                         </TableCell>
 
-                        {/* TIMING COLUMN */}
+                        {/* TIMING */}
                         <TableCell className="text-xs">
                             <div className="font-bold">
                                 {new Date(booking.booking_time).toLocaleDateString(undefined, { dateStyle: 'medium' })}
@@ -207,7 +208,7 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* ACTION COLUMN */}
+                        {/* ACTION (GATED ACCEPT) */}
                         <TableCell className="text-right pr-6">
                             {isPending ? (
                                 <div className="flex justify-end gap-2">
@@ -215,14 +216,14 @@ export default function BusinessDashboardPage() {
                                         size="sm" 
                                         disabled={!booking.staff_id}
                                         className={cn(
-                                            "h-8 text-[10px] font-bold uppercase gap-1.5",
+                                            "h-8 text-[10px] font-bold uppercase gap-1.5 min-w-[80px]",
                                             booking.staff_id 
-                                                ? "bg-green-600 hover:bg-green-700" 
+                                                ? "bg-green-600 hover:bg-green-700 text-white shadow-md" 
                                                 : "bg-muted text-muted-foreground cursor-not-allowed"
                                         )}
                                         onClick={() => updateStatus(booking.id, "accepted")}
                                     >
-                                        <CheckCircle2 className="h-3 w-3" /> Accept
+                                        <CheckCircle2 className="h-3 w-3" /> Accept ✅
                                     </Button>
                                     <Button 
                                         size="sm" 
@@ -230,19 +231,19 @@ export default function BusinessDashboardPage() {
                                         className="h-8 text-[10px] font-bold uppercase gap-1.5" 
                                         onClick={() => updateStatus(booking.id, "rejected")}
                                     >
-                                        <XCircle className="h-3 w-3" /> Reject
+                                        <XCircle className="h-3 w-3" /> Reject ❌
                                     </Button>
                                 </div>
                             ) : (
                                 <div className="flex justify-end gap-2">
-                                    <Badge variant="outline" className="uppercase text-[10px]">{booking.status}</Badge>
+                                    <Badge variant="outline" className="uppercase text-[10px] py-1">{booking.status}</Badge>
                                     {booking.status === 'accepted' && (
                                         <Button 
                                             size="sm" 
                                             className="h-8 text-[10px] font-bold uppercase" 
                                             onClick={() => updateStatus(booking.id, "completed")}
                                         >
-                                            Complete
+                                            Mark Complete
                                         </Button>
                                     )}
                                 </div>
@@ -305,7 +306,7 @@ export default function BusinessDashboardPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     <Button variant="outline" size="sm" onClick={fetchData} className="rounded-full h-10">
-                        <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} /> Refresh
+                        <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} /> Refresh Queue
                     </Button>
                     <Badge className="bg-primary hover:bg-primary font-bold px-4 py-1.5 rounded-full uppercase tracking-tighter">
                         {business?.subscription_status?.replace('_', ' ')}
@@ -330,14 +331,14 @@ export default function BusinessDashboardPage() {
                         Active Jobs ({activeList.length})
                     </TabsTrigger>
                     <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase">
-                        Service History ({completedList.length})
+                        History ({completedList.length})
                     </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="pending">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
                         <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">New Requests</CardTitle>
+                            <CardTitle className="text-lg">New Booking Requests</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <BookingTable list={pendingList} isPending />
@@ -348,7 +349,7 @@ export default function BusinessDashboardPage() {
                 <TabsContent value="active">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
                         <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">In-Progress</CardTitle>
+                            <CardTitle className="text-lg">In-Progress Services</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <BookingTable list={activeList} />
