@@ -10,7 +10,6 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Business } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -132,28 +131,7 @@ export default function Home() {
     load();
   }, []);
 
-  const pricingPlans = [
-    {
-      name: "Starter",
-      price: "P150",
-      desc: "For small or single-station car wash businesses",
-      features: ["1 registered location", "Up to 3 verified employees", "Station-based bookings", "Profile in search", "Verification badge"],
-      notIncluded: ["Mobile service", "Priority listing"]
-    },
-    {
-      name: "Pro",
-      price: "P300",
-      desc: "For established stations offering mobile service",
-      features: ["Up to 10 verified employees", "Mobile services", "ID + photo verification", "Service area selection", "Higher ranking"],
-      notIncluded: ["Unlimited employees", "Multi-locations"]
-    },
-    {
-      name: "Enterprise",
-      price: "P600",
-      desc: "For multi-location operators",
-      features: ["Unlimited employees", "Multiple locations", "Priority listing", "Advanced analytics", "Dedicated support"]
-    }
-  ];
+  if (!mounted) return null;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -220,7 +198,7 @@ export default function Home() {
             <h2 className="text-4xl font-bold">Verified Partners</h2>
             <p className="text-muted-foreground">Trusted businesses providing high-quality service across Botswana.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
-              {!mounted || loading ? (
+              {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
                       <Card key={i} className="overflow-hidden bg-card">
                         <Skeleton className="h-48 w-full" />

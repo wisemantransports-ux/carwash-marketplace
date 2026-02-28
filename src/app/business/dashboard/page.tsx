@@ -114,14 +114,17 @@ export default function BusinessDashboardPage() {
                     .eq("business_id", bizData.id)
                     .order("booking_time", { ascending: true });
                 
-                if (bookingError) throw bookingError;
+                if (bookingError) {
+                    console.error("[DASHBOARD] Fetch failure details:", JSON.stringify(bookingError, null, 2));
+                    throw bookingError;
+                }
                 setBookings(bookingData || []);
 
             } else {
                 setFetchError("Business profile not found.");
             }
         } catch (error: any) {
-            console.error("[DASHBOARD] Fetch failure:", error);
+            console.error("[DASHBOARD] Fatal catch:", error);
             setFetchError(error.message || "A database error occurred.");
         } finally {
             setLoading(false);
