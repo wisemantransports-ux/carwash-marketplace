@@ -1,17 +1,15 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Clock, Trophy, Tags, Loader2 } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
@@ -19,7 +17,7 @@ function BusinessCard({ business }: { business: any }) {
   const reviews = Number(business.review_count || 0);
 
   return (
-    <Card className="flex flex-col h-[520px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl">
+    <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl">
       <div className="relative h-44 w-full group overflow-hidden bg-muted">
         {business.logo_url ? (
           <Image
@@ -33,47 +31,24 @@ function BusinessCard({ business }: { business: any }) {
             <Store className="h-16 w-16 opacity-10" />
           </div>
         )}
-        <div className="absolute top-3 right-3">
-          <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold uppercase text-[10px] px-3 py-1">
-            {business.services?.length || 0} Packages
-          </Badge>
-        </div>
       </div>
       
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2">
           <CardTitle className="text-xl line-clamp-1 font-bold">{business.name}</CardTitle>
-          <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 shrink-0 font-bold">
+          <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 font-bold shrink-0">
             <ShieldCheck className="h-3 w-3 mr-1" /> Verified
           </Badge>
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <MapPin className="h-3 w-3" />
-            <span className="truncate">{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
+            <span className="truncate">{business.city || 'Botswana'}</span>
         </div>
       </CardHeader>
 
-      <CardContent className="flex-grow space-y-4 pb-4 overflow-hidden flex flex-col">
-        <div className="space-y-2 flex-1 flex flex-col min-h-0">
-            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
-                <Tags className="h-3 w-3" /> Service Highlights
-            </p>
-            <ScrollArea className="flex-1 pr-2">
-                <div className="space-y-1.5">
-                    {business.services && business.services.length > 0 ? business.services.map((svc: any) => (
-                        <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2.5 rounded-xl border border-transparent hover:border-primary/20 transition-colors">
-                            <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
-                            <span className="font-bold text-primary">P{Number(svc.price).toFixed(2)}</span>
-                        </div>
-                    )) : (
-                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Catalog arriving soon...</p>
-                    )}
-                </div>
-            </ScrollArea>
-        </div>
-
-        <div className="flex items-center gap-2 pt-2 border-t border-dashed shrink-0">
-          <div className="flex text-yellow-400" aria-label={`Rating: ${rating} out of 5 stars`}>
+      <CardContent className="flex-grow pb-4">
+        <div className="flex items-center gap-2 pt-2 border-t border-dashed">
+          <div className="flex text-yellow-400" aria-label={`Rating: ${rating} stars`}>
             {[1, 2, 3, 4, 5].map((s) => (
                 <Star 
                   key={s} 
@@ -89,8 +64,8 @@ function BusinessCard({ business }: { business: any }) {
         </div>
       </CardContent>
 
-      <CardFooter className="pt-0 shrink-0">
-        <Button asChild className="w-full shadow-md font-bold rounded-xl h-11">
+      <CardFooter className="pt-0">
+        <Button asChild className="w-full font-bold rounded-xl h-11">
           <Link href={`/find-wash/${business.id}`}>View Details & Book</Link>
         </Button>
       </CardFooter>
@@ -107,13 +82,15 @@ export default function PublicFindWashPage() {
   useEffect(() => {
     setMounted(true);
     const load = async () => {
+      if (!isSupabaseConfigured) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
-        // High resiliency query: strictly verified partners using basic business table fields
-        // to avoid permission issues with guests querying bookings/ratings directly.
         const { data, error } = await supabase
             .from('businesses')
-            .select('*, services(id, name, price)')
+            .select('*')
             .eq('verification_status', 'verified')
             .order('rating', { ascending: false });
         
@@ -128,16 +105,16 @@ export default function PublicFindWashPage() {
     load();
   }, []);
 
+  if (!mounted) return (
+    <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-background">
+        <Loader2 className="animate-spin h-10 w-10 text-primary" />
+        <p className="text-muted-foreground animate-pulse font-medium">Syncing marketplace...</p>
+    </div>
+  );
+
   const filtered = businesses.filter(b => 
     b.name?.toLowerCase().includes(search.toLowerCase()) || 
     (b.city && b.city.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  if (!mounted) return (
-    <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
-        <Loader2 className="animate-spin h-10 w-10 text-primary" />
-        <p className="text-muted-foreground animate-pulse">Syncing marketplace...</p>
-    </div>
   );
 
   return (
@@ -153,7 +130,7 @@ export default function PublicFindWashPage() {
             <span className="text-sm font-bold text-primary tracking-tight">Marketplace</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" asChild className="hidden xs:inline-flex"><Link href="/login">Sign In</Link></Button>
+            <Button size="sm" variant="ghost" asChild><Link href="/login">Sign In</Link></Button>
             <Button size="sm" asChild><Link href="/signup">Sign Up</Link></Button>
           </div>
         </div>
@@ -163,10 +140,10 @@ export default function PublicFindWashPage() {
         <div className="space-y-4 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
             <ShieldCheck className="h-3 w-3" />
-            <span>Verified Platform Partners</span>
+            <span>Verified Platform Partners Only</span>
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight">Find a Professional Wash</h1>
-          <p className="text-muted-foreground text-lg">Browse car wash businesses verified for quality and reliability.</p>
+          <h1 className="text-4xl font-extrabold tracking-tight">Find a Verified Wash</h1>
+          <p className="text-muted-foreground text-lg">Browse partners verified for quality and reliability across Botswana.</p>
           <div className="relative max-w-2xl pt-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
@@ -196,7 +173,7 @@ export default function PublicFindWashPage() {
           ) : (
               <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
                   <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                  <p className="text-muted-foreground font-bold text-lg">No verified partners found matching your search.</p>
+                  <p className="text-muted-foreground font-bold text-lg">No verified partners found.</p>
                   <Button variant="link" onClick={() => setSearch('')} className="font-bold">View All Partners</Button>
               </div>
           )}

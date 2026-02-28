@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -9,12 +8,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 function BusinessCard({ business }: { business: any }) {
-  const rating = Number(business.rating || business.avg_rating || 0);
+  const rating = Number(business.rating || 0);
   const reviews = Number(business.review_count || 0);
 
   return (
@@ -32,11 +31,6 @@ function BusinessCard({ business }: { business: any }) {
             <Store className="h-16 w-16 opacity-10" />
           </div>
         )}
-        <div className="absolute top-3 right-3">
-          <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black font-bold uppercase text-[10px] px-3 py-1">
-            {business.type === 'station' ? 'Station' : 'Mobile'}
-          </Badge>
-        </div>
       </div>
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2">
@@ -85,9 +79,12 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
     async function load() {
+      if (!isSupabaseConfigured) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
-        // High resiliency query for verified partners
         const { data, error } = await supabase
             .from('businesses')
             .select('*')
@@ -106,9 +103,9 @@ export default function Home() {
   }, []);
 
   if (!mounted) return (
-    <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+    <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-background">
         <Loader2 className="animate-spin h-10 w-10 text-primary" />
-        <p className="text-muted-foreground animate-pulse">Entering marketplace...</p>
+        <p className="text-muted-foreground animate-pulse font-medium">Entering marketplace...</p>
     </div>
   );
 
@@ -121,7 +118,6 @@ export default function Home() {
             <span className="font-bold text-primary tracking-tight">Carwash Marketplace</span>
           </div>
           <div className="hidden md:flex items-center gap-6">
-            <Link href="#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">How it Works</Link>
             <Link href="#safety" className="text-sm font-medium hover:text-primary transition-colors">Safety & Trust</Link>
             <Link href="/find-wash" className="text-sm font-medium hover:text-primary transition-colors font-bold">Find a Wash</Link>
           </div>
@@ -138,26 +134,26 @@ export default function Home() {
             <div className="flex-1 text-center lg:text-left space-y-8">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border shadow-sm text-sm font-medium text-primary mb-2">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Verified Platform Partners</span>
+                <span>Verified Platform Partners Only</span>
               </div>
               <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1]">
                 Grow Your Car Wash Business with <span className="text-primary italic">Verified</span> Bookings.
               </h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto lg:mx-0">
-                A secure platform where registered car wash businesses connect with nearby customers — at the station or on-site.
+                The most secure platform in Botswana for professional car wash operators to connect with verified customers.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
                 <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-lg font-bold" onClick={() => router.push('/signup?role=business-owner')}>
-                  Register Your Car Wash
+                  Register Your Business
                 </Button>
                 <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-full font-bold" onClick={() => router.push('/find-wash')}>
-                  Find a Verified Wash
+                  Browse Marketplace
                 </Button>
               </div>
             </div>
             <div className="flex-1 relative w-full aspect-square max-w-[500px] mx-auto">
               <div className="absolute inset-0 bg-primary/10 rounded-[2.5rem] -rotate-3" />
-              <div className="absolute inset-0 overflow-hidden rounded-[2rem] border-4 border-white shadow-2xl rotate-3 transition-transform hover:rotate-0 duration-500">
+              <div className="absolute inset-0 overflow-hidden rounded-[2rem] border-4 border-white shadow-2xl rotate-3">
                 <Image 
                   src="https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=1080" 
                   alt="Car Wash Service" 
@@ -196,7 +192,7 @@ export default function Home() {
               ) : (
                   <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-card/50">
                       <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                      <p className="text-muted-foreground font-bold">Newly verified partners will appear here.</p>
+                      <p className="text-muted-foreground font-bold">Verified partners will appear here.</p>
                   </div>
               )}
             </div>
