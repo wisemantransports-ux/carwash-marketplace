@@ -14,14 +14,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 function BusinessCard({ business }: { business: any }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const isTrial = business.trial_start_date && business.trial_end_date && 
                   new Date(business.trial_start_date) <= new Date() && 
                   new Date(business.trial_end_date) >= new Date();
   
-  const hasHighRating = (business.avg_rating || 0) >= 4.5;
+  if (!mounted) return <Skeleton className="h-[400px] w-full rounded-2xl" />;
 
   return (
-    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
+    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl">
       <div className="relative h-48 w-full group overflow-hidden bg-muted">
         {business.logo_url ? (
           <Image
@@ -32,24 +35,24 @@ function BusinessCard({ business }: { business: any }) {
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-muted-foreground bg-primary/5">
-            <Store className="h-12 w-12 opacity-10" />
+            <Store className="h-16 w-16 opacity-10" />
           </div>
         )}
-        <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
+        <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
           {isTrial && (
-            <Badge className="bg-orange-500 text-white shadow-lg font-bold border-2 border-white/20">
+            <Badge className="bg-orange-500 text-white shadow-lg font-bold border-2 border-white/20 px-3 py-1">
               <Clock className="h-3 w-3 mr-1" /> TRIAL
             </Badge>
           )}
-          <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black font-bold uppercase text-[10px]">
+          <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black font-bold uppercase text-[10px] px-3 py-1">
             {business.type === 'station' ? 'Station' : 'Mobile'}
           </Badge>
         </div>
       </div>
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2">
-          <CardTitle className="text-xl line-clamp-1">{business.name}</CardTitle>
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 shrink-0 text-[10px]">
+          <CardTitle className="text-xl line-clamp-1 font-bold">{business.name}</CardTitle>
+          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 shrink-0 text-[10px] font-bold">
             <ShieldCheck className="h-3 w-3 mr-1" /> Verified
           </Badge>
         </div>
@@ -66,17 +69,17 @@ function BusinessCard({ business }: { business: any }) {
                   key={s} 
                   className={cn(
                     "h-3.5 w-3.5", 
-                    s <= Math.round(business.avg_rating || 0) ? "fill-current" : "text-gray-200"
+                    s <= Math.round(business.rating || 0) ? "fill-current" : "text-gray-200"
                   )} 
                 />
             ))}
           </div>
-          <span className="text-xs font-bold">{(business.avg_rating || 0).toFixed(1)}</span>
+          <span className="text-xs font-bold">{(business.rating || 0).toFixed(1)}</span>
           <span className="text-[10px] text-muted-foreground">({business.review_count || 0} reviews)</span>
         </div>
       </CardContent>
       <CardFooter className="pt-0">
-        <Button asChild className="w-full shadow-md font-bold">
+        <Button asChild className="w-full shadow-md font-bold rounded-xl h-11">
           <Link href={`/find-wash/${business.id}`}>View Services</Link>
         </Button>
       </CardFooter>
@@ -92,42 +95,29 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true);
-    const load = async () => {
+    async function load() {
       setLoading(true);
       try {
-        const now = new Date().toISOString();
-        const { data: bizData, error: bizError } = await supabase
+        const { data, error } = await supabase
             .from('businesses')
-            .select(`
-              *,
-              bookings(
-                status,
-                ratings(rating)
-              )
-            `);
+            .select('*')
+            .order('rating', { ascending: false });
         
-        if (bizError) throw bizError;
+        if (error) throw error;
 
-        const processed = (bizData || [])
-            .filter(b => 
-                b.verification_status === 'verified' || 
-                (b.trial_start_date && b.trial_end_date && b.trial_start_date <= now && b.trial_end_date >= now)
-            )
-            .map(b => {
-                const completedBookings = (b.bookings || []).filter((bk: any) => bk.status === 'completed');
-                const ratings = completedBookings.flatMap((bk: any) => bk.ratings || []).filter(r => r.rating);
-                const avg = ratings.length > 0 ? ratings.reduce((acc, r) => acc + r.rating, 0) / ratings.length : 0;
-                return { ...b, avg_rating: avg, review_count: ratings.length };
-            })
-            .sort((a, b) => (b.avg_rating - a.avg_rating) || a.name.localeCompare(b.name));
+        const now = new Date();
+        const filtered = (data || []).filter(b => 
+            b.verification_status === 'verified' || 
+            (b.trial_start_date && b.trial_end_date && new Date(b.trial_start_date) <= now && new Date(b.trial_end_date) >= now)
+        );
 
-        setBusinesses(processed);
+        setBusinesses(filtered);
       } catch (e) {
         console.error("Landing page fetch error:", e);
       } finally {
         setLoading(false);
       }
-    };
+    }
     load();
   }, []);
 
@@ -144,7 +134,7 @@ export default function Home() {
           <div className="hidden md:flex items-center gap-6">
             <Link href="#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">How it Works</Link>
             <Link href="#safety" className="text-sm font-medium hover:text-primary transition-colors">Safety & Trust</Link>
-            <Link href="/find-wash" className="text-sm font-medium hover:text-primary transition-colors">Marketplace</Link>
+            <Link href="/find-wash" className="text-sm font-medium hover:text-primary transition-colors font-bold">Find a Wash</Link>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => router.push('/login')}>Sign In</Button>
@@ -168,17 +158,17 @@ export default function Home() {
                 A secure platform where registered car wash businesses connect with nearby customers — at the station or on-site.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
-                <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-lg" onClick={() => router.push('/signup?role=business-owner')}>
+                <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-lg font-bold" onClick={() => router.push('/signup?role=business-owner')}>
                   Register Your Car Wash
                 </Button>
-                <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-full" onClick={() => router.push('/find-wash')}>
+                <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-full font-bold" onClick={() => router.push('/find-wash')}>
                   Find a Verified Wash
                 </Button>
               </div>
             </div>
-            <div className="flex-1 relative w-full aspect-square">
-              <div className="absolute inset-0 bg-primary/10 rounded-3xl -rotate-2" />
-              <div className="absolute inset-0 overflow-hidden rounded-3xl border shadow-2xl rotate-2 transition-transform hover:rotate-0 duration-500">
+            <div className="flex-1 relative w-full aspect-square max-w-[500px] mx-auto">
+              <div className="absolute inset-0 bg-primary/10 rounded-[2.5rem] -rotate-3" />
+              <div className="absolute inset-0 overflow-hidden rounded-[2rem] border-4 border-white shadow-2xl rotate-3 transition-transform hover:rotate-0 duration-500">
                 <Image 
                   src="https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=1080" 
                   alt="Car Wash Service" 
@@ -192,19 +182,21 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-24 border-y bg-muted/30 text-center">
+      <section className="py-24 border-y bg-muted/20">
         <div className="container mx-auto px-4">
-          <div className="max-w-6xl mx-auto space-y-8">
-            <h2 className="text-4xl font-bold">Verified Partners & Trials</h2>
-            <p className="text-muted-foreground">Trusted businesses providing high-quality service across Botswana.</p>
+          <div className="max-w-6xl mx-auto space-y-12 text-center">
+            <div className="space-y-4">
+                <h2 className="text-4xl font-extrabold tracking-tight">Marketplace Directory</h2>
+                <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Trusted businesses providing high-quality service across Botswana.</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
               {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
-                      <Card key={i} className="overflow-hidden bg-card">
+                      <Card key={i} className="overflow-hidden bg-card rounded-2xl">
                         <Skeleton className="h-48 w-full" />
-                        <div className="p-4 space-y-2">
+                        <div className="p-6 space-y-4">
                           <Skeleton className="h-6 w-3/4" />
-                          <Skeleton className="h-4 w-1/2" />
+                          <Skeleton className="h-10 w-full" />
                         </div>
                       </Card>
                   ))
@@ -213,34 +205,42 @@ export default function Home() {
                       <BusinessCard key={business.id} business={business} />
                   ))
               ) : (
-                  <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-card">
+                  <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-card/50">
                       <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                      <p className="text-muted-foreground font-bold">No verified businesses found.</p>
+                      <p className="text-muted-foreground font-bold">Newly verified partners will appear here.</p>
                   </div>
               )}
             </div>
-            <Button variant="outline" size="lg" asChild>
-              <Link href="/find-wash">View All Partners</Link>
-            </Button>
+            {businesses.length > 0 && (
+                <Button variant="outline" size="lg" asChild className="rounded-full px-10 h-12 font-bold">
+                    <Link href="/find-wash">View Full Marketplace</Link>
+                </Button>
+            )}
           </div>
         </div>
       </section>
 
       <section id="safety" className="py-24 bg-primary text-primary-foreground">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl space-y-8">
-            <h2 className="text-4xl font-bold">Safety, Accountability, and Trust</h2>
-            <p className="text-xl opacity-90">Only professional, registered businesses are allowed on the platform.</p>
-            <div className="grid sm:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <UserCheck className="h-8 w-8" />
+          <div className="max-w-4xl mx-auto text-center space-y-12">
+            <div className="space-y-4">
+                <h2 className="text-4xl font-extrabold tracking-tight">Safety, Accountability, and Trust</h2>
+                <p className="text-xl opacity-90 max-w-2xl mx-auto">Only professional, registered businesses are allowed on the platform.</p>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-12 text-left">
+              <div className="bg-white/10 p-8 rounded-3xl backdrop-blur-sm border border-white/10 space-y-4">
+                <div className="bg-white/20 w-12 h-12 rounded-2xl flex items-center justify-center">
+                    <UserCheck className="h-6 w-6" />
+                </div>
                 <h4 className="text-xl font-bold">Employee Verification</h4>
-                <p className="text-sm opacity-80">Every staff member has a verified Omang/ID reference for your security.</p>
+                <p className="text-sm opacity-80 leading-relaxed">Every staff member has a verified Omang/ID reference for your security. You always know who is working on your vehicle.</p>
               </div>
-              <div className="space-y-4">
-                <TrendingUp className="h-8 w-8" />
+              <div className="bg-white/10 p-8 rounded-3xl backdrop-blur-sm border border-white/10 space-y-4">
+                <div className="bg-white/20 w-12 h-12 rounded-2xl flex items-center justify-center">
+                    <TrendingUp className="h-6 w-6" />
+                </div>
                 <h4 className="text-xl font-bold">Digital Accountability</h4>
-                <p className="text-sm opacity-80">Full paper trail for every booking, ensuring quality and reliability.</p>
+                <p className="text-sm opacity-80 leading-relaxed">Full digital paper trail for every booking, including timestamped status updates and verified customer feedback.</p>
               </div>
             </div>
           </div>
@@ -248,7 +248,7 @@ export default function Home() {
       </section>
 
       <footer className="py-16 border-t bg-card text-center">
-        <p className="text-xs text-muted-foreground">© 2024 Carwash Marketplace Botswana. Secure platform for verified businesses.</p>
+        <p className="text-xs text-muted-foreground">© 2024 HydroFlow Carwash Marketplace Botswana. Secure platform for verified businesses.</p>
       </footer>
     </div>
   );

@@ -15,14 +15,17 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const isTrial = business.trial_start_date && business.trial_end_date && 
                   new Date(business.trial_start_date) <= new Date() && 
                   new Date(business.trial_end_date) >= new Date();
   
-  const hasHighRating = (business.avg_rating || 0) >= 4.5;
+  if (!mounted) return <Skeleton className="h-[500px] w-full rounded-2xl" />;
 
   return (
-    <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
+    <Card className="flex flex-col h-[520px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl">
       <div className="relative h-44 w-full group overflow-hidden bg-muted">
         {business.logo_url ? (
           <Image
@@ -36,18 +39,13 @@ function BusinessCard({ business }: { business: any }) {
             <Store className="h-16 w-16 opacity-10" />
           </div>
         )}
-        <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
+        <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
           {isTrial && (
-            <Badge className="bg-orange-500 text-white shadow-lg font-bold border-2 border-white/20">
+            <Badge className="bg-orange-500 text-white shadow-lg font-bold border-2 border-white/20 px-3 py-1">
               <Clock className="h-3 w-3 mr-1" /> TRIAL
             </Badge>
           )}
-          {hasHighRating && (
-            <Badge className="bg-yellow-500 text-black shadow-lg font-bold border-2 border-white/20">
-              <Trophy className="h-3 w-3 mr-1" /> TOP RATED
-            </Badge>
-          )}
-          <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold uppercase text-[10px]">
+          <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold uppercase text-[10px] px-3 py-1">
             {business.services?.length || 0} Packages
           </Badge>
         </div>
@@ -55,8 +53,8 @@ function BusinessCard({ business }: { business: any }) {
       
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2">
-          <CardTitle className="text-xl line-clamp-1">{business.name}</CardTitle>
-          <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 shrink-0">
+          <CardTitle className="text-xl line-clamp-1 font-bold">{business.name}</CardTitle>
+          <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 shrink-0 font-bold">
             <ShieldCheck className="h-3 w-3 mr-1" /> Verified
           </Badge>
         </div>
@@ -69,41 +67,41 @@ function BusinessCard({ business }: { business: any }) {
       <CardContent className="flex-grow space-y-4 pb-4 overflow-hidden flex flex-col">
         <div className="space-y-2 flex-1 flex flex-col min-h-0">
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
-                <Tags className="h-3 w-3" /> Service Preview
+                <Tags className="h-3 w-3" /> Service Highlights
             </p>
             <ScrollArea className="flex-1 pr-2">
                 <div className="space-y-1.5">
                     {business.services && business.services.length > 0 ? business.services.map((svc: any) => (
-                        <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent hover:border-primary/20 transition-colors">
+                        <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2.5 rounded-xl border border-transparent hover:border-primary/20 transition-colors">
                             <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
-                            <span className="font-bold text-primary">BWP {Number(svc.price).toFixed(2)}</span>
+                            <span className="font-bold text-primary">P{Number(svc.price).toFixed(2)}</span>
                         </div>
                     )) : (
-                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Service catalog arriving soon...</p>
+                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Catalog arriving soon...</p>
                     )}
                 </div>
             </ScrollArea>
         </div>
 
         <div className="flex items-center gap-2 pt-2 border-t border-dashed shrink-0">
-          <div className="flex text-yellow-400" aria-label={`Rating: ${business.avg_rating || 0} out of 5 stars`}>
+          <div className="flex text-yellow-400" aria-label={`Rating: ${business.rating || 0} out of 5 stars`}>
             {[1, 2, 3, 4, 5].map((s) => (
                 <Star 
                   key={s} 
                   className={cn(
                     "h-3.5 w-3.5", 
-                    s <= Math.round(business.avg_rating || 0) ? "fill-current" : "text-gray-200"
+                    s <= Math.round(business.rating || 0) ? "fill-current" : "text-gray-200"
                   )} 
                 />
             ))}
           </div>
-          <span className="text-sm font-bold">{(business.avg_rating || 0).toFixed(1)}</span>
+          <span className="text-sm font-bold">{(business.rating || 0).toFixed(1)}</span>
           <span className="text-[10px] text-muted-foreground">({business.review_count || 0} reviews)</span>
         </div>
       </CardContent>
 
       <CardFooter className="pt-0 shrink-0">
-        <Button asChild className="w-full shadow-md font-bold">
+        <Button asChild className="w-full shadow-md font-bold rounded-xl h-11">
           <Link href={`/find-wash/${business.id}`}>View Details & Book</Link>
         </Button>
       </CardFooter>
@@ -122,33 +120,18 @@ export default function PublicFindWashPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const now = new Date().toISOString();
-        // Robust query logic: Verified OR Active Trial
-        const { data: bizData, error: bizError } = await supabase
+        const { data, error } = await supabase
             .from('businesses')
-            .select(`
-              *,
-              services(*),
-              bookings(
-                status,
-                ratings(rating)
-              )
-            `);
+            .select('*, services(id, name, price)')
+            .order('rating', { ascending: false });
         
-        if (bizError) throw bizError;
+        if (error) throw error;
 
-        const processed = (bizData || [])
-            .filter(b => 
-                b.verification_status === 'verified' || 
-                (b.trial_start_date && b.trial_end_date && b.trial_start_date <= now && b.trial_end_date >= now)
-            )
-            .map(b => {
-                const completedBookings = (b.bookings || []).filter((bk: any) => bk.status === 'completed');
-                const ratings = completedBookings.flatMap((bk: any) => bk.ratings || []).filter(r => r.rating);
-                const avg = ratings.length > 0 ? ratings.reduce((acc, r) => acc + r.rating, 0) / ratings.length : 0;
-                return { ...b, avg_rating: avg, review_count: ratings.length };
-            })
-            .sort((a, b) => (b.avg_rating - a.avg_rating) || a.name.localeCompare(b.name));
+        const now = new Date();
+        const processed = (data || []).filter(b => 
+            b.verification_status === 'verified' || 
+            (b.trial_start_date && b.trial_end_date && new Date(b.trial_start_date) <= now && new Date(b.trial_end_date) >= now)
+        );
 
         setBusinesses(processed);
       } catch (e) {
@@ -173,14 +156,14 @@ export default function PublicFindWashPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 text-primary font-bold hover:opacity-80 transition-opacity">
             <ArrowLeft className="h-4 w-4" />
-            <span>Back to Home</span>
+            <span className="hidden sm:inline">Back to Home</span>
           </Link>
           <div className="flex items-center gap-2">
              <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-[10px]">CWM</div>
-            <span className="text-sm font-bold text-primary tracking-tight">Carwash Marketplace</span>
+            <span className="text-sm font-bold text-primary tracking-tight">Marketplace</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" asChild><Link href="/login">Sign In</Link></Button>
+            <Button size="sm" variant="ghost" asChild className="hidden xs:inline-flex"><Link href="/login">Sign In</Link></Button>
             <Button size="sm" asChild><Link href="/signup">Sign Up</Link></Button>
           </div>
         </div>
@@ -198,7 +181,7 @@ export default function PublicFindWashPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search by name or city..." 
-                className="pl-10 h-12 bg-card border-2"
+                className="pl-10 h-12 bg-card border-2 rounded-xl shadow-sm"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -208,7 +191,7 @@ export default function PublicFindWashPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
-                  <Card key={i} className="overflow-hidden bg-card">
+                  <Card key={i} className="overflow-hidden bg-card rounded-2xl">
                     <Skeleton className="h-48 w-full" />
                     <div className="p-4 space-y-2">
                       <Skeleton className="h-6 w-3/4" />
@@ -221,10 +204,10 @@ export default function PublicFindWashPage() {
                   <BusinessCard key={business.id} business={business} />
               ))
           ) : (
-              <div className="col-span-full py-24 text-center border-2 border-dashed rounded-xl bg-muted/20">
+              <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
                   <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                  <p className="text-muted-foreground font-bold text-lg">No verified partners found.</p>
-                  <Button variant="link" onClick={() => setSearch('')}>View All Partners</Button>
+                  <p className="text-muted-foreground font-bold text-lg">No verified partners found matching your search.</p>
+                  <Button variant="link" onClick={() => setSearch('')} className="font-bold">View All Partners</Button>
               </div>
           )}
         </div>
