@@ -30,6 +30,7 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
+    // Local state to keep UI stable during background refreshes
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -52,7 +53,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Restricted Mode Pre-Check
+            // 1. Restricted Mode Pre-Check (Verify access before hitting business tables)
             const { data: profile, error: profileError } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
@@ -94,7 +95,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with Full Relational Joins & Ratings
+                // 4. Fetch Bookings with Explicit Relational Joins for 7-Column Layout
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -102,6 +103,7 @@ export default function BusinessDashboardPage() {
                         booking_time,
                         status,
                         staff_id,
+                        price,
                         customer:users!bookings_customer_id_fkey ( name, email ),
                         service:services!bookings_service_id_fkey ( name, price ),
                         car:cars!bookings_car_id_fkey ( make, model ),
@@ -112,14 +114,16 @@ export default function BusinessDashboardPage() {
                     .order("booking_time", { ascending: true });
                 
                 if (bookingError) throw bookingError;
+                
+                console.log("[DASHBOARD] Fetched Bookings:", bookingData);
                 setBookings(bookingData || []);
 
             } else {
-                setFetchError("Business profile not found.");
+                setFetchError("Business profile not found. Please complete your profile setup.");
             }
         } catch (error: any) {
             console.error("[DASHBOARD] Fetch failure:", JSON.stringify(error, null, 2));
-            setFetchError(error.message || "A database error occurred.");
+            setFetchError(error.message || "A database error occurred while loading your dashboard.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -130,6 +134,7 @@ export default function BusinessDashboardPage() {
         setMounted(true);
         fetchData();
 
+        // Real-time listener for status changes
         const channel = supabase
             .channel('dashboard-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
@@ -149,8 +154,12 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
 
-            toast({ title: status === 'accepted' ? "Accepted ✅" : "Rejected ❌" });
+            toast({ 
+                title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Rejected ❌",
+                description: status === 'accepted' ? "An invoice has been generated." : "The request has been removed."
+            });
             
+            // Clean up local assignment state for this row
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -166,6 +175,7 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
+        // Optimistic UI update to ensure selection "sticks" immediately
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -175,9 +185,11 @@ export default function BusinessDashboardPage() {
                 .eq("id", bookingId);
 
             if (error) throw error;
-            // Removed notification as requested to avoid sync overlap
+            
+            toast({ title: "Employee assigned successfully." });
             await fetchData(true);
         } catch (e: any) {
+            // Revert on error
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -193,94 +205,119 @@ export default function BusinessDashboardPage() {
         <div className="flex flex-col items-center justify-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8 text-center">
             <Lock className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
             <h2 className="text-2xl font-bold">Operations Restricted</h2>
-            <p className="text-muted-foreground mt-2 max-w-md mx-auto">Please upgrade or renew your plan to manage bookings.</p>
-            <Button asChild className="mt-8"><Link href="/business/subscription">Renew Access Now</Link></Button>
+            <p className="text-muted-foreground mt-2 max-w-md mx-auto">Please upgrade or renew your plan to manage bookings and assign staff.</p>
+            <Button asChild className="mt-8 shadow-lg"><Link href="/business/subscription">Renew Access Now</Link></Button>
         </div>
     );
 
     const BookingTable = ({ list, isPending = false, isHistory = false }: { list: any[], isPending?: boolean, isHistory?: boolean }) => (
-        <Table>
-            <TableHeader>
-                <TableRow className="bg-muted/50">
-                    <TableHead className="font-bold">Customer Name</TableHead>
-                    <TableHead className="font-bold">Customer Email</TableHead>
-                    <TableHead className="font-bold">Service Info</TableHead>
-                    <TableHead className="font-bold">Car Make & Model</TableHead>
-                    <TableHead className="font-bold">Staff</TableHead>
-                    <TableHead className="font-bold">Timing</TableHead>
-                    <TableHead className={cn("text-right font-bold pr-6", isHistory && "text-center")}>
-                        {isHistory ? "Feedback" : "Action"}
-                    </TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {list.length > 0 ? list.map((booking) => {
-                    const currentStaffId = localStaffAssignments[booking.id] || booking.staff_id || "";
-                    const isStaffAssigned = !!currentStaffId;
-                    const rating = booking.rating?.[0];
+        <div className="overflow-x-auto">
+            <Table>
+                <TableHeader>
+                    <TableRow className="bg-muted/50 border-b-2">
+                        <TableHead className="font-bold whitespace-nowrap px-4 py-4">Customer Name</TableHead>
+                        <TableHead className="font-bold whitespace-nowrap px-4">Customer Email</TableHead>
+                        <TableHead className="font-bold whitespace-nowrap px-4">Service Info</TableHead>
+                        <TableHead className="font-bold whitespace-nowrap px-4">Car Make & Model</TableHead>
+                        <TableHead className="font-bold whitespace-nowrap px-4">Staff</TableHead>
+                        <TableHead className="font-bold whitespace-nowrap px-4">Timing</TableHead>
+                        <TableHead className={cn("text-right font-bold pr-6 whitespace-nowrap", isHistory && "text-center")}>
+                            {isHistory ? "Feedback" : "Action"}
+                        </TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {list.length > 0 ? list.map((booking) => {
+                        const currentStaffId = localStaffAssignments[booking.id] || booking.staff_id || "";
+                        const isStaffAssigned = !!currentStaffId;
+                        const rating = booking.rating?.[0];
 
-                    return (
-                        <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
-                            <TableCell className="font-bold text-sm">{booking.customer?.name}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{booking.customer?.email}</TableCell>
-                            <TableCell>
-                                <div className="text-sm font-medium">{booking.service?.name}</div>
-                                <div className="text-[10px] font-bold text-primary">BWP {Number(booking.service?.price || 0).toFixed(2)}</div>
-                            </TableCell>
-                            <TableCell className="text-sm font-bold">{booking.car?.make} {booking.car?.model}</TableCell>
-                            <TableCell>
-                                {isHistory ? (
-                                    <span className="text-xs font-medium">{booking.staff?.name || 'Unassigned'}</span>
-                                ) : (
-                                    <select
-                                        className="h-8 w-full max-w-[150px] rounded-md border bg-background px-2 py-1 text-xs font-bold cursor-pointer"
-                                        value={currentStaffId}
-                                        onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
-                                    >
-                                        <option value="">Select Staff</option>
-                                        {staffList?.map((staff) => (<option key={staff.id} value={staff.id}>{staff.name}</option>))}
-                                    </select>
-                                )}
-                            </TableCell>
-                            <TableCell className="text-xs">
-                                <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                                <div className="text-muted-foreground uppercase">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                            </TableCell>
-                            <TableCell className={cn("text-right pr-6", isHistory && "text-center")}>
-                                {isPending ? (
-                                    <div className="flex justify-end gap-2">
-                                        <Button 
-                                            size="sm" 
-                                            disabled={!isStaffAssigned}
-                                            className={cn("h-8 text-[10px] font-bold uppercase", isStaffAssigned ? "bg-green-600 hover:bg-green-700" : "bg-muted")}
-                                            onClick={() => updateStatus(booking.id, "accepted")}
-                                        >Accept ✅</Button>
-                                        <Button size="sm" variant="destructive" className="h-8 text-[10px] font-bold uppercase" onClick={() => updateStatus(booking.id, "rejected")}>Reject ❌</Button>
-                                    </div>
-                                ) : isHistory ? (
-                                    rating ? (
-                                        <div className="flex flex-col items-center gap-1">
-                                            <div className="flex gap-0.5">
-                                                {Array.from({length: 5}).map((_, i) => (
-                                                    <Star key={i} className={cn("h-3 w-3", i < rating.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300")} />
-                                                ))}
-                                            </div>
-                                            {rating.feedback && <span className="text-[10px] text-muted-foreground italic line-clamp-1 max-w-[100px]">"{rating.feedback}"</span>}
-                                        </div>
+                        // Human-readable timing format: Feb 27 - 11:00 PM
+                        const timing = booking.booking_time 
+                            ? new Date(booking.booking_time).toLocaleString('en-US', { month: 'short', day: 'numeric' }) + 
+                              " - " + 
+                              new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : "---";
+
+                        return (
+                            <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors border-b">
+                                <TableCell className="font-bold text-sm px-4 py-4">{booking.customer?.name || '---'}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground px-4">{booking.customer?.email || '---'}</TableCell>
+                                <TableCell className="px-4">
+                                    <div className="text-xs font-medium">{booking.service?.name}</div>
+                                    <div className="text-[10px] font-bold text-primary">BWP {Number(booking.service?.price || 0).toFixed(2)}</div>
+                                </TableCell>
+                                <TableCell className="text-xs font-bold px-4">
+                                    {booking.car?.make} {booking.car?.model}
+                                </TableCell>
+                                <TableCell className="px-4 min-w-[160px]">
+                                    {isHistory ? (
+                                        <span className="text-xs font-medium">{booking.staff?.name || 'Unassigned'}</span>
                                     ) : (
-                                        <span className="text-[10px] text-muted-foreground italic">No rating</span>
-                                    )
-                                ) : (
-                                    <Badge variant="outline" className="uppercase text-[10px] py-1">{booking.status}</Badge>
-                                )}
+                                        <select
+                                            className="h-9 w-full rounded-md border bg-background px-2 py-1 text-xs font-bold cursor-pointer focus:ring-2 focus:ring-primary outline-none transition-all"
+                                            value={currentStaffId}
+                                            onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
+                                        >
+                                            <option value="">Select Staff</option>
+                                            {staffList?.map((staff) => (
+                                                <option key={staff.id} value={staff.id}>{staff.name}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </TableCell>
+                                <TableCell className="text-[11px] font-medium px-4 whitespace-nowrap">
+                                    {timing}
+                                </TableCell>
+                                <TableCell className={cn("text-right pr-6", isHistory && "text-center")}>
+                                    {isPending ? (
+                                        <div className="flex justify-end gap-2">
+                                            <Button 
+                                                size="sm" 
+                                                disabled={!isStaffAssigned}
+                                                className={cn(
+                                                    "h-8 text-[10px] font-bold uppercase transition-all shadow-sm", 
+                                                    isStaffAssigned ? "bg-green-600 hover:bg-green-700 text-white" : "bg-muted text-muted-foreground"
+                                                )}
+                                                onClick={() => updateStatus(booking.id, "accepted")}
+                                            >Accept ✅</Button>
+                                            <Button 
+                                                size="sm" 
+                                                variant="destructive" 
+                                                className="h-8 text-[10px] font-bold uppercase shadow-sm" 
+                                                onClick={() => updateStatus(booking.id, "rejected")}
+                                            >Reject ❌</Button>
+                                        </div>
+                                    ) : isHistory ? (
+                                        rating ? (
+                                            <div className="flex flex-col items-center gap-1">
+                                                <div className="flex gap-0.5">
+                                                    {Array.from({length: 5}).map((_, i) => (
+                                                        <Star key={i} className={cn("h-3 w-3", i < rating.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300")} />
+                                                    ))}
+                                                </div>
+                                                {rating.feedback && <span className="text-[10px] text-muted-foreground italic line-clamp-1 max-w-[100px]">"{rating.feedback}"</span>}
+                                            </div>
+                                        ) : (
+                                            <span className="text-[10px] text-muted-foreground italic">No rating</span>
+                                        )
+                                    ) : (
+                                        <Badge variant="outline" className="uppercase text-[10px] py-1 border-primary/20 text-primary">{booking.status}</Badge>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        );
+                    }) : (
+                        <TableRow>
+                            <TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic">
+                                <Truck className="h-10 w-10 mx-auto opacity-20 mb-2" />
+                                No requests available.
                             </TableCell>
                         </TableRow>
-                    );
-                }) : (
-                    <TableRow><TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic"><Truck className="h-10 w-10 mx-auto opacity-20 mb-2" />No requests available.</TableCell></TableRow>
-                )}
-            </TableBody>
-        </Table>
+                    )}
+                </TableBody>
+            </Table>
+        </div>
     );
 
     const pendingList = bookings.filter(b => b.status === 'pending');
@@ -291,28 +328,57 @@ export default function BusinessDashboardPage() {
         <div className="space-y-8 animate-in fade-in duration-500 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div className="space-y-1">
-                    <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business?.name || 'My Business'}</h1>
-                    <p className="text-muted-foreground font-medium">Operations Center</p>
+                    <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business?.name || 'Operations'}</h1>
+                    <p className="text-muted-foreground font-medium">Real-time Booking Management</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10">
+                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-6 border-primary/20 hover:bg-primary/5">
                         <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Queue
                     </Button>
-                    <Badge className="bg-primary font-bold px-4 py-1.5 rounded-full uppercase">{business?.subscription_status || 'ACTIVE'}</Badge>
+                    <Badge className="bg-primary text-white font-bold px-4 py-1.5 rounded-full uppercase shadow-sm">
+                        {business?.subscription_status || 'ACTIVE'}
+                    </Badge>
                 </div>
             </div>
 
-            {fetchError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{fetchError}</AlertDescription></Alert>}
+            {fetchError && (
+                <Alert variant="destructive" className="border-2 shadow-lg">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle className="font-bold">Fetch Error</AlertTitle>
+                    <AlertDescription>{fetchError}</AlertDescription>
+                </Alert>
+            )}
 
             <Tabs defaultValue="pending" className="w-full">
-                <TabsList className="mb-8 grid w-full grid-cols-3 max-w-2xl bg-muted/50 p-1.5 h-12 rounded-xl">
-                    <TabsTrigger value="pending" className="rounded-lg text-[10px] font-black uppercase">Incoming ({pendingList.length})</TabsTrigger>
-                    <TabsTrigger value="active" className="rounded-lg text-[10px] font-black uppercase">Active ({activeList.length})</TabsTrigger>
-                    <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase">History ({completedList.length})</TabsTrigger>
+                <TabsList className="mb-8 grid w-full grid-cols-3 max-w-2xl bg-muted/50 p-1.5 h-12 rounded-xl border">
+                    <TabsTrigger value="pending" className="rounded-lg text-[10px] font-black uppercase data-[state=active]:shadow-md">
+                        Incoming ({pendingList.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="active" className="rounded-lg text-[10px] font-black uppercase data-[state=active]:shadow-md">
+                        Active ({activeList.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase data-[state=active]:shadow-md">
+                        History ({completedList.length})
+                    </TabsTrigger>
                 </TabsList>
-                <TabsContent value="pending"><Card className="shadow-2xl overflow-hidden"><BookingTable list={pendingList} isPending /></Card></TabsContent>
-                <TabsContent value="active"><Card className="shadow-2xl overflow-hidden"><BookingTable list={activeList} /></Card></TabsContent>
-                <TabsContent value="completed"><Card className="shadow-2xl overflow-hidden"><BookingTable list={completedList} isHistory /></Card></TabsContent>
+                
+                <TabsContent value="pending" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <Card className="shadow-2xl overflow-hidden border-2 border-primary/5">
+                        <BookingTable list={pendingList} isPending />
+                    </Card>
+                </TabsContent>
+                
+                <TabsContent value="active" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <Card className="shadow-2xl overflow-hidden border-2 border-primary/5">
+                        <BookingTable list={activeList} />
+                    </Card>
+                </TabsContent>
+                
+                <TabsContent value="completed" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <Card className="shadow-2xl overflow-hidden border-2 border-primary/5">
+                        <BookingTable list={completedList} isHistory />
+                    </Card>
+                </TabsContent>
             </Tabs>
         </div>
     );
