@@ -10,8 +10,7 @@ import {
     AlertCircle, 
     Truck,
     Lock,
-    CheckCircle2,
-    XCircle
+    CheckCircle2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -27,10 +26,11 @@ export default function BusinessDashboardPage() {
     const [business, setBusiness] = useState<any>(null);
     const [isRestricted, setIsRestricted] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [mounted, setMounted] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Stable state for staff selection to prevent "reverting" behavior
+    // Stable state for staff selection to ensure immediate UI feedback and persistence
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -53,17 +53,14 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Pre-check status check to avoid Business RLS recursion
+            // 1. Status Check (preemptive)
             const { data: profile, error: profileError } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
                 .eq('id', authUser.id)
                 .maybeSingle();
 
-            if (profileError) {
-                console.error("[DASHBOARD] Profile check failure:", JSON.stringify(profileError, null, 2));
-                throw profileError;
-            }
+            if (profileError) throw profileError;
 
             const isPaid = profile?.paid === true;
             const isTrialValid = profile?.trial_expiry ? new Date(profile.trial_expiry) > new Date() : false;
@@ -90,18 +87,15 @@ export default function BusinessDashboardPage() {
                 setBusiness(bizData);
 
                 // 3. Fetch Staff List
-                const { data: staffData, error: staffError } = await supabase
+                const { data: staffData } = await supabase
                     .from("employees")
                     .select("id, name")
                     .eq("business_id", bizData.id)
                     .order('name');
                 
-                if (staffError) console.error("Staff fetch error:", JSON.stringify(staffError, null, 2));
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with Explicit Relational Joins
-                // Table: bookings
-                // Relations: customer (users), service (services), car (cars), staff (employees)
+                // 4. Fetch Bookings with Full Relational Joins
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -109,18 +103,10 @@ export default function BusinessDashboardPage() {
                         booking_time,
                         status,
                         staff_id,
-                        customer:users!bookings_customer_id_fkey (
-                            name,
-                            email
-                        ),
-                        service:services!bookings_service_id_fkey (
-                            name,
-                            price
-                        ),
-                        car:cars!bookings_car_id_fkey (
-                            make,
-                            model
-                        )
+                        customer:users!bookings_customer_id_fkey ( name, email ),
+                        service:services!bookings_service_id_fkey ( name, price ),
+                        car:cars!bookings_car_id_fkey ( make, model ),
+                        staff:employees!bookings_staff_id_fkey ( name )
                     `)
                     .eq("business_id", bizData.id)
                     .order("booking_time", { ascending: true });
@@ -132,8 +118,8 @@ export default function BusinessDashboardPage() {
                 setFetchError("Business profile not found.");
             }
         } catch (error: any) {
-            console.error("[DASHBOARD] Fetch error details:", JSON.stringify(error, null, 2));
-            setFetchError(error.message || "A database error occurred while loading your dashboard.");
+            console.error("[DASHBOARD] Fetch failure:", JSON.stringify(error, null, 2));
+            setFetchError(error.message || "A database error occurred.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -141,19 +127,17 @@ export default function BusinessDashboardPage() {
     }, []);
 
     useEffect(() => {
+        setMounted(true);
         fetchData();
 
         const channel = supabase
             .channel('dashboard-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
-                // Background refresh without clearing local optimistic state
                 fetchData(true);
             })
             .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        return () => { supabase.removeChannel(channel); };
     }, [fetchData]);
 
     const updateStatus = async (bookingId: string, status: string) => {
@@ -165,12 +149,8 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
 
-            toast({ 
-                title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Rejected", 
-                description: `Request has been marked as ${status}.` 
-            });
+            toast({ title: status === 'accepted' ? "Accepted ✅" : "Rejected ❌" });
             
-            // Clear local tracking for this row as it's leaving the pending queue
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -186,7 +166,7 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // OPTIMISTIC UPDATE: Set local state first so it "sticks" immediately
+        // Optimistic update for immediate stability
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -196,19 +176,28 @@ export default function BusinessDashboardPage() {
                 .eq("id", bookingId);
 
             if (error) throw error;
-            
-            // Notification removed per user request to stabilize flow
+            toast({ title: "Employee assigned successfully." });
             await fetchData(true);
         } catch (e: any) {
-            // Revert local state on database failure
             setLocalStaffAssignments(prev => {
-                const next = { ...prev };
+                const next = { ...next };
                 delete next[bookingId];
                 return next;
             });
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
         }
     };
+
+    if (!mounted) return <div className="flex justify-center py-32"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
+
+    if (isRestricted) return (
+        <div className="flex flex-col items-center justify-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8 text-center">
+            <Lock className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+            <h2 className="text-2xl font-bold">Operations Restricted</h2>
+            <p className="text-muted-foreground mt-2 max-w-md mx-auto">Please upgrade or renew your plan to manage bookings.</p>
+            <Button asChild className="mt-8"><Link href="/business/subscription">Renew Access Now</Link></Button>
+        </div>
+    );
 
     const BookingTable = ({ list, isPending = false }: { list: any[], isPending?: boolean }) => (
         <Table>
@@ -225,128 +214,54 @@ export default function BusinessDashboardPage() {
             </TableHeader>
             <TableBody>
                 {list.length > 0 ? list.map((booking) => {
-                    // Source of truth for selection: local assignment state OR database record
                     const currentStaffId = localStaffAssignments[booking.id] || booking.staff_id || "";
                     const isStaffAssigned = !!currentStaffId;
 
                     return (
                         <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
-                            <TableCell className="font-bold text-sm">
-                                {booking.customer?.name || "Customer"}
-                            </TableCell>
-
-                            <TableCell className="text-xs text-muted-foreground">
-                                {booking.customer?.email || "No email"}
-                            </TableCell>
-
+                            <TableCell className="font-bold text-sm">{booking.customer?.name}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{booking.customer?.email}</TableCell>
                             <TableCell>
-                                <div className="text-sm font-medium">
-                                    {booking.service?.name}
-                                </div>
-                                <div className="text-[10px] font-bold text-primary">
-                                    BWP {Number(booking.service?.price || 0).toFixed(2)}
-                                </div>
+                                <div className="text-sm font-medium">{booking.service?.name}</div>
+                                <div className="text-[10px] font-bold text-primary">BWP {Number(booking.service?.price || 0).toFixed(2)}</div>
                             </TableCell>
-
-                            <TableCell className="text-sm font-bold">
-                                {booking.car?.make} {booking.car?.model}
-                            </TableCell>
-
+                            <TableCell className="text-sm font-bold">{booking.car?.make} {booking.car?.model}</TableCell>
                             <TableCell>
                                 <select
-                                    className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer transition-all"
+                                    className="h-8 w-full max-w-[150px] rounded-md border bg-background px-2 py-1 text-xs font-bold cursor-pointer"
                                     value={currentStaffId}
                                     onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
                                 >
                                     <option value="">Select Staff</option>
-                                    {staffList?.map((staff) => (
-                                        <option key={staff.id} value={staff.id}>
-                                            {staff.name}
-                                        </option>
-                                    ))}
+                                    {staffList?.map((staff) => (<option key={staff.id} value={staff.id}>{staff.name}</option>))}
                                 </select>
                             </TableCell>
-
                             <TableCell className="text-xs">
-                                <div className="font-bold">
-                                    {new Date(booking.booking_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                </div>
-                                <div className="text-muted-foreground uppercase">
-                                    {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </div>
+                                <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                <div className="text-muted-foreground uppercase">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                             </TableCell>
-
                             <TableCell className="text-right pr-6">
                                 {isPending ? (
                                     <div className="flex justify-end gap-2">
                                         <Button 
                                             size="sm" 
                                             disabled={!isStaffAssigned}
-                                            className={cn(
-                                                "h-8 text-[10px] font-bold uppercase gap-1.5 min-w-[80px] transition-all",
-                                                isStaffAssigned 
-                                                    ? "bg-green-600 hover:bg-green-700 text-white shadow-md" 
-                                                    : "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
-                                            )}
+                                            className={cn("h-8 text-[10px] font-bold uppercase", isStaffAssigned ? "bg-green-600 hover:bg-green-700" : "bg-muted")}
                                             onClick={() => updateStatus(booking.id, "accepted")}
-                                        >
-                                            Accept ✅
-                                        </Button>
-                                        <Button 
-                                            size="sm" 
-                                            variant="destructive"
-                                            className="h-8 text-[10px] font-bold uppercase gap-1.5" 
-                                            onClick={() => updateStatus(booking.id, "rejected")}
-                                        >
-                                            Reject ❌
-                                        </Button>
+                                        >Accept ✅</Button>
+                                        <Button size="sm" variant="destructive" className="h-8 text-[10px] font-bold uppercase" onClick={() => updateStatus(booking.id, "rejected")}>Reject ❌</Button>
                                     </div>
                                 ) : (
-                                    <div className="flex justify-end gap-2">
-                                        <Badge variant="outline" className="uppercase text-[10px] py-1">{booking.status}</Badge>
-                                        {booking.status === 'accepted' && (
-                                            <Button 
-                                                size="sm" 
-                                                className="h-8 text-[10px] font-bold uppercase" 
-                                                onClick={() => updateStatus(booking.id, "completed")}
-                                            >
-                                                Mark Complete
-                                            </Button>
-                                        )}
-                                    </div>
+                                    <Badge variant="outline" className="uppercase text-[10px] py-1">{booking.status}</Badge>
                                 )}
                             </TableCell>
                         </TableRow>
                     );
                 }) : (
-                    <TableRow>
-                        <TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic">
-                            <div className="flex flex-col items-center gap-2 opacity-40">
-                                <Truck className="h-10 w-10" />
-                                <p>{isPending ? "No pending requests available" : "No bookings available yet."}</p>
-                            </div>
-                        </TableCell>
-                    </TableRow>
+                    <TableRow><TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic"><Truck className="h-10 w-10 mx-auto opacity-20 mb-2" />No requests available.</TableCell></TableRow>
                 )}
             </TableBody>
         </Table>
-    );
-
-    if (loading) return <div className="flex justify-center py-32"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
-    
-    if (isRestricted) return (
-        <div className="flex flex-col items-center justify-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8 text-center">
-            <Lock className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-            <h2 className="text-2xl font-bold">Operations Restricted</h2>
-            <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                Your professional features are currently paused. Please upgrade or renew your plan to view and manage bookings.
-            </p>
-            <div className="mt-8 flex gap-4">
-                <Button asChild>
-                    <Link href="/business/subscription">Renew Access Now</Link>
-                </Button>
-            </div>
-        </div>
     );
 
     const pendingList = bookings.filter(b => b.status === 'pending');
@@ -364,65 +279,21 @@ export default function BusinessDashboardPage() {
                     <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10">
                         <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Queue
                     </Button>
-                    <Badge className="bg-primary font-bold px-4 py-1.5 rounded-full uppercase tracking-tighter">
-                        {business?.subscription_status?.replace('_', ' ') || 'ACTIVE'}
-                    </Badge>
+                    <Badge className="bg-primary font-bold px-4 py-1.5 rounded-full uppercase">{business?.subscription_status || 'ACTIVE'}</Badge>
                 </div>
             </div>
 
-            {fetchError && (
-                <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Notice</AlertTitle>
-                    <AlertDescription>{fetchError}</AlertDescription>
-                </Alert>
-            )}
+            {fetchError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{fetchError}</AlertDescription></Alert>}
 
             <Tabs defaultValue="pending" className="w-full">
                 <TabsList className="mb-8 grid w-full grid-cols-3 max-w-2xl bg-muted/50 p-1.5 h-12 rounded-xl">
-                    <TabsTrigger value="pending" className="rounded-lg text-[10px] font-black uppercase">
-                        Incoming ({pendingList.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="active" className="rounded-lg text-[10px] font-black uppercase">
-                        Active Jobs ({activeList.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase">
-                        History ({completedList.length})
-                    </TabsTrigger>
+                    <TabsTrigger value="pending" className="rounded-lg text-[10px] font-black uppercase">Incoming ({pendingList.length})</TabsTrigger>
+                    <TabsTrigger value="active" className="rounded-lg text-[10px] font-black uppercase">Active ({activeList.length})</TabsTrigger>
+                    <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase">History ({completedList.length})</TabsTrigger>
                 </TabsList>
-
-                <TabsContent value="pending">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
-                        <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">New Booking Requests</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <BookingTable list={pendingList} isPending />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                
-                <TabsContent value="active">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
-                        <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">In-Progress Services</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <BookingTable list={activeList} />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                
-                <TabsContent value="completed">
-                    <Card className="shadow-2xl border-muted/50 overflow-hidden">
-                        <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Finished Services</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <BookingTable list={completedList} />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                <TabsContent value="pending"><Card className="shadow-2xl overflow-hidden"><BookingTable list={pendingList} isPending /></Card></TabsContent>
+                <TabsContent value="active"><Card className="shadow-2xl overflow-hidden"><BookingTable list={activeList} /></Card></TabsContent>
+                <TabsContent value="completed"><Card className="shadow-2xl overflow-hidden"><BookingTable list={completedList} /></Card></TabsContent>
             </Tabs>
         </div>
     );

@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, MapPin, Star, Repeat, Loader2, Car as CarIcon, XCircle, FileText, ChevronRight, UserCheck, Phone, CheckCircle2 } from "lucide-react";
+import { Calendar, Clock, MapPin, Star, Repeat, Loader2, Car as CarIcon, XCircle, UserCheck, Phone, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
@@ -31,11 +31,13 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
   
   const [cancelling, setCancelling] = useState(false);
   const [finishing, setFinishing] = useState(false);
-  
-  // Feedback form state
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [isFinishingOpen, setIsFinishingOpen] = useState(false);
+
+  // Date formatting handled post-mount
+  const dateStr = booking.booking_time ? new Date(booking.booking_time).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : '---';
+  const timeStr = booking.booking_time ? new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---';
 
   const handleCancel = async () => {
     setCancelling(true);
@@ -46,19 +48,10 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
         .eq('id', booking.booking_id);
 
       if (error) throw error;
-
-      toast({ 
-        title: 'Booking Cancelled', 
-        description: 'Your booking has been successfully cancelled.' 
-      });
-      
+      toast({ title: 'Booking Cancelled' });
       onRefresh();
     } catch (error: any) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Cancellation Failed', 
-        description: error.message || 'Could not cancel the booking.' 
-      });
+      toast({ variant: 'destructive', title: 'Cancellation Failed', description: error.message });
     } finally {
       setCancelling(false);
     }
@@ -70,7 +63,6 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Unauthorized");
 
-      // 1. Update Booking status
       const { error: bookingError } = await supabase
         .from('bookings')
         .update({ status: 'completed' })
@@ -78,22 +70,17 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
       
       if (bookingError) throw bookingError;
 
-      // 2. Submit Rating if provided
       if (rating > 0) {
-        const { error: ratingError } = await supabase
-          .from('ratings')
-          .insert({
-            booking_id: booking.booking_id,
-            customer_id: session.user.id,
-            business_id: booking.business_id,
-            rating: rating,
-            feedback: feedback
-          });
-        
-        if (ratingError) throw ratingError;
+        await supabase.from('ratings').insert({
+          booking_id: booking.booking_id,
+          customer_id: session.user.id,
+          business_id: booking.business_id,
+          rating: rating,
+          feedback: feedback
+        });
       }
 
-      toast({ title: 'Service Completed', description: 'Thank you for your feedback!' });
+      toast({ title: 'Service Completed' });
       setIsFinishingOpen(false);
       onRefresh();
     } catch (error: any) {
@@ -133,21 +120,21 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
       <CardContent className="space-y-4 pb-4 flex-grow">
         <div className="bg-muted/30 p-3 rounded-lg space-y-2">
             <div className="flex justify-between items-center text-sm">
-                <span className="font-semibold text-primary">{booking.service_name || 'Wash Service'}</span>
+                <span className="font-semibold text-primary">{booking.service_name}</span>
                 <span className="font-bold">P{Number(booking.price || 0).toFixed(2)}</span>
             </div>
             <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {booking.service_duration || '--'} mins</span>
-                <span className="flex items-center gap-1"><CarIcon className="h-3.5 w-3.5" /> {booking.car_details || 'Registered Vehicle'}</span>
+                <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {booking.service_duration} mins</span>
+                <span className="flex items-center gap-1"><CarIcon className="h-3.5 w-3.5" /> {booking.car_details}</span>
             </div>
         </div>
 
         <div className="flex items-center gap-2 font-medium text-sm">
             <Calendar className="h-4 w-4 text-primary" /> 
-            <span>{booking.booking_time ? new Date(booking.booking_time).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : '---'}</span>
+            <span>{dateStr}</span>
             <span className="text-muted-foreground">•</span>
             <Clock className="h-4 w-4 text-primary" />
-            <span>{booking.booking_time ? new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---'}</span>
+            <span>{timeStr}</span>
         </div>
 
         <div className="mt-4 pt-4 border-t">
@@ -155,14 +142,12 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
                 <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9 border-2 border-primary/10">
                         <AvatarImage src={booking.staff.image_url} alt={booking.staff.name} className="object-cover" />
-                        <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-bold">
-                            {booking.staff.name?.charAt(0)}
-                        </AvatarFallback>
+                        <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-bold">{booking.staff.name?.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col">
                         <div className="flex items-center gap-1.5">
                             <span className="text-xs font-bold">{booking.staff.name}</span>
-                            <Badge variant="outline" className="text-[8px] h-4 px-1 py-0 border-primary/20 text-primary">Detailer</Badge>
+                            <Badge variant="outline" className="text-[8px] h-4 px-1 border-primary/20 text-primary">Detailer</Badge>
                         </div>
                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
                             <Phone className="h-2.5 w-2.5" /> {booking.staff.phone}
@@ -210,25 +195,20 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
                             <div className="space-y-2">
                                 <Label>Optional Feedback</Label>
                                 <Textarea 
-                                    placeholder="Tell us what was great or what could be improved..." 
+                                    placeholder="Tell us what was great..." 
                                     value={feedback}
                                     onChange={(e) => setFeedback(e.target.value)}
                                 />
                             </div>
                         </div>
                         <DialogFooter>
-                            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={handleFinishAndRate} disabled={finishing}>
-                                {finishing ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                            <Button className="w-full bg-green-600" onClick={handleFinishAndRate} disabled={finishing}>
+                                {finishing && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
                                 Confirm Completion
                             </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
-            )}
-            {booking.status === 'completed' && !booking.hasRating && (
-                <Button variant="ghost" size="sm" className="h-8 text-xs" asChild>
-                    <Link href={`/customer/rate/${booking.booking_id}`}><Star className="mr-1 h-3 w-3" /> Rate</Link>
-                </Button>
             )}
         </div>
         
@@ -241,13 +221,10 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
                         </Button>
                     </DialogTrigger>
                     <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Cancel Booking?</DialogTitle>
-                            <DialogDescription>This action cannot be undone.</DialogDescription>
-                        </DialogHeader>
+                        <DialogHeader><DialogTitle>Cancel Booking?</DialogTitle><DialogDescription>This action cannot be undone.</DialogDescription></DialogHeader>
                         <DialogFooter>
                             <Button variant="destructive" onClick={handleCancel} disabled={cancelling}>
-                                {cancelling ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                                {cancelling && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
                                 Confirm Cancellation
                             </Button>
                         </DialogFooter>
@@ -270,6 +247,7 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
 export default function BookingHistoryPage() {
     const [bookings, setBookings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [mounted, setMounted] = useState(false);
 
     const fetchBookings = useCallback(async () => {
         setLoading(true);
@@ -310,15 +288,18 @@ export default function BookingHistoryPage() {
 
             setBookings(formatted);
         } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Fetch Error', description: 'Could not load your bookings.' });
+            toast({ variant: 'destructive', title: 'Fetch Error', description: 'Could not load bookings.' });
         } finally {
             setLoading(false);
         }
     }, []);
 
     useEffect(() => {
+        setMounted(true);
         fetchBookings();
     }, [fetchBookings]);
+
+    if (!mounted) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
     const upcomingBookings = bookings.filter(b => !['completed', 'cancelled', 'rejected'].includes(b.status));
     const pastBookings = bookings.filter(b => ['completed', 'cancelled', 'rejected'].includes(b.status));
@@ -328,10 +309,10 @@ export default function BookingHistoryPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
                     <h1 className="text-3xl font-bold tracking-tight">My Bookings</h1>
-                    <p className="text-muted-foreground">Confirm completions and track your mobile services.</p>
+                    <p className="text-muted-foreground">Manage your wash requests and feedback.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => fetchBookings()} disabled={loading}>
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                    <Loader2 className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
                     Refresh
                 </Button>
             </div>
@@ -372,27 +353,4 @@ export default function BookingHistoryPage() {
             </Tabs>
         </div>
     );
-}
-
-// Helper icon fix
-function RefreshCw(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-      <path d="M21 3v5h-5" />
-      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-      <path d="M3 21v-5h5" />
-    </svg>
-  )
 }
