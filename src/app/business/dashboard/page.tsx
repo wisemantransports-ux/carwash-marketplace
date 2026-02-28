@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -25,6 +26,7 @@ export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<any[]>([]);
     const [staffList, setStaffList] = useState<any[]>([]);
     const [business, setBusiness] = useState<any>(null);
+    const [isRestricted, setIsRestricted] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
@@ -44,6 +46,8 @@ export default function BusinessDashboardPage() {
         else setRefreshing(true);
         
         setFetchError(null);
+        setIsRestricted(false);
+
         try {
             const { data: { user: authUser } } = await supabase.auth.getUser();
             if (!authUser) {
@@ -52,7 +56,24 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Resolve Business Info
+            // 1. CHECK STATUS FIRST (Prevents recursion/RLS errors by avoiding 'businesses' table if restricted)
+            const { data: profile } = await supabase
+                .from('users_with_access')
+                .select('paid, trial_expiry')
+                .eq('id', authUser.id)
+                .maybeSingle();
+
+            const isPaid = profile?.paid === true;
+            const isTrialValid = profile?.trial_expiry ? new Date(profile.trial_expiry) > new Date() : false;
+            
+            if (!isPaid && !isTrialValid) {
+                setIsRestricted(true);
+                setLoading(false);
+                setRefreshing(false);
+                return;
+            }
+
+            // 2. Resolve Business Info (Only if not restricted)
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -64,7 +85,7 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff List
+                // 3. Fetch Staff List
                 const { data: staffData } = await supabase
                     .from("employees")
                     .select("id, name")
@@ -72,7 +93,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 3. Fetch Bookings with STRICT relational mapping for Name/Email
+                // 4. Fetch Bookings with relations
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -171,8 +192,6 @@ export default function BusinessDashboardPage() {
                 .eq("id", bookingId);
 
             if (error) throw error;
-            
-            // Note: No notification here as requested to prevent state conflicts
         } catch (e: any) {
             // Revert local state on error
             setLocalStaffAssignments(prev => {
@@ -249,7 +268,7 @@ export default function BusinessDashboardPage() {
                             {/* 6. TIMING COLUMN */}
                             <TableCell className="text-xs">
                                 <div className="font-bold">
-                                    {new Date(booking.booking_time).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                                    {new Date(booking.booking_time).toLocaleDateString()}
                                 </div>
                                 <div className="text-muted-foreground">
                                     {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -313,30 +332,18 @@ export default function BusinessDashboardPage() {
         </Table>
     );
 
-    if (loading && !business) return <div className="flex justify-center py-32"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
+    if (loading) return <div className="flex justify-center py-32"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
     
-    const isVerified = business?.verification_status === 'verified';
-    const isActive = business?.subscription_status === 'active';
-    const subEndDate = business?.sub_end_date ? new Date(business.sub_end_date) : null;
-    const isTrialActive = subEndDate && subEndDate > new Date();
-    
-    const isAccessActive = isVerified && (isActive || isTrialActive);
-
-    if (!isAccessActive && business) return (
+    if (isRestricted) return (
         <div className="flex flex-col items-center justify-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8 text-center">
             <Lock className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-            <h2 className="text-2xl font-bold">Operations Locked</h2>
+            <h2 className="text-2xl font-bold">Operations Restricted</h2>
             <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                {!isVerified
-                    ? "Verification pending. Your account is under review." 
-                    : "Your professional features are currently paused. Please renew your plan."}
+                Your professional features are currently paused. Please upgrade or renew your plan to view and manage bookings.
             </p>
             <div className="mt-8 flex gap-4">
-                <Button variant="outline" asChild>
-                    <Link href="/business/profile">Review Profile</Link>
-                </Button>
                 <Button asChild>
-                    <Link href="/business/subscription">View Plans</Link>
+                    <Link href="/business/subscription">Renew Access Now</Link>
                 </Button>
             </div>
         </div>
@@ -350,15 +357,15 @@ export default function BusinessDashboardPage() {
         <div className="space-y-8 animate-in fade-in duration-500 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div className="space-y-1">
-                    <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business?.name}</h1>
+                    <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business?.name || 'My Business'}</h1>
                     <p className="text-muted-foreground font-medium">Operations Center</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10">
                         <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Queue
                     </Button>
-                    <Badge className="bg-primary hover:bg-primary font-bold px-4 py-1.5 rounded-full uppercase tracking-tighter">
-                        {business?.subscription_status?.replace('_', ' ')}
+                    <Badge className="bg-primary font-bold px-4 py-1.5 rounded-full uppercase tracking-tighter">
+                        {business?.subscription_status?.replace('_', ' ') || 'ACTIVE'}
                     </Badge>
                 </div>
             </div>
