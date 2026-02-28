@@ -57,18 +57,16 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff List for assignment (using 'name' column)
+                // 2. Fetch Staff List for assignment
                 const { data: staffData, error: staffError } = await supabase
                     .from("employees")
                     .select("id, name")
                     .eq("business_id", bizData.id);
                 
-                if (staffError) {
-                    console.error("Staff fetch error:", staffError);
-                }
+                if (staffError) console.error("Staff list fetch error:", staffError);
                 setStaffList(staffData || []);
 
-                // 3. Fetch Bookings with relations
+                // 3. Fetch Bookings with strict relational data
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -111,6 +109,18 @@ export default function BusinessDashboardPage() {
 
     useEffect(() => {
         fetchData();
+
+        // Realtime subscription for instant updates
+        const channel = supabase
+            .channel('dashboard-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+                fetchData();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [fetchData]);
 
     const updateStatus = async (bookingId: string, status: string) => {
@@ -135,6 +145,9 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
+        // OPTIMISTIC UPDATE: Change local state immediately so it "sticks" visually
+        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, staff_id: staffId } : b));
+
         try {
             const { error } = await supabase
                 .from("bookings")
@@ -144,8 +157,11 @@ export default function BusinessDashboardPage() {
             if (error) throw error;
             
             toast({ title: "Employee assigned", description: "The staff member has been linked to this booking." });
+            // Sync with server state
             await fetchData();
         } catch (e: any) {
+            // Revert on error
+            await fetchData();
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
         }
     };
@@ -192,7 +208,7 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* 4. STAFF (DROPDOWN) */}
+                        {/* 4. STAFF (STABLE DROPDOWN) */}
                         <TableCell>
                             <select
                                 className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
@@ -218,7 +234,7 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* 6. ACTION */}
+                        {/* 6. ACTION (GATED ACCEPT) */}
                         <TableCell className="text-right pr-6">
                             {isPending ? (
                                 <div className="flex justify-end gap-2">
