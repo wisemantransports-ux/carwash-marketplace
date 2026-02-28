@@ -6,21 +6,17 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, ArrowRight, CheckCircle2, Phone, Tags, Trophy, Clock } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Tags } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { toast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
-  const isTrial = business.trial_start_date && business.trial_end_date && 
-                  new Date(business.trial_start_date) <= new Date() && 
-                  new Date(business.trial_end_date) >= new Date();
-  
-  const hasHighRating = (business.avg_rating || 0) >= 4.5;
+  const rating = Number(business.rating || 0);
+  const reviews = Number(business.review_count || 0);
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
@@ -37,17 +33,7 @@ function BusinessCard({ business }: { business: any }) {
             <Store className="h-16 w-16 opacity-10" />
           </div>
         )}
-        <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
-          {isTrial && (
-            <Badge className="bg-orange-500 text-white shadow-lg font-bold border-2 border-white/20">
-              <Clock className="h-3 w-3 mr-1" /> TRIAL
-            </Badge>
-          )}
-          {hasHighRating && (
-            <Badge className="bg-yellow-500 text-black shadow-lg font-bold border-2 border-white/20">
-              <Trophy className="h-3 w-3 mr-1" /> TOP RATED
-            </Badge>
-          )}
+        <div className="absolute top-2 right-2">
           <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold text-[10px] uppercase">
             {business.services?.length || 0} Packages
           </Badge>
@@ -87,20 +73,20 @@ function BusinessCard({ business }: { business: any }) {
         </div>
 
         <div className="flex items-center gap-1.5 pt-2 border-t border-dashed shrink-0">
-          <div className="flex text-yellow-400" aria-label={`Rating: ${business.avg_rating || 0} stars`}>
+          <div className="flex text-yellow-400" aria-label={`Rating: ${rating} stars`}>
             {[1, 2, 3, 4, 5].map((s) => (
               <Star 
                 key={s} 
                 className={cn(
                   "h-3.5 w-3.5", 
-                  s <= Math.round(business.avg_rating || 0) ? "fill-current" : "text-gray-200"
+                  s <= Math.round(rating) ? "fill-current" : "text-gray-200"
                 )} 
               />
             ))}
           </div>
-          <span className="text-sm font-bold">{(business.avg_rating || 0).toFixed(1)}</span>
+          <span className="text-sm font-bold">{rating.toFixed(1)}</span>
           <span className="text-[10px] text-muted-foreground ml-auto uppercase font-bold tracking-widest">
-            {business.review_count || 0} Reviews
+            {reviews} Reviews
           </span>
         </div>
       </CardContent>
@@ -127,41 +113,16 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
-        const now = new Date().toISOString();
-        const { data: bizData, error: bizError } = await supabase
+        const { data, error } = await supabase
             .from('businesses')
-            .select(`
-              *,
-              services(*),
-              bookings(
-                status,
-                ratings(rating)
-              )
-            `);
+            .select('*, services(*)')
+            .eq('verification_status', 'verified')
+            .order('rating', { ascending: false });
         
-        if (bizError) throw bizError;
-        
-        const processed = (bizData || [])
-            .filter(b => 
-                b.verification_status === 'verified' || 
-                (b.trial_start_date && b.trial_end_date && b.trial_start_date <= now && b.trial_end_date >= now)
-            )
-            .map(b => {
-                const completedBookings = (b.bookings || []).filter((bk: any) => bk.status === 'completed');
-                const ratings = completedBookings.flatMap((bk: any) => bk.ratings || []).filter(r => r.rating);
-                const avg = ratings.length > 0 ? ratings.reduce((acc, r) => acc + r.rating, 0) / ratings.length : 0;
-                
-                return {
-                    ...b,
-                    avg_rating: avg,
-                    review_count: ratings.length
-                };
-            })
-            .sort((a, b) => (b.avg_rating - a.avg_rating) || a.name.localeCompare(b.name));
-
-        setBusinesses(processed);
+        if (error) throw error;
+        setBusinesses(data || []);
       } catch (e: any) {
-        toast({ variant: 'destructive', title: 'Marketplace Error', description: 'Could not load partners.' });
+        console.error('Marketplace Error:', e);
       } finally {
         setLoading(false);
       }

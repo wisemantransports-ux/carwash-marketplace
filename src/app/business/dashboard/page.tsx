@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
     Loader2, 
@@ -12,8 +12,6 @@ import {
     Truck,
     Lock,
     Star,
-    CheckCircle2,
-    XCircle,
     Mail,
     User
 } from "lucide-react";

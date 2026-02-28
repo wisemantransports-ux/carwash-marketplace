@@ -2,9 +2,9 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, MapPin, Star, ShieldCheck, UserCheck, TrendingUp, XCircle, Store, Clock, Trophy } from "lucide-react";
+import { MapPin, Star, ShieldCheck, UserCheck, TrendingUp, Store } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -17,11 +17,10 @@ function BusinessCard({ business }: { business: any }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const isTrial = business.trial_start_date && business.trial_end_date && 
-                  new Date(business.trial_start_date) <= new Date() && 
-                  new Date(business.trial_end_date) >= new Date();
-  
   if (!mounted) return <Skeleton className="h-[400px] w-full rounded-2xl" />;
+
+  const rating = Number(business.rating || 0);
+  const reviews = Number(business.review_count || 0);
 
   return (
     <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl">
@@ -38,12 +37,7 @@ function BusinessCard({ business }: { business: any }) {
             <Store className="h-16 w-16 opacity-10" />
           </div>
         )}
-        <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
-          {isTrial && (
-            <Badge className="bg-orange-500 text-white shadow-lg font-bold border-2 border-white/20 px-3 py-1">
-              <Clock className="h-3 w-3 mr-1" /> TRIAL
-            </Badge>
-          )}
+        <div className="absolute top-3 right-3">
           <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black font-bold uppercase text-[10px] px-3 py-1">
             {business.type === 'station' ? 'Station' : 'Mobile'}
           </Badge>
@@ -69,13 +63,13 @@ function BusinessCard({ business }: { business: any }) {
                   key={s} 
                   className={cn(
                     "h-3.5 w-3.5", 
-                    s <= Math.round(business.rating || 0) ? "fill-current" : "text-gray-200"
+                    s <= Math.round(rating) ? "fill-current" : "text-gray-200"
                   )} 
                 />
             ))}
           </div>
-          <span className="text-xs font-bold">{(business.rating || 0).toFixed(1)}</span>
-          <span className="text-[10px] text-muted-foreground">({business.review_count || 0} reviews)</span>
+          <span className="text-xs font-bold">{rating.toFixed(1)}</span>
+          <span className="text-[10px] text-muted-foreground">({reviews} reviews)</span>
         </div>
       </CardContent>
       <CardFooter className="pt-0">
@@ -101,17 +95,11 @@ export default function Home() {
         const { data, error } = await supabase
             .from('businesses')
             .select('*')
+            .eq('verification_status', 'verified')
             .order('rating', { ascending: false });
         
         if (error) throw error;
-
-        const now = new Date();
-        const filtered = (data || []).filter(b => 
-            b.verification_status === 'verified' || 
-            (b.trial_start_date && b.trial_end_date && new Date(b.trial_start_date) <= now && new Date(b.trial_end_date) >= now)
-        );
-
-        setBusinesses(filtered);
+        setBusinesses(data || []);
       } catch (e) {
         console.error("Landing page fetch error:", e);
       } finally {
