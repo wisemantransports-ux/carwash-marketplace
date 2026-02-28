@@ -64,7 +64,7 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff List - Standardize on 'name' column
+                // 2. Fetch Staff List
                 const { data: staffData } = await supabase
                     .from("employees")
                     .select("id, name")
@@ -72,7 +72,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 3. Fetch Bookings with STRICT relational mapping
+                // 3. Fetch Bookings with STRICT relational mapping for Name/Email
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -172,8 +172,7 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             
-            // We don't trigger a full data re-fetch here because it causes the "revert" flicker.
-            // The local state will hold the value until the next background sync or status change.
+            // Note: No notification here as requested to prevent state conflicts
         } catch (e: any) {
             // Revert local state on error
             setLocalStaffAssignments(prev => {
@@ -189,9 +188,10 @@ export default function BusinessDashboardPage() {
         <Table>
             <TableHeader>
                 <TableRow className="bg-muted/50">
-                    <TableHead className="font-bold">Customer</TableHead>
+                    <TableHead className="font-bold">Customer Name</TableHead>
+                    <TableHead className="font-bold">Customer Email</TableHead>
                     <TableHead className="font-bold">Service Info</TableHead>
-                    <TableHead className="font-bold">Car</TableHead>
+                    <TableHead className="font-bold">Car Make & Model</TableHead>
                     <TableHead className="font-bold">Staff</TableHead>
                     <TableHead className="font-bold">Timing</TableHead>
                     <TableHead className="text-right font-bold pr-6">Action</TableHead>
@@ -205,17 +205,17 @@ export default function BusinessDashboardPage() {
 
                     return (
                         <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
-                            {/* 1. CUSTOMER COLUMN */}
-                            <TableCell>
-                                <div className="font-bold text-sm">
-                                    {booking.customer?.name ?? "Unknown Customer"}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground">
-                                    {booking.customer?.email ?? ""}
-                                </div>
+                            {/* 1. CUSTOMER NAME COLUMN */}
+                            <TableCell className="font-bold text-sm">
+                                {booking.customer?.name ?? "Unknown Customer"}
                             </TableCell>
 
-                            {/* 2. SERVICE INFO COLUMN */}
+                            {/* 2. CUSTOMER EMAIL COLUMN */}
+                            <TableCell className="text-xs text-muted-foreground">
+                                {booking.customer?.email ?? "No email provided"}
+                            </TableCell>
+
+                            {/* 3. SERVICE INFO COLUMN */}
                             <TableCell>
                                 <div className="text-sm font-medium">
                                     {booking.services?.name}
@@ -225,14 +225,12 @@ export default function BusinessDashboardPage() {
                                 </div>
                             </TableCell>
 
-                            {/* 3. CAR COLUMN */}
-                            <TableCell>
-                                <div className="text-sm font-bold">
-                                    {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
-                                </div>
+                            {/* 4. CAR MAKE & MODEL COLUMN */}
+                            <TableCell className="text-sm font-bold">
+                                {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
                             </TableCell>
 
-                            {/* 4. STAFF DROPDOWN COLUMN */}
+                            {/* 5. STAFF DROPDOWN COLUMN */}
                             <TableCell>
                                 <select
                                     className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
@@ -248,7 +246,7 @@ export default function BusinessDashboardPage() {
                                 </select>
                             </TableCell>
 
-                            {/* 5. TIMING COLUMN */}
+                            {/* 6. TIMING COLUMN */}
                             <TableCell className="text-xs">
                                 <div className="font-bold">
                                     {new Date(booking.booking_time).toLocaleDateString(undefined, { dateStyle: 'medium' })}
@@ -258,7 +256,7 @@ export default function BusinessDashboardPage() {
                                 </div>
                             </TableCell>
 
-                            {/* 6. ACTION COLUMN */}
+                            {/* 7. ACTION COLUMN */}
                             <TableCell className="text-right pr-6">
                                 {isPending ? (
                                     <div className="flex justify-end gap-2">
@@ -303,7 +301,7 @@ export default function BusinessDashboardPage() {
                     );
                 }) : (
                     <TableRow>
-                        <TableCell colSpan={6} className="h-48 text-center text-muted-foreground italic">
+                        <TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic">
                             <div className="flex flex-col items-center gap-2 opacity-40">
                                 <Truck className="h-10 w-10" />
                                 <p>{isPending ? "No pending requests available" : "No bookings available yet."}</p>
