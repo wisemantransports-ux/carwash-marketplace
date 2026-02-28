@@ -16,8 +16,8 @@ import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
-  const hasHighRating = business.avgRating >= 4.5;
-  const isTrusted = business.reviewCount >= 5;
+  const hasHighRating = (business.avgRating || 0) >= 4.5;
+  const isTrusted = (business.reviewCount || 0) >= 5;
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
@@ -78,12 +78,14 @@ function BusinessCard({ business }: { business: any }) {
             </p>
             <ScrollArea className="flex-1 pr-2">
                 <div className="space-y-1.5">
-                    {business.services?.map((svc: any) => (
+                    {business.services && business.services.length > 0 ? business.services.map((svc: any) => (
                         <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent hover:border-primary/20 transition-colors">
                             <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
                             <span className="font-bold text-primary">BWP {Number(svc.price).toFixed(2)}</span>
                         </div>
-                    ))}
+                    )) : (
+                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Catalog setup in progress...</p>
+                    )}
                 </div>
             </ScrollArea>
         </div>
@@ -95,14 +97,14 @@ function BusinessCard({ business }: { business: any }) {
                 key={s} 
                 className={cn(
                   "h-3.5 w-3.5", 
-                  s <= Math.round(business.avgRating) ? "fill-current" : "text-gray-200"
+                  s <= Math.round(business.avgRating || 0) ? "fill-current" : "text-gray-200"
                 )} 
               />
             ))}
           </div>
-          <span className="text-sm font-bold">{business.avgRating.toFixed(1)}</span>
+          <span className="text-sm font-bold">{(business.avgRating || 0).toFixed(1)}</span>
           <span className="text-[10px] text-muted-foreground ml-auto uppercase font-bold tracking-widest">
-            {business.reviewCount} Verified Reviews
+            {business.reviewCount || 0} Verified Reviews
           </span>
         </div>
       </CardContent>
@@ -129,8 +131,8 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
-        // Filter: verification_status = 'verified'
-        // Include relational data for avg_rating and review_count (completed bookings only)
+        // Requirement: verification_status = 'verified'
+        // Include reviews from completed bookings via relational joins
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select(`
@@ -141,14 +143,13 @@ export default function CustomerHomePage() {
                 ratings(rating)
               )
             `)
-            .eq('verification_status', 'verified')
-            .eq('status', 'verified');
+            .eq('verification_status', 'verified');
         
         if (bizError) throw bizError;
 
         const formatted = (bizData || [])
-          .filter(biz => biz.services && biz.services.length > 0)
           .map(biz => {
+            // Aggregate ratings only from completed bookings
             const completedBookings = (biz.bookings || []).filter((b: any) => b.status === 'completed');
             const ratings = completedBookings.flatMap((b: any) => b.ratings || []);
             
@@ -163,7 +164,7 @@ export default function CustomerHomePage() {
             };
           });
 
-        // Sorting logic: avg_rating DESC, name ASC
+        // Sorting: Best reputation first
         formatted.sort((a, b) => {
             if (b.avgRating !== a.avgRating) return b.avgRating - a.avgRating;
             return a.name.localeCompare(b.name);

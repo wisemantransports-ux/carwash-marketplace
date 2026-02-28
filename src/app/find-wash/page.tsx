@@ -15,8 +15,8 @@ import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
-  const hasHighRating = business.avgRating >= 4.5;
-  const isTrusted = business.reviewCount >= 5;
+  const hasHighRating = (business.avgRating || 0) >= 4.5;
+  const isTrusted = (business.reviewCount || 0) >= 5;
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
@@ -76,12 +76,14 @@ function BusinessCard({ business }: { business: any }) {
             </p>
             <ScrollArea className="flex-1 pr-2">
                 <div className="space-y-1.5">
-                    {business.services?.map((svc: any) => (
+                    {business.services && business.services.length > 0 ? business.services.map((svc: any) => (
                         <div key={svc.id} className="flex justify-between items-center text-xs bg-muted/30 p-2 rounded-lg border border-transparent hover:border-primary/20 transition-colors">
                             <span className="font-medium truncate max-w-[120px]">{svc.name}</span>
                             <span className="font-bold text-primary">BWP {Number(svc.price).toFixed(2)}</span>
                         </div>
-                    ))}
+                    )) : (
+                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Catalog setup in progress...</p>
+                    )}
                 </div>
             </ScrollArea>
         </div>
@@ -93,13 +95,13 @@ function BusinessCard({ business }: { business: any }) {
                   key={s} 
                   className={cn(
                     "h-3.5 w-3.5", 
-                    s <= Math.round(business.avgRating) ? "fill-current" : "text-gray-200"
+                    s <= Math.round(business.avgRating || 0) ? "fill-current" : "text-gray-200"
                   )} 
                 />
             ))}
           </div>
-          <span className="text-sm font-bold">{business.avgRating.toFixed(1)}</span>
-          <span className="text-[10px] text-muted-foreground">({business.reviewCount} reviews)</span>
+          <span className="text-sm font-bold">{(business.avgRating || 0).toFixed(1)}</span>
+          <span className="text-[10px] text-muted-foreground">({business.reviewCount || 0} reviews)</span>
           
           {isTrusted && (
             <Badge variant="outline" className="ml-auto text-[8px] font-bold border-blue-200 bg-blue-50 text-blue-700">
@@ -129,9 +131,7 @@ export default function PublicFindWashPage() {
     const load = async () => {
       setLoading(true);
       try {
-        // SQL Requirement Implementation: 
-        // verification_status = 'verified'
-        // Include reviews from completed bookings via deep join
+        // Query for verified businesses only
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select(`
@@ -147,7 +147,7 @@ export default function PublicFindWashPage() {
         if (bizError) throw bizError;
         
         const formatted = (bizData || []).map(biz => {
-          // Calculate avg_rating and review_count based only on completed bookings
+          // Aggregate logic for ratings
           const completedBookings = (biz.bookings || []).filter((b: any) => b.status === 'completed');
           const ratings = completedBookings.flatMap((b: any) => b.ratings || []);
           
