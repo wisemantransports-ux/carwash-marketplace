@@ -1,4 +1,3 @@
-
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
 import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Lock, UserCircle, Receipt, Package, Loader2, RefreshCw } from "lucide-react";
@@ -32,7 +31,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         return;
       }
 
-      // 1. PRE-CHECK STATUS via standard view (Avoids Business RLS recursion)
+      // 1. STATUS CHECK via standard view (Avoids Business RLS recursion)
       const { data: profile, error: profileError } = await supabase
         .from('users_with_access')
         .select('paid, trial_expiry')
@@ -40,7 +39,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         .maybeSingle();
 
       if (profileError) {
-        console.error("[LAYOUT] Profile check failure:", profileError);
+        console.error("[LAYOUT] Profile check failure:", JSON.stringify(profileError, null, 2));
         setFetchError(profileError.message);
         setLoading(false);
         return;
@@ -60,7 +59,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         return;
       }
 
-      // 2. FETCH BUSINESS DATA ONLY IF ALLOWED
+      // 2. FETCH BUSINESS DATA (Safe after status check)
       const { data: biz, error: bizError } = await supabase
         .from('businesses')
         .select('*')
@@ -68,7 +67,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         .maybeSingle();
       
       if (bizError) {
-        console.error("[LAYOUT] Business fetch error:", bizError);
+        console.error("[LAYOUT] Business fetch error:", JSON.stringify(bizError, null, 2));
         setFetchError(bizError.message);
         setBusiness(null);
       } else if (biz) {
@@ -185,7 +184,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
             </div>
             <div className="space-y-2">
               <h2 className="text-3xl font-bold">Dashboard Restricted</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
+              <p className="text-muted-foreground max-md mx-auto">
                 Access to operations, services, and earnings is disabled for inactive accounts. Please select a plan to resume your professional dashboard.
               </p>
             </div>

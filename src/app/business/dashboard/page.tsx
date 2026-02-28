@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -31,7 +30,7 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Use local state to make selection "stick" immediately
+    // Stable state for staff selection to prevent "reverting" behavior
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -54,14 +53,17 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Pre-fetch status check to avoid RLS recursion
+            // 1. Pre-check status check to avoid Business RLS recursion
             const { data: profile, error: profileError } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
                 .eq('id', authUser.id)
                 .maybeSingle();
 
-            if (profileError) throw profileError;
+            if (profileError) {
+                console.error("[DASHBOARD] Profile check failure:", JSON.stringify(profileError, null, 2));
+                throw profileError;
+            }
 
             const isPaid = profile?.paid === true;
             const isTrialValid = profile?.trial_expiry ? new Date(profile.trial_expiry) > new Date() : false;
@@ -78,7 +80,7 @@ export default function BusinessDashboardPage() {
             // 2. Fetch Business Identity
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
-                .select('*')
+                .select('id, name, subscription_status')
                 .eq('owner_id', authUser.id)
                 .maybeSingle();
             
@@ -94,10 +96,12 @@ export default function BusinessDashboardPage() {
                     .eq("business_id", bizData.id)
                     .order('name');
                 
-                if (staffError) console.error("Staff fetch error:", staffError);
+                if (staffError) console.error("Staff fetch error:", JSON.stringify(staffError, null, 2));
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with Explicit Joins
+                // 4. Fetch Bookings with Explicit Relational Joins
+                // Table: bookings
+                // Relations: customer (users), service (services), car (cars), staff (employees)
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -109,11 +113,11 @@ export default function BusinessDashboardPage() {
                             name,
                             email
                         ),
-                        services!bookings_service_id_fkey (
+                        service:services!bookings_service_id_fkey (
                             name,
                             price
                         ),
-                        cars!bookings_car_id_fkey (
+                        car:cars!bookings_car_id_fkey (
                             make,
                             model
                         )
@@ -128,8 +132,8 @@ export default function BusinessDashboardPage() {
                 setFetchError("Business profile not found.");
             }
         } catch (error: any) {
-            console.error("[DASHBOARD] Fetch error:", error);
-            setFetchError(error.message || "A database error occurred.");
+            console.error("[DASHBOARD] Fetch error details:", JSON.stringify(error, null, 2));
+            setFetchError(error.message || "A database error occurred while loading your dashboard.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -142,6 +146,7 @@ export default function BusinessDashboardPage() {
         const channel = supabase
             .channel('dashboard-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+                // Background refresh without clearing local optimistic state
                 fetchData(true);
             })
             .subscribe();
@@ -165,7 +170,7 @@ export default function BusinessDashboardPage() {
                 description: `Request has been marked as ${status}.` 
             });
             
-            // Clear local state for this row
+            // Clear local tracking for this row as it's leaving the pending queue
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -181,7 +186,7 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // Optimistic UI update
+        // OPTIMISTIC UPDATE: Set local state first so it "sticks" immediately
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -192,10 +197,10 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             
-            toast({ title: "Employee assigned successfully." });
+            // Notification removed per user request to stabilize flow
             await fetchData(true);
         } catch (e: any) {
-            // Revert local state on failure
+            // Revert local state on database failure
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -220,6 +225,7 @@ export default function BusinessDashboardPage() {
             </TableHeader>
             <TableBody>
                 {list.length > 0 ? list.map((booking) => {
+                    // Source of truth for selection: local assignment state OR database record
                     const currentStaffId = localStaffAssignments[booking.id] || booking.staff_id || "";
                     const isStaffAssigned = !!currentStaffId;
 
@@ -235,20 +241,20 @@ export default function BusinessDashboardPage() {
 
                             <TableCell>
                                 <div className="text-sm font-medium">
-                                    {booking.services?.name}
+                                    {booking.service?.name}
                                 </div>
                                 <div className="text-[10px] font-bold text-primary">
-                                    BWP {Number(booking.services?.price || 0).toFixed(2)}
+                                    BWP {Number(booking.service?.price || 0).toFixed(2)}
                                 </div>
                             </TableCell>
 
                             <TableCell className="text-sm font-bold">
-                                {booking.cars?.make} {booking.cars?.model}
+                                {booking.car?.make} {booking.car?.model}
                             </TableCell>
 
                             <TableCell>
                                 <select
-                                    className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
+                                    className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer transition-all"
                                     value={currentStaffId}
                                     onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
                                 >
@@ -277,10 +283,10 @@ export default function BusinessDashboardPage() {
                                             size="sm" 
                                             disabled={!isStaffAssigned}
                                             className={cn(
-                                                "h-8 text-[10px] font-bold uppercase gap-1.5 min-w-[80px]",
+                                                "h-8 text-[10px] font-bold uppercase gap-1.5 min-w-[80px] transition-all",
                                                 isStaffAssigned 
                                                     ? "bg-green-600 hover:bg-green-700 text-white shadow-md" 
-                                                    : "bg-muted text-muted-foreground cursor-not-allowed"
+                                                    : "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
                                             )}
                                             onClick={() => updateStatus(booking.id, "accepted")}
                                         >
