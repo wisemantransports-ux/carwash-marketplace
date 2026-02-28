@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,9 +29,9 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // This ref tracks which booking IDs are currently being updated to prevent
-    // background refreshes from overwriting the local UI state prematurely.
-    const updatingRef = useRef<Record<string, boolean>>({});
+    // CRITICAL: This local state ensures dropdown selections "stick" immediately 
+    // and are not overwritten by background server refreshes.
+    const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
         if (!isSupabaseConfigured) {
@@ -64,7 +64,7 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff List - Ensure we use 'name' column
+                // 2. Fetch Staff List - Standardize on 'name' column
                 const { data: staffData } = await supabase
                     .from("employees")
                     .select("id, name")
@@ -72,7 +72,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 3. Fetch Bookings with full relations
+                // 3. Fetch Bookings with STRICT relational mapping
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -100,19 +100,7 @@ export default function BusinessDashboardPage() {
                     .order("booking_time", { ascending: true });
                 
                 if (bookingError) throw bookingError;
-
-                // STABLE UPDATE: Use functional state to merge without overwriting "locked" rows
-                setBookings(currentBookings => {
-                    const freshData = bookingData || [];
-                    return freshData.map(newB => {
-                        // If this specific row is being updated by the user, preserve the local staff_id
-                        if (updatingRef.current[newB.id]) {
-                            const localMatch = currentBookings.find(b => b.id === newB.id);
-                            return localMatch ? { ...newB, staff_id: localMatch.staff_id } : newB;
-                        }
-                        return newB;
-                    });
-                });
+                setBookings(bookingData || []);
 
             } else {
                 setFetchError("Business profile not found. Please complete your profile setup.");
@@ -129,6 +117,7 @@ export default function BusinessDashboardPage() {
     useEffect(() => {
         fetchData();
 
+        // Real-time listener for seamless updates
         const channel = supabase
             .channel('dashboard-sync')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
@@ -154,6 +143,14 @@ export default function BusinessDashboardPage() {
                 title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Updated", 
                 description: `Request status has been set to ${status}.` 
             });
+            
+            // Clear local assignment after successful status update to refresh clean
+            setLocalStaffAssignments(prev => {
+                const next = { ...prev };
+                delete next[bookingId];
+                return next;
+            });
+
             await fetchData(true);
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -163,14 +160,11 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // 1. Lock the row to prevent background refreshes from reverting the UI
-        updatingRef.current[bookingId] = true;
-
-        // 2. OPTIMISTIC UPDATE: Change local state immediately so it "sticks" visually
-        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, staff_id: staffId } : b));
+        // 1. STICK IMMEDIATELY: Update local state so UI never flickers
+        setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
-            // 3. Persist to Supabase
+            // 2. Persist to Supabase silently
             const { error } = await supabase
                 .from("bookings")
                 .update({ staff_id: staffId })
@@ -178,16 +172,15 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             
-            // 4. Wait for a settling period (2s) to allow DB and Realtime to propagate 
-            // before releasing the lock and refreshing.
-            setTimeout(() => {
-                updatingRef.current[bookingId] = false;
-                fetchData(true);
-            }, 2000);
-
+            // We don't trigger a full data re-fetch here because it causes the "revert" flicker.
+            // The local state will hold the value until the next background sync or status change.
         } catch (e: any) {
-            updatingRef.current[bookingId] = false;
-            await fetchData(true);
+            // Revert local state on error
+            setLocalStaffAssignments(prev => {
+                const next = { ...prev };
+                delete next[bookingId];
+                return next;
+            });
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
         }
     };
@@ -205,98 +198,110 @@ export default function BusinessDashboardPage() {
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {list.length > 0 ? list.map((booking) => (
-                    <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
-                        <TableCell>
-                            <div className="font-bold text-sm">
-                                {booking.customer?.name ?? "Unknown Customer"}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground">
-                                {booking.customer?.email ?? ""}
-                            </div>
-                        </TableCell>
+                {list.length > 0 ? list.map((booking) => {
+                    // Resolve the current staff ID from local state OR server state
+                    const currentStaffId = localStaffAssignments[booking.id] ?? booking.staff_id ?? "";
+                    const isStaffAssigned = !!currentStaffId;
 
-                        <TableCell>
-                            <div className="text-sm font-medium">
-                                {booking.services?.name}
-                            </div>
-                            <div className="text-[10px] font-bold text-primary">
-                                BWP {Number(booking.services?.price || 0).toFixed(2)}
-                            </div>
-                        </TableCell>
-
-                        <TableCell>
-                            <div className="text-sm font-bold">
-                                {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
-                            </div>
-                        </TableCell>
-
-                        <TableCell>
-                            <select
-                                className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
-                                value={booking.staff_id || ""}
-                                onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
-                            >
-                                <option value="">Select Staff</option>
-                                {staffList?.map((staff) => (
-                                    <option key={staff.id} value={staff.id}>
-                                        {staff.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </TableCell>
-
-                        <TableCell className="text-xs">
-                            <div className="font-bold">
-                                {new Date(booking.booking_time).toLocaleDateString(undefined, { dateStyle: 'medium' })}
-                            </div>
-                            <div className="text-muted-foreground">
-                                {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                        </TableCell>
-
-                        <TableCell className="text-right pr-6">
-                            {isPending ? (
-                                <div className="flex justify-end gap-2">
-                                    <Button 
-                                        size="sm" 
-                                        disabled={!booking.staff_id}
-                                        className={cn(
-                                            "h-8 text-[10px] font-bold uppercase gap-1.5 min-w-[80px]",
-                                            booking.staff_id 
-                                                ? "bg-green-600 hover:bg-green-700 text-white shadow-md" 
-                                                : "bg-muted text-muted-foreground cursor-not-allowed"
-                                        )}
-                                        onClick={() => updateStatus(booking.id, "accepted")}
-                                    >
-                                        Accept ✅
-                                    </Button>
-                                    <Button 
-                                        size="sm" 
-                                        variant="destructive"
-                                        className="h-8 text-[10px] font-bold uppercase gap-1.5" 
-                                        onClick={() => updateStatus(booking.id, "rejected")}
-                                    >
-                                        Reject ❌
-                                    </Button>
+                    return (
+                        <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
+                            {/* 1. CUSTOMER COLUMN */}
+                            <TableCell>
+                                <div className="font-bold text-sm">
+                                    {booking.customer?.name ?? "Unknown Customer"}
                                 </div>
-                            ) : (
-                                <div className="flex justify-end gap-2">
-                                    <Badge variant="outline" className="uppercase text-[10px] py-1">{booking.status}</Badge>
-                                    {booking.status === 'accepted' && (
+                                <div className="text-[10px] text-muted-foreground">
+                                    {booking.customer?.email ?? ""}
+                                </div>
+                            </TableCell>
+
+                            {/* 2. SERVICE INFO COLUMN */}
+                            <TableCell>
+                                <div className="text-sm font-medium">
+                                    {booking.services?.name}
+                                </div>
+                                <div className="text-[10px] font-bold text-primary">
+                                    BWP {Number(booking.services?.price || 0).toFixed(2)}
+                                </div>
+                            </TableCell>
+
+                            {/* 3. CAR COLUMN */}
+                            <TableCell>
+                                <div className="text-sm font-bold">
+                                    {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
+                                </div>
+                            </TableCell>
+
+                            {/* 4. STAFF DROPDOWN COLUMN */}
+                            <TableCell>
+                                <select
+                                    className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
+                                    value={currentStaffId}
+                                    onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
+                                >
+                                    <option value="">Select Staff</option>
+                                    {staffList?.map((staff) => (
+                                        <option key={staff.id} value={staff.id}>
+                                            {staff.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </TableCell>
+
+                            {/* 5. TIMING COLUMN */}
+                            <TableCell className="text-xs">
+                                <div className="font-bold">
+                                    {new Date(booking.booking_time).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                                </div>
+                                <div className="text-muted-foreground">
+                                    {new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                            </TableCell>
+
+                            {/* 6. ACTION COLUMN */}
+                            <TableCell className="text-right pr-6">
+                                {isPending ? (
+                                    <div className="flex justify-end gap-2">
                                         <Button 
                                             size="sm" 
-                                            className="h-8 text-[10px] font-bold uppercase" 
-                                            onClick={() => updateStatus(booking.id, "completed")}
+                                            disabled={!isStaffAssigned}
+                                            className={cn(
+                                                "h-8 text-[10px] font-bold uppercase gap-1.5 min-w-[80px]",
+                                                isStaffAssigned 
+                                                    ? "bg-green-600 hover:bg-green-700 text-white shadow-md" 
+                                                    : "bg-muted text-muted-foreground cursor-not-allowed"
+                                            )}
+                                            onClick={() => updateStatus(booking.id, "accepted")}
                                         >
-                                            Mark Complete
+                                            Accept ✅
                                         </Button>
-                                    )}
-                                </div>
-                            )}
-                        </TableCell>
-                    </TableRow>
-                )) : (
+                                        <Button 
+                                            size="sm" 
+                                            variant="destructive"
+                                            className="h-8 text-[10px] font-bold uppercase gap-1.5" 
+                                            onClick={() => updateStatus(booking.id, "rejected")}
+                                        >
+                                            Reject ❌
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-end gap-2">
+                                        <Badge variant="outline" className="uppercase text-[10px] py-1">{booking.status}</Badge>
+                                        {booking.status === 'accepted' && (
+                                            <Button 
+                                                size="sm" 
+                                                className="h-8 text-[10px] font-bold uppercase" 
+                                                onClick={() => updateStatus(booking.id, "completed")}
+                                            >
+                                                Mark Complete
+                                            </Button>
+                                        )}
+                                    </div>
+                                )}
+                            </TableCell>
+                        </TableRow>
+                    );
+                }) : (
                     <TableRow>
                         <TableCell colSpan={6} className="h-48 text-center text-muted-foreground italic">
                             <div className="flex flex-col items-center gap-2 opacity-40">
