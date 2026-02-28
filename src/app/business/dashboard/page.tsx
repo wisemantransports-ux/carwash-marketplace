@@ -9,7 +9,9 @@ import {
     RefreshCw, 
     AlertCircle, 
     Truck,
-    Lock
+    Lock,
+    CheckCircle2,
+    XCircle
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -54,8 +56,7 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Bookings with STRICT relation query
-                // Note: Joining users table via customer_id foreign key
+                // 2. Fetch ALL Bookings with EXACT relations requested
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -63,17 +64,17 @@ export default function BusinessDashboardPage() {
                         booking_time,
                         status,
                         staff_id,
-                        users:customer_id (
+                        customer:users!bookings_customer_id_fkey (
                             id,
                             name,
                             email
                         ),
-                        services:service_id (
+                        services (
                             id,
                             name,
                             price
                         ),
-                        cars:car_id (
+                        cars (
                             id,
                             make,
                             model
@@ -116,7 +117,10 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
 
-            toast({ title: "Status Updated", description: `Booking is now ${status}.` });
+            toast({ 
+                title: status === 'accepted' ? "Booking Accepted" : "Booking Rejected", 
+                description: `Request has been marked as ${status}.` 
+            });
             fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -144,6 +148,7 @@ export default function BusinessDashboardPage() {
                 <TableRow className="bg-muted/50">
                     <TableHead className="font-bold">Customer</TableHead>
                     <TableHead className="font-bold">Service Info</TableHead>
+                    <TableHead className="font-bold">Car</TableHead>
                     <TableHead className="font-bold">Staff</TableHead>
                     <TableHead className="font-bold">Timing</TableHead>
                     <TableHead className="text-right font-bold pr-6">Action</TableHead>
@@ -155,19 +160,24 @@ export default function BusinessDashboardPage() {
                         {/* CUSTOMER COLUMN */}
                         <TableCell>
                             <div className="font-bold text-sm">
-                                {booking.users?.name ?? "Unknown Customer"}
+                                {booking.customer?.name ?? "Unknown Customer"}
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                                {booking.users?.email ?? ""}
+                            <div className="text-[10px] text-muted-foreground">
+                                {booking.customer?.email ?? ""}
                             </div>
                         </TableCell>
 
                         {/* SERVICE INFO COLUMN */}
                         <TableCell>
-                            <div className="font-medium text-sm">{booking.services?.name}</div>
-                            <div className="font-bold text-primary text-xs">P{booking.services?.price}</div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                                Car: {booking.cars?.make ?? "Unknown"} {booking.cars?.model ?? ""}
+                            <div className="text-sm font-medium">
+                                {booking.services?.name} - <span className="font-bold text-primary">BWP {Number(booking.services?.price || 0).toFixed(2)}</span>
+                            </div>
+                        </TableCell>
+
+                        {/* CAR COLUMN */}
+                        <TableCell>
+                            <div className="text-sm font-bold">
+                                {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
                             </div>
                         </TableCell>
 
@@ -205,22 +215,22 @@ export default function BusinessDashboardPage() {
                                         size="sm" 
                                         disabled={!booking.staff_id}
                                         className={cn(
-                                            "h-8 text-[10px] font-bold uppercase",
+                                            "h-8 text-[10px] font-bold uppercase gap-1.5",
                                             booking.staff_id 
                                                 ? "bg-green-600 hover:bg-green-700" 
                                                 : "bg-muted text-muted-foreground cursor-not-allowed"
                                         )}
                                         onClick={() => updateStatus(booking.id, "accepted")}
                                     >
-                                        Accept
+                                        <CheckCircle2 className="h-3 w-3" /> Accept
                                     </Button>
                                     <Button 
                                         size="sm" 
                                         variant="destructive"
-                                        className="h-8 text-[10px] font-bold uppercase" 
+                                        className="h-8 text-[10px] font-bold uppercase gap-1.5" 
                                         onClick={() => updateStatus(booking.id, "rejected")}
                                     >
-                                        Reject
+                                        <XCircle className="h-3 w-3" /> Reject
                                     </Button>
                                 </div>
                             ) : (
@@ -241,10 +251,10 @@ export default function BusinessDashboardPage() {
                     </TableRow>
                 )) : (
                     <TableRow>
-                        <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
+                        <TableCell colSpan={6} className="h-48 text-center text-muted-foreground italic">
                             <div className="flex flex-col items-center gap-2 opacity-40">
                                 <Truck className="h-10 w-10" />
-                                <p>No bookings available yet.</p>
+                                <p>{isPending ? "No pending requests available" : "No bookings available yet."}</p>
                             </div>
                         </TableCell>
                     </TableRow>
