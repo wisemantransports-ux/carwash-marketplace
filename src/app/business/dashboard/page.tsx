@@ -30,7 +30,6 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Local state to keep UI stable during background refreshes
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -53,14 +52,17 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Restricted Mode Pre-Check (Verify access before hitting business tables)
+            // 1. Restriction Pre-Check via users_with_access view
             const { data: profile, error: profileError } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
                 .eq('id', authUser.id)
                 .maybeSingle();
 
-            if (profileError) throw profileError;
+            if (profileError) {
+                console.error("[DASHBOARD] Profile Check Error:", JSON.stringify(profileError, null, 2));
+                throw profileError;
+            }
 
             const isPaid = profile?.paid === true;
             const isTrialValid = profile?.trial_expiry ? new Date(profile.trial_expiry) > new Date() : false;
@@ -74,19 +76,22 @@ export default function BusinessDashboardPage() {
 
             setIsRestricted(false);
 
-            // 2. Fetch Business Identity
+            // 2. Fetch Business Record
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
-                .select('id, name, subscription_status')
+                .select('*')
                 .eq('owner_id', authUser.id)
                 .maybeSingle();
             
-            if (bizError) throw bizError;
+            if (bizError) {
+                console.error("[DASHBOARD] Business Record Error:", JSON.stringify(bizError, null, 2));
+                throw bizError;
+            }
             
             if (bizData) {
                 setBusiness(bizData);
 
-                // 3. Fetch Staff List
+                // 3. Fetch Staff
                 const { data: staffData } = await supabase
                     .from("employees")
                     .select("id, name")
@@ -95,7 +100,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with Explicit Relational Joins for 7-Column Layout
+                // 4. Fetch Bookings with Explicit Relationship Naming
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -113,17 +118,18 @@ export default function BusinessDashboardPage() {
                     .eq("business_id", bizData.id)
                     .order("booking_time", { ascending: true });
                 
-                if (bookingError) throw bookingError;
+                if (bookingError) {
+                    console.error("[DASHBOARD] Booking Fetch Error:", JSON.stringify(bookingError, null, 2));
+                    throw bookingError;
+                }
                 
-                console.log("[DASHBOARD] Fetched Bookings:", bookingData);
                 setBookings(bookingData || []);
 
             } else {
                 setFetchError("Business profile not found. Please complete your profile setup.");
             }
         } catch (error: any) {
-            console.error("[DASHBOARD] Fetch failure:", JSON.stringify(error, null, 2));
-            setFetchError(error.message || "A database error occurred while loading your dashboard.");
+            setFetchError(error.message || "A database error occurred while loading operational data.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -134,7 +140,6 @@ export default function BusinessDashboardPage() {
         setMounted(true);
         fetchData();
 
-        // Real-time listener for status changes
         const channel = supabase
             .channel('dashboard-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
@@ -156,10 +161,9 @@ export default function BusinessDashboardPage() {
 
             toast({ 
                 title: status === 'accepted' ? "Booking Accepted ✅" : "Booking Rejected ❌",
-                description: status === 'accepted' ? "An invoice has been generated." : "The request has been removed."
+                description: status === 'accepted' ? "Invoice generated automatically." : "Request removed."
             });
             
-            // Clean up local assignment state for this row
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -175,7 +179,6 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // Optimistic UI update to ensure selection "sticks" immediately
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -185,11 +188,8 @@ export default function BusinessDashboardPage() {
                 .eq("id", bookingId);
 
             if (error) throw error;
-            
-            toast({ title: "Employee assigned successfully." });
             await fetchData(true);
         } catch (e: any) {
-            // Revert on error
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -205,7 +205,7 @@ export default function BusinessDashboardPage() {
         <div className="flex flex-col items-center justify-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8 text-center">
             <Lock className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
             <h2 className="text-2xl font-bold">Operations Restricted</h2>
-            <p className="text-muted-foreground mt-2 max-w-md mx-auto">Please upgrade or renew your plan to manage bookings and assign staff.</p>
+            <p className="text-muted-foreground mt-2 max-w-md mx-auto">Renew your plan or extend your trial to access real-time bookings.</p>
             <Button asChild className="mt-8 shadow-lg"><Link href="/business/subscription">Renew Access Now</Link></Button>
         </div>
     );
@@ -232,7 +232,6 @@ export default function BusinessDashboardPage() {
                         const isStaffAssigned = !!currentStaffId;
                         const rating = booking.rating?.[0];
 
-                        // Human-readable timing format: Feb 27 - 11:00 PM
                         const timing = booking.booking_time 
                             ? new Date(booking.booking_time).toLocaleString('en-US', { month: 'short', day: 'numeric' }) + 
                               " - " + 
@@ -329,7 +328,7 @@ export default function BusinessDashboardPage() {
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business?.name || 'Operations'}</h1>
-                    <p className="text-muted-foreground font-medium">Real-time Booking Management</p>
+                    <p className="text-muted-foreground font-medium">Real-time Booking Center</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-6 border-primary/20 hover:bg-primary/5">
@@ -344,20 +343,20 @@ export default function BusinessDashboardPage() {
             {fetchError && (
                 <Alert variant="destructive" className="border-2 shadow-lg">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle className="font-bold">Fetch Error</AlertTitle>
+                    <AlertTitle className="font-bold">Operational Error</AlertTitle>
                     <AlertDescription>{fetchError}</AlertDescription>
                 </Alert>
             )}
 
             <Tabs defaultValue="pending" className="w-full">
                 <TabsList className="mb-8 grid w-full grid-cols-3 max-w-2xl bg-muted/50 p-1.5 h-12 rounded-xl border">
-                    <TabsTrigger value="pending" className="rounded-lg text-[10px] font-black uppercase data-[state=active]:shadow-md">
+                    <TabsTrigger value="pending" className="rounded-lg text-[10px] font-black uppercase">
                         Incoming ({pendingList.length})
                     </TabsTrigger>
-                    <TabsTrigger value="active" className="rounded-lg text-[10px] font-black uppercase data-[state=active]:shadow-md">
+                    <TabsTrigger value="active" className="rounded-lg text-[10px] font-black uppercase">
                         Active ({activeList.length})
                     </TabsTrigger>
-                    <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase data-[state=active]:shadow-md">
+                    <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase">
                         History ({completedList.length})
                     </TabsTrigger>
                 </TabsList>

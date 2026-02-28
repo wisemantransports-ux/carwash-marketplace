@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, CheckCircle2, Phone, Tags, Trophy, Award } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, CheckCircle2, Phone, Tags, Trophy } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,7 +16,6 @@ import { cn } from '@/lib/utils';
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
   const hasHighRating = (business.avgRating || 0) >= 4.5;
-  const isTrusted = (business.reviewCount || 0) >= 5;
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
@@ -60,11 +59,11 @@ function BusinessCard({ business }: { business: any }) {
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <MapPin className="h-3 w-3" />
-                <span className="truncate">{business.address || 'No address provided'}, {business.city || 'Botswana'}</span>
+                <span className="truncate">{business.address || 'No address'}, {business.city || 'Botswana'}</span>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-green-600 font-bold">
                 <Phone className="h-3 w-3" />
-                <span>{business.whatsapp_number || 'No contact provided'}</span>
+                <span>{business.whatsapp_number || 'Contact ready'}</span>
             </div>
         </div>
       </CardHeader>
@@ -72,7 +71,7 @@ function BusinessCard({ business }: { business: any }) {
       <CardContent className="flex-grow space-y-4 pb-4 overflow-hidden flex flex-col">
         <div className="space-y-2 flex-1 flex flex-col min-h-0">
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
-                <Tags className="h-3 w-3" /> Full Service Catalog
+                <Tags className="h-3 w-3" /> Catalog Preview
             </p>
             <ScrollArea className="flex-1 pr-2">
                 <div className="space-y-1.5">
@@ -82,7 +81,7 @@ function BusinessCard({ business }: { business: any }) {
                             <span className="font-bold text-primary">BWP {Number(svc.price).toFixed(2)}</span>
                         </div>
                     )) : (
-                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Catalog setup in progress...</p>
+                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Service catalog arriving soon...</p>
                     )}
                 </div>
             </ScrollArea>
@@ -102,12 +101,6 @@ function BusinessCard({ business }: { business: any }) {
           </div>
           <span className="text-sm font-bold">{(business.avgRating || 0).toFixed(1)}</span>
           <span className="text-[10px] text-muted-foreground">({business.reviewCount || 0} reviews)</span>
-          
-          {isTrusted && (
-            <Badge variant="outline" className="ml-auto text-[8px] font-bold border-blue-200 bg-blue-50 text-blue-700">
-              <Award className="h-2.5 w-2.5 mr-1" /> TRUSTED
-            </Badge>
-          )}
         </div>
       </CardContent>
 
@@ -131,7 +124,6 @@ export default function PublicFindWashPage() {
     const load = async () => {
       setLoading(true);
       try {
-        // Query for verified businesses only
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select(`
@@ -144,13 +136,14 @@ export default function PublicFindWashPage() {
             `)
             .eq('verification_status', 'verified');
         
-        if (bizError) throw bizError;
+        if (bizError) {
+            console.error("Public Marketplace Error:", JSON.stringify(bizError, null, 2));
+            throw bizError;
+        }
         
         const formatted = (bizData || []).map(biz => {
-          // Aggregate logic for ratings
           const completedBookings = (biz.bookings || []).filter((b: any) => b.status === 'completed');
           const ratings = completedBookings.flatMap((b: any) => b.ratings || []);
-          
           const totalStars = ratings.reduce((acc: number, curr: any) => acc + (curr.rating || 0), 0);
           const reviewCount = ratings.length;
           const avgRating = reviewCount > 0 ? totalStars / reviewCount : 0;
@@ -162,15 +155,10 @@ export default function PublicFindWashPage() {
           };
         });
 
-        // Sorting Logic: avg_rating DESC, name ASC
-        formatted.sort((a, b) => {
-            if (b.avgRating !== a.avgRating) return b.avgRating - a.avgRating;
-            return a.name.localeCompare(b.name);
-        });
-        
+        formatted.sort((a, b) => (b.avgRating - a.avgRating) || a.name.localeCompare(b.name));
         setBusinesses(formatted);
       } catch (e) {
-        console.error('Marketplace Load Error:', e);
+        console.error('Marketplace Load Failure:', e);
       } finally {
         setLoading(false);
       }
@@ -198,12 +186,8 @@ export default function PublicFindWashPage() {
             <span className="text-sm font-bold text-primary tracking-tight text-nowrap">Carwash Marketplace</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" asChild>
-                <Link href="/login">Sign In</Link>
-            </Button>
-            <Button size="sm" asChild>
-                <Link href="/signup">Sign Up</Link>
-            </Button>
+            <Button size="sm" variant="ghost" asChild><Link href="/login">Sign In</Link></Button>
+            <Button size="sm" asChild><Link href="/signup">Sign Up</Link></Button>
           </div>
         </div>
       </header>
@@ -212,21 +196,19 @@ export default function PublicFindWashPage() {
         <div className="space-y-4 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
             <ShieldCheck className="h-3 w-3" />
-            <span>Active Trust Seals Only</span>
+            <span>Trust Seal Partners Only</span>
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight">Verified Partners</h1>
-          <p className="text-muted-foreground text-lg">Browse professional car wash businesses. Only partners with active trust seals and packages are listed here.</p>
+          <p className="text-muted-foreground text-lg">Browse professional car wash businesses verified for quality and reliability.</p>
           
-          <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    placeholder="Search by business name or city..." 
-                    className="pl-10 h-12 bg-card border-2"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-              </div>
+          <div className="relative max-w-2xl pt-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search by name or operating city..." 
+                className="pl-10 h-12 bg-card border-2"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
           </div>
         </div>
 
@@ -247,9 +229,9 @@ export default function PublicFindWashPage() {
               ))
           ) : (
               <div className="col-span-full py-24 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                  <p className="text-muted-foreground font-bold text-lg">No verified businesses available. Try adjusting your search or check back later.</p>
-                  <p className="text-muted-foreground text-sm">Newly verified partners with services will appear here automatically.</p>
-                  <Button variant="link" onClick={() => setSearch('')}>Clear Search</Button>
+                  <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+                  <p className="text-muted-foreground font-bold text-lg">No verified partners found.</p>
+                  <Button variant="link" onClick={() => setSearch('')}>View All Partners</Button>
               </div>
           )}
         </div>
@@ -257,7 +239,7 @@ export default function PublicFindWashPage() {
 
       <footer className="py-12 border-t mt-20 bg-muted/30">
         <div className="container mx-auto px-4 text-center">
-          <p className="text-sm text-muted-foreground">Looking to register your business? <Link href="/signup?role=business-owner" className="text-primary font-bold hover:underline">Get started here</Link></p>
+          <p className="text-sm text-muted-foreground">Are you a business owner? <Link href="/signup" className="text-primary font-bold hover:underline">Get verified today</Link></p>
         </div>
       </footer>
     </div>

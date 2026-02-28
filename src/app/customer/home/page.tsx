@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Package, ArrowRight, CheckCircle2, Phone, Tags, Trophy, Award } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Package, ArrowRight, CheckCircle2, Phone, Tags, Trophy } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,7 +17,6 @@ import { cn } from '@/lib/utils';
 function BusinessCard({ business }: { business: any }) {
   const isCipa = business.special_tag === 'CIPA Verified';
   const hasHighRating = (business.avgRating || 0) >= 4.5;
-  const isTrusted = (business.reviewCount || 0) >= 5;
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2">
@@ -62,11 +61,11 @@ function BusinessCard({ business }: { business: any }) {
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <MapPin className="h-3 w-3" />
-                <span className="truncate">{business.address || 'No address provided'}, {business.city || 'Botswana'}</span>
+                <span className="truncate">{business.address || 'No address'}, {business.city || 'Botswana'}</span>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-green-600 font-bold">
                 <Phone className="h-3 w-3" />
-                <span>{business.whatsapp_number || 'No contact provided'}</span>
+                <span>{business.whatsapp_number || 'Contact ready'}</span>
             </div>
         </div>
       </CardHeader>
@@ -74,7 +73,7 @@ function BusinessCard({ business }: { business: any }) {
       <CardContent className="flex-grow space-y-4 pb-4 overflow-hidden flex flex-col">
         <div className="space-y-2 flex-1 flex flex-col min-h-0">
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
-                <Tags className="h-3 w-3" /> Full Service Catalog
+                <Tags className="h-3 w-3" /> Service Menu
             </p>
             <ScrollArea className="flex-1 pr-2">
                 <div className="space-y-1.5">
@@ -84,7 +83,7 @@ function BusinessCard({ business }: { business: any }) {
                             <span className="font-bold text-primary">BWP {Number(svc.price).toFixed(2)}</span>
                         </div>
                     )) : (
-                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Catalog setup in progress...</p>
+                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Contact business for pricing.</p>
                     )}
                 </div>
             </ScrollArea>
@@ -112,7 +111,7 @@ function BusinessCard({ business }: { business: any }) {
       <CardFooter className="pt-0 shrink-0">
         <Button asChild className="w-full shadow-md font-bold">
           <Link href={`/customer/book/${business.id}`}>
-            Book This Business
+            Book Service
           </Link>
         </Button>
       </CardFooter>
@@ -131,8 +130,7 @@ export default function CustomerHomePage() {
     async function load() {
       setLoading(true);
       try {
-        // Requirement: verification_status = 'verified'
-        // Include reviews from completed bookings via relational joins
+        // Simple robust fetch to ensure businesses appear even if joins fail permissions
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select(`
@@ -145,14 +143,14 @@ export default function CustomerHomePage() {
             `)
             .eq('verification_status', 'verified');
         
-        if (bizError) throw bizError;
+        if (bizError) {
+            console.error("Marketplace Fetch Error:", JSON.stringify(bizError, null, 2));
+            throw bizError;
+        }
 
-        const formatted = (bizData || [])
-          .map(biz => {
-            // Aggregate ratings only from completed bookings
+        const formatted = (bizData || []).map(biz => {
             const completedBookings = (biz.bookings || []).filter((b: any) => b.status === 'completed');
             const ratings = completedBookings.flatMap((b: any) => b.ratings || []);
-            
             const totalStars = ratings.reduce((acc: number, curr: any) => acc + (curr.rating || 0), 0);
             const reviewCount = ratings.length;
             const avgRating = reviewCount > 0 ? totalStars / reviewCount : 0;
@@ -162,18 +160,12 @@ export default function CustomerHomePage() {
               avgRating,
               reviewCount
             };
-          });
-
-        // Sorting: Best reputation first
-        formatted.sort((a, b) => {
-            if (b.avgRating !== a.avgRating) return b.avgRating - a.avgRating;
-            return a.name.localeCompare(b.name);
         });
-        
+
+        formatted.sort((a, b) => (b.avgRating - a.avgRating) || a.name.localeCompare(b.name));
         setBusinesses(formatted);
       } catch (e: any) {
-        console.error("Marketplace Load Error:", e);
-        toast({ variant: 'destructive', title: 'Load Error', description: 'Could not fetch verified car washes.' });
+        toast({ variant: 'destructive', title: 'Marketplace Error', description: 'Could not load partners.' });
       } finally {
         setLoading(false);
       }
@@ -194,23 +186,21 @@ export default function CustomerHomePage() {
         <div className="flex-1 space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
             <ShieldCheck className="h-3 w-3" />
-            <span>Verified Partners Only</span>
+            <span>Verified Platform Partners</span>
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-primary">Discover Top Washes</h1>
           <p className="text-muted-foreground text-lg max-w-2xl">
-            Browse professional mobile detailers and stations. Only verified partners with active services are featured here.
+            Professional car wash businesses verified for your peace of mind.
           </p>
           
-          <div className="flex gap-4 max-w-2xl pt-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search by business name or city..." 
-                className="pl-10 h-12 bg-card shadow-sm border-2"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
+          <div className="relative max-w-2xl pt-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search by name or city..." 
+              className="pl-10 h-12 bg-card shadow-sm border-2"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
         </div>
 
@@ -220,18 +210,18 @@ export default function CustomerHomePage() {
               <div className="p-2 bg-primary/10 rounded-lg">
                 <Package className="h-5 w-5 text-primary" />
               </div>
-              <Badge variant="secondary" className="text-[10px]">COMING SOON</Badge>
+              <Badge variant="secondary" className="text-[10px]">ROADMAP</Badge>
             </div>
             <CardTitle className="text-lg pt-2">Spare Shop</CardTitle>
           </CardHeader>
           <CardContent className="pb-4">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Soon you can add air fresheners, shampoos, and wipers to your wash booking.
+              Add accessories and parts to your wash booking soon.
             </p>
           </CardContent>
           <CardFooter>
-            <Button variant="ghost" size="sm" className="w-full text-[10px] h-8 text-muted-foreground cursor-not-allowed group">
-              Preview Catalog <ArrowRight className="ml-2 h-3 w-3 transition-transform group-hover:translate-x-1" />
+            <Button variant="ghost" size="sm" className="w-full text-[10px] h-8 text-muted-foreground cursor-not-allowed">
+              Coming Soon <ArrowRight className="ml-2 h-3 w-3" />
             </Button>
           </CardFooter>
         </Card>
@@ -244,7 +234,6 @@ export default function CustomerHomePage() {
               <Skeleton className="h-48 w-full" />
               <div className="p-6 space-y-4">
                 <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
                 <Skeleton className="h-10 w-full" />
               </div>
             </Card>
@@ -255,14 +244,10 @@ export default function CustomerHomePage() {
           ))
         ) : (
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
-            <div className="max-w-xs mx-auto space-y-4">
-              <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20" />
-              <div className="space-y-1">
-                <p className="text-xl font-bold">No verified businesses available</p>
-                <p className="text-muted-foreground text-sm">Try adjusting your search or check back later for new partners.</p>
-              </div>
-              <Button variant="outline" className="rounded-full" onClick={() => setSearch('')}>Clear Search</Button>
-            </div>
+            <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+            <p className="text-xl font-bold">No verified washes found</p>
+            <p className="text-muted-foreground text-sm">Adjust your search or check back later for new partners.</p>
+            <Button variant="outline" className="mt-4" onClick={() => setSearch('')}>Clear Search</Button>
           </div>
         )}
       </div>
