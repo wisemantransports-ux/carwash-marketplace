@@ -15,21 +15,32 @@ import {
     UserCheck,
     Check,
     Truck,
-    Lock
+    Lock,
+    UserPlus,
+    Phone
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
 export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<any[]>([]);
+    const [employees, setEmployees] = useState<any[]>([]);
     const [business, setBusiness] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    
+    // Assignment State
+    const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+    const [selectedStaffId, setSelectedStaffId] = useState<string>("");
+    const [assigning, setAssigning] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!isSupabaseConfigured) {
@@ -47,7 +58,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Resolve Business Info for the logged-in user
+            // 1. Resolve Business Info
             const { data: bizData, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -59,21 +70,28 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch bookings filtering by business_id
-                // Joining with related tables to get customer and service names
+                // 2. Fetch Bookings with Joins
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
                     .select(`
                         *,
                         customer:customer_id ( name, email ),
-                        service:service_id ( name )
+                        service:service_id ( name ),
+                        staff:staff_id ( name, phone, image_url )
                     `)
                     .eq('business_id', bizData.id)
                     .order('booking_time', { ascending: true });
                 
                 if (bookingError) throw bookingError;
-                
                 setBookings(bookingData || []);
+
+                // 3. Fetch Staff Registry for assignment
+                const { data: staffData } = await supabase
+                    .from('employees')
+                    .select('*')
+                    .eq('business_id', bizData.id);
+                setEmployees(staffData || []);
+
             } else {
                 setFetchError("Business profile not found. Please complete your profile setup.");
             }
@@ -89,12 +107,12 @@ export default function BusinessDashboardPage() {
         fetchData();
     }, [fetchData]);
 
-    // Real-time updates: subscribe to changes in the bookings table
+    // Real-time updates
     useEffect(() => {
         if (!business?.id) return;
 
         const channel = supabase
-            .channel('realtime-bookings')
+            .channel(`dashboard-${business.id}`)
             .on('postgres_changes', 
                 { 
                     event: '*', 
@@ -102,9 +120,7 @@ export default function BusinessDashboardPage() {
                     table: 'bookings', 
                     filter: `business_id=eq.${business.id}` 
                 }, 
-                () => {
-                    fetchData();
-                }
+                () => fetchData()
             )
             .subscribe();
 
@@ -122,15 +138,35 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
 
-            toast({ 
-                title: "Status Updated", 
-                description: `Booking is now ${newStatus}.` 
-            });
-            
-            // Local state update for immediate feedback
-            setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
+            toast({ title: "Status Updated", description: `Booking is now ${newStatus}.` });
+            fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
+        }
+    };
+
+    const handleAssignStaff = async () => {
+        if (!selectedBookingId || !selectedStaffId) return;
+        setAssigning(true);
+        try {
+            const { error } = await supabase
+                .from('bookings')
+                .update({ 
+                    staff_id: selectedStaffId,
+                    status: 'active' // Auto-activate on assignment
+                })
+                .eq('id', selectedBookingId);
+
+            if (error) throw error;
+
+            toast({ title: "Staff Assigned", description: "Detailer has been assigned to this booking." });
+            setSelectedBookingId(null);
+            setSelectedStaffId("");
+            fetchData();
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
+        } finally {
+            setAssigning(false);
         }
     };
 
@@ -140,8 +176,8 @@ export default function BusinessDashboardPage() {
                 <TableRow className="bg-muted/50">
                     <TableHead className="font-bold">Customer</TableHead>
                     <TableHead className="font-bold">Service Info</TableHead>
+                    <TableHead className="font-bold">Staff</TableHead>
                     <TableHead className="font-bold">Timing</TableHead>
-                    <TableHead className="font-bold">Status</TableHead>
                     <TableHead className="text-right font-bold pr-6">Action</TableHead>
                 </TableRow>
             </TableHeader>
@@ -151,36 +187,84 @@ export default function BusinessDashboardPage() {
                         <TableCell>
                             <div className="flex flex-col">
                                 <span className="font-bold text-sm">{booking.customer?.name || 'Customer'}</span>
-                                <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[100px]">{booking.customer_id}</span>
+                                <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[100px]">{booking.customer_id?.slice(-8)}</span>
                             </div>
                         </TableCell>
                         <TableCell>
                             <div className="flex flex-col">
                                 <span className="text-xs font-medium">{booking.service?.name || 'Wash Service'}</span>
                                 <span className="text-[10px] text-primary font-bold">
-                                    P{booking.price?.toFixed(2)}
+                                    P{Number(booking.price || 0).toFixed(2)}
                                 </span>
                             </div>
+                        </TableCell>
+                        <TableCell>
+                            {booking.staff ? (
+                                <div className="flex items-center gap-2">
+                                    <Avatar className="h-6 w-6">
+                                        <AvatarImage src={booking.staff.image_url} />
+                                        <AvatarFallback>{booking.staff.name?.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    <span className="text-xs font-medium">{booking.staff.name}</span>
+                                </div>
+                            ) : (
+                                <Badge variant="outline" className="text-[9px] font-normal opacity-60">Unassigned</Badge>
+                            )}
                         </TableCell>
                         <TableCell className="text-[11px]">
                             <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString()}</div>
                             <div className="text-muted-foreground">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                         </TableCell>
-                        <TableCell>
-                            <Badge variant="outline" className="text-[10px] uppercase font-bold px-2 py-0">
-                                {booking.status}
-                            </Badge>
-                        </TableCell>
                         <TableCell className="text-right pr-6">
                             <div className="flex justify-end gap-2">
                                 {booking.status === 'pending' && (
-                                    <Button 
-                                        size="sm" 
-                                        className="h-8 text-[10px] font-bold uppercase bg-green-600 hover:bg-green-700" 
-                                        onClick={() => handleUpdateStatus(booking.id, 'active')}
-                                    >
-                                        <Check className="h-3 w-3 mr-1" /> Accept
-                                    </Button>
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button 
+                                                size="sm" 
+                                                className="h-8 text-[10px] font-bold uppercase bg-green-600 hover:bg-green-700" 
+                                                onClick={() => setSelectedBookingId(booking.id)}
+                                            >
+                                                <UserPlus className="h-3 w-3 mr-1" /> Assign & Accept
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>Assign Staff Member</DialogTitle>
+                                                <DialogDescription>
+                                                    Select a professional detailer to handle this wash for {booking.customer?.name}.
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="py-4 space-y-4">
+                                                <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Choose a detailer..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {employees.map(emp => (
+                                                            <SelectItem key={emp.id} value={emp.id}>
+                                                                {emp.name} ({emp.phone})
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                {employees.length === 0 && (
+                                                    <p className="text-xs text-destructive font-bold italic">
+                                                        No employees registered. Go to Team Management first.
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <DialogFooter>
+                                                <Button 
+                                                    className="w-full" 
+                                                    disabled={assigning || !selectedStaffId}
+                                                    onClick={handleAssignStaff}
+                                                >
+                                                    {assigning ? <Loader2 className="animate-spin h-4 w-4" /> : "Confirm Assignment"}
+                                                </Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
                                 )}
                                 {booking.status === 'active' && (
                                     <Button 
@@ -188,7 +272,7 @@ export default function BusinessDashboardPage() {
                                         className="h-8 text-[10px] font-bold uppercase" 
                                         onClick={() => handleUpdateStatus(booking.id, 'completed')}
                                     >
-                                        <CheckCircle2 className="h-3 w-3 mr-1" /> Finish
+                                        <CheckCircle2 className="h-3 w-3 mr-1" /> Mark Complete
                                     </Button>
                                 )}
                             </div>
@@ -253,7 +337,7 @@ export default function BusinessDashboardPage() {
                         <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} /> Refresh
                     </Button>
                     <Badge className="bg-primary hover:bg-primary font-bold px-4 py-1.5 rounded-full uppercase tracking-tighter">
-                        {business?.subscription_status}
+                        {business?.subscription_status?.replace('_', ' ')}
                     </Badge>
                 </div>
             </div>
@@ -269,20 +353,20 @@ export default function BusinessDashboardPage() {
             <Tabs defaultValue="pending" className="w-full">
                 <TabsList className="mb-8 grid w-full grid-cols-3 max-w-2xl bg-muted/50 p-1.5 h-12 rounded-xl">
                     <TabsTrigger value="pending" className="rounded-lg text-[10px] font-black uppercase">
-                        Pending ({pendingList.length})
+                        Incoming ({pendingList.length})
                     </TabsTrigger>
                     <TabsTrigger value="active" className="rounded-lg text-[10px] font-black uppercase">
-                        Active ({activeList.length})
+                        Active Jobs ({activeList.length})
                     </TabsTrigger>
                     <TabsTrigger value="completed" className="rounded-lg text-[10px] font-black uppercase">
-                        Completed ({completedList.length})
+                        Service History ({completedList.length})
                     </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="pending">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
                         <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Pending Requests</CardTitle>
+                            <CardTitle className="text-lg">New Requests</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <BookingTable list={pendingList} showActions />
@@ -293,7 +377,7 @@ export default function BusinessDashboardPage() {
                 <TabsContent value="active">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
                         <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Active Queue</CardTitle>
+                            <CardTitle className="text-lg">In-Progress</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <BookingTable list={activeList} />
@@ -304,7 +388,7 @@ export default function BusinessDashboardPage() {
                 <TabsContent value="completed">
                     <Card className="shadow-2xl border-muted/50 overflow-hidden">
                         <CardHeader className="bg-muted/10 border-b py-4">
-                            <CardTitle className="text-lg">Completed Services</CardTitle>
+                            <CardTitle className="text-lg">Finished Services</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <BookingTable list={completedList} />

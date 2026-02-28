@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { Booking, Employee } from '@/lib/types';
+import type { Employee } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Phone, CheckCircle, MessageSquare, MapPin, Clock, User, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
@@ -28,27 +28,23 @@ export default function MobileServiceTrackingPage({ params }: { params: Promise<
         const fetchTrackingDetails = async () => {
             setLoading(true);
             try {
-                // 1. Fetch Booking
+                // 1. Fetch Booking with joined Staff info
                 const { data: bookingData, error: bookingError } = await supabase
                     .from('bookings')
-                    .select('*, service:service_id(name), car:car_id(make, model)')
+                    .select(`
+                        *, 
+                        service:service_id(name), 
+                        car:car_id(make, model),
+                        staff:staff_id(*)
+                    `)
                     .eq('id', bookingId)
                     .maybeSingle();
                 
                 if (bookingError) throw bookingError;
                 if (bookingData) {
                     setBooking(bookingData);
-                    
-                    // 2. Fetch Assigned Employee
-                    if (bookingData.assignedEmployeeId) {
-                        const { data: empData, error: empError } = await supabase
-                            .from('employees')
-                            .select('*')
-                            .eq('id', bookingData.assignedEmployeeId)
-                            .maybeSingle();
-                        
-                        if (empError) throw empError;
-                        setEmployee(empData);
+                    if (bookingData.staff) {
+                        setEmployee(bookingData.staff);
                     }
                 }
             } catch (error) {
