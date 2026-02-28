@@ -28,6 +28,9 @@ export default function BusinessDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    
+    // This ref tracks which booking IDs are currently being updated to prevent
+    // background refreshes from overwriting the local UI state prematurely.
     const updatingRef = useRef<Record<string, boolean>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -61,16 +64,15 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff List for assignment - Use 'name' column
-                const { data: staffData, error: staffError } = await supabase
+                // 2. Fetch Staff List - Ensure we use 'name' column
+                const { data: staffData } = await supabase
                     .from("employees")
                     .select("id, name")
                     .eq("business_id", bizData.id);
                 
-                if (staffError) console.error("Staff fetch error:", staffError);
                 setStaffList(staffData || []);
 
-                // 3. Fetch Bookings with relations
+                // 3. Fetch Bookings with full relations
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -99,45 +101,45 @@ export default function BusinessDashboardPage() {
                 
                 if (bookingError) throw bookingError;
 
-                // Merge updates: If we are currently updating a row locally, preserve that local state
-                const mergedBookings = (bookingData || []).map(newB => {
-                    if (updatingRef.current[newB.id]) {
-                        const existing = bookings.find(b => b.id === newB.id);
-                        return existing ? { ...newB, staff_id: existing.staff_id } : newB;
-                    }
-                    return newB;
+                // STABLE UPDATE: Use functional state to merge without overwriting "locked" rows
+                setBookings(currentBookings => {
+                    const freshData = bookingData || [];
+                    return freshData.map(newB => {
+                        // If this specific row is being updated by the user, preserve the local staff_id
+                        if (updatingRef.current[newB.id]) {
+                            const localMatch = currentBookings.find(b => b.id === newB.id);
+                            return localMatch ? { ...newB, staff_id: localMatch.staff_id } : newB;
+                        }
+                        return newB;
+                    });
                 });
-
-                setBookings(mergedBookings);
 
             } else {
                 setFetchError("Business profile not found. Please complete your profile setup.");
             }
         } catch (error: any) {
             console.error("[DASHBOARD] Fetch error:", error);
-            setFetchError(error.message || "Unable to load operational data. Check connection.");
+            setFetchError(error.message || "Unable to load operational data.");
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [bookings]);
+    }, []);
 
     useEffect(() => {
         fetchData();
 
         const channel = supabase
             .channel('dashboard-sync')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, (payload) => {
-                if (!updatingRef.current[payload.new?.id]) {
-                    fetchData(true);
-                }
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+                fetchData(true);
             })
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, []);
+    }, [fetchData]);
 
     const updateStatus = async (bookingId: string, status: string) => {
         try {
@@ -161,13 +163,14 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // Lock this row to prevent background refresh from reverting it
+        // 1. Lock the row to prevent background refreshes from reverting the UI
         updatingRef.current[bookingId] = true;
 
-        // OPTIMISTIC UPDATE: Change local state immediately
+        // 2. OPTIMISTIC UPDATE: Change local state immediately so it "sticks" visually
         setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, staff_id: staffId } : b));
 
         try {
+            // 3. Persist to Supabase
             const { error } = await supabase
                 .from("bookings")
                 .update({ staff_id: staffId })
@@ -175,13 +178,12 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             
-            // Notification removed as requested by user to ensure smooth state 'sticking'
-            
-            // Allow background sync to take over after a small delay
+            // 4. Wait for a settling period (2s) to allow DB and Realtime to propagate 
+            // before releasing the lock and refreshing.
             setTimeout(() => {
                 updatingRef.current[bookingId] = false;
                 fetchData(true);
-            }, 1000);
+            }, 2000);
 
         } catch (e: any) {
             updatingRef.current[bookingId] = false;
