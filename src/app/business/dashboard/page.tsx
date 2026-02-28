@@ -35,7 +35,7 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Prioritized local state for staff assignments to ensure UI sticks immediately
+    // local state for staff assignments to ensure UI sticks immediately
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -58,7 +58,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Pre-fetch status check to avoid infinite recursion RLS
+            // 1. Status Check
             const { data: profile } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
@@ -77,7 +77,7 @@ export default function BusinessDashboardPage() {
 
             setIsRestricted(false);
 
-            // 2. Fetch Business Record
+            // 2. Fetch Business
             const { data: bizData } = await supabase
                 .from('businesses')
                 .select('*')
@@ -96,7 +96,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with Explicit Relation Mapping
+                // 4. Fetch Bookings with exact 7-column relation requirements
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -114,17 +114,14 @@ export default function BusinessDashboardPage() {
                     .eq("business_id", bizData.id)
                     .order("booking_time", { ascending: true });
                 
-                if (bookingError) {
-                    console.error("[DASHBOARD] Fetch failure details:", JSON.stringify(bookingError, null, 2));
-                    throw bookingError;
-                }
+                if (bookingError) throw bookingError;
                 setBookings(bookingData || []);
 
             } else {
                 setFetchError("Business profile not found.");
             }
         } catch (error: any) {
-            console.error("[DASHBOARD] Fatal catch:", error);
+            console.error("[DASHBOARD] Fetch failure:", JSON.stringify(error, null, 2));
             setFetchError(error.message || "A database error occurred.");
         } finally {
             setLoading(false);
@@ -160,7 +157,6 @@ export default function BusinessDashboardPage() {
                 description: status === 'accepted' ? "Service moved to active queue." : "Request removed."
             });
             
-            // Clear local tracking for this booking as it moves tab
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -176,7 +172,6 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // Update local state immediately for responsiveness
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -189,7 +184,6 @@ export default function BusinessDashboardPage() {
             toast({ title: "Employee assigned successfully." });
             await fetchData(true);
         } catch (e: any) {
-            // Revert on error
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];

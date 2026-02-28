@@ -48,7 +48,7 @@ function BusinessCard({ business }: { business: any }) {
               <Trophy className="h-3 w-3 mr-1" /> TOP RATED
             </Badge>
           )}
-          <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold">
+          <Badge variant="secondary" className="backdrop-blur-md bg-white/90 text-black shadow-sm font-bold text-[10px] uppercase">
             {business.services?.length || 0} Packages
           </Badge>
         </div>
@@ -61,11 +61,9 @@ function BusinessCard({ business }: { business: any }) {
             <ShieldCheck className="h-3 w-3 mr-1" /> Verified
           </Badge>
         </div>
-        <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                <span className="truncate">{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
-            </div>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+            <MapPin className="h-3 w-3" />
+            <span className="truncate">{business.address || 'Gaborone'}, {business.city || 'Botswana'}</span>
         </div>
       </CardHeader>
 
@@ -89,7 +87,7 @@ function BusinessCard({ business }: { business: any }) {
         </div>
 
         <div className="flex items-center gap-1.5 pt-2 border-t border-dashed shrink-0">
-          <div className="flex text-yellow-400">
+          <div className="flex text-yellow-400" aria-label={`Rating: ${business.avg_rating || 0} stars`}>
             {[1, 2, 3, 4, 5].map((s) => (
               <Star 
                 key={s} 

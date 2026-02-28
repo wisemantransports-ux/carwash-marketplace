@@ -41,7 +41,7 @@ function BusinessCard({ business }: { business: any }) {
               <Clock className="h-3 w-3 mr-1" /> TRIAL
             </Badge>
           )}
-          <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black">
+          <Badge variant="secondary" className="backdrop-blur-md bg-white/80 text-black font-bold uppercase text-[10px]">
             {business.type === 'station' ? 'Station' : 'Mobile'}
           </Badge>
         </div>
@@ -144,7 +144,7 @@ export default function Home() {
           <div className="hidden md:flex items-center gap-6">
             <Link href="#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">How it Works</Link>
             <Link href="#safety" className="text-sm font-medium hover:text-primary transition-colors">Safety & Trust</Link>
-            <Link href="#pricing" className="text-sm font-medium hover:text-primary transition-colors">Pricing</Link>
+            <Link href="/find-wash" className="text-sm font-medium hover:text-primary transition-colors">Marketplace</Link>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => router.push('/login')}>Sign In</Button>
@@ -159,7 +159,7 @@ export default function Home() {
             <div className="flex-1 text-center lg:text-left space-y-8">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border shadow-sm text-sm font-medium text-primary mb-2">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Verified Partners Only</span>
+                <span>Verified Platform Partners</span>
               </div>
               <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1]">
                 Grow Your Car Wash Business with <span className="text-primary italic">Verified</span> Bookings.
@@ -195,7 +195,7 @@ export default function Home() {
       <section className="py-24 border-y bg-muted/30 text-center">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto space-y-8">
-            <h2 className="text-4xl font-bold">Verified Partners</h2>
+            <h2 className="text-4xl font-bold">Verified Partners & Trials</h2>
             <p className="text-muted-foreground">Trusted businesses providing high-quality service across Botswana.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
               {loading ? (
@@ -215,7 +215,7 @@ export default function Home() {
               ) : (
                   <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-card">
                       <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                      <p className="text-muted-foreground font-bold">No verified businesses available at the moment.</p>
+                      <p className="text-muted-foreground font-bold">No verified businesses found.</p>
                   </div>
               )}
             </div>

@@ -86,7 +86,7 @@ function BusinessCard({ business }: { business: any }) {
         </div>
 
         <div className="flex items-center gap-2 pt-2 border-t border-dashed shrink-0">
-          <div className="flex text-yellow-400">
+          <div className="flex text-yellow-400" aria-label={`Rating: ${business.avg_rating || 0} out of 5 stars`}>
             {[1, 2, 3, 4, 5].map((s) => (
                 <Star 
                   key={s} 
@@ -123,6 +123,7 @@ export default function PublicFindWashPage() {
       setLoading(true);
       try {
         const now = new Date().toISOString();
+        // Robust query logic: Verified OR Active Trial
         const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select(`
