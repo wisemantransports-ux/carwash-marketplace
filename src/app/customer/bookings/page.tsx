@@ -35,7 +35,6 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
   const [feedback, setFeedback] = useState('');
   const [isFinishingOpen, setIsFinishingOpen] = useState(false);
 
-  // Date formatting handled post-mount
   const dateStr = booking.booking_time ? new Date(booking.booking_time).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : '---';
   const timeStr = booking.booking_time ? new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---';
 
@@ -58,11 +57,17 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
   };
 
   const handleFinishAndRate = async () => {
+    if (rating === 0) {
+        toast({ variant: 'destructive', title: 'Rating Required', description: 'Please select a star rating.' });
+        return;
+    }
+
     setFinishing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Unauthorized");
 
+      // 1. Update Booking Status
       const { error: bookingError } = await supabase
         .from('bookings')
         .update({ status: 'completed' })
@@ -70,21 +75,22 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
       
       if (bookingError) throw bookingError;
 
-      if (rating > 0) {
-        await supabase.from('ratings').insert({
-          booking_id: booking.booking_id,
-          customer_id: session.user.id,
-          business_id: booking.business_id,
-          rating: rating,
-          feedback: feedback
-        });
-      }
+      // 2. Upsert Rating (ON CONFLICT booking_id)
+      const { error: ratingError } = await supabase.from('ratings').upsert({
+        booking_id: booking.booking_id,
+        customer_id: session.user.id,
+        business_id: booking.business_id,
+        rating: rating,
+        feedback: feedback
+      }, { onConflict: 'booking_id' });
 
-      toast({ title: 'Service Completed' });
+      if (ratingError) throw ratingError;
+
+      toast({ title: 'Service Completed', description: 'Your feedback has been submitted.' });
       setIsFinishingOpen(false);
       onRefresh();
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
+      toast({ variant: 'destructive', title: 'Process Failed', description: error.message });
     } finally {
       setFinishing(false);
     }
@@ -136,6 +142,17 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
             <Clock className="h-4 w-4 text-primary" />
             <span>{timeStr}</span>
         </div>
+
+        {booking.status === 'completed' && booking.hasRating && (
+            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-100 rounded-lg">
+                <div className="flex gap-0.5">
+                    {Array.from({length: 5}).map((_, i) => (
+                        <Star key={i} className={cn("h-3 w-3", i < booking.ratingValue ? "text-yellow-400 fill-yellow-400" : "text-gray-200")} />
+                    ))}
+                </div>
+                {booking.ratingFeedback && <p className="text-[10px] text-muted-foreground italic mt-1 line-clamp-1">"{booking.ratingFeedback}"</p>}
+            </div>
+        )}
 
         <div className="mt-4 pt-4 border-t">
             {booking.staff ? (
@@ -202,8 +219,8 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
                             </div>
                         </div>
                         <DialogFooter>
-                            <Button className="w-full bg-green-600" onClick={handleFinishAndRate} disabled={finishing}>
-                                {finishing && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
+                            <Button className="w-full bg-green-600 h-12 text-lg shadow-lg" onClick={handleFinishAndRate} disabled={finishing || rating === 0}>
+                                {finishing ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : null}
                                 Confirm Completion
                             </Button>
                         </DialogFooter>
@@ -263,7 +280,7 @@ export default function BookingHistoryPage() {
                     service:service_id ( name, duration ),
                     car:car_id ( make, model ),
                     staff:staff_id ( name, phone, image_url ),
-                    rating:ratings!booking_id ( id )
+                    rating:ratings!booking_id ( id, rating, feedback )
                 `)
                 .eq('customer_id', session.user.id)
                 .order('booking_time', { ascending: false });
@@ -283,7 +300,9 @@ export default function BookingHistoryPage() {
                 service_duration: b.service?.duration,
                 car_details: b.car ? `${b.car.make} ${b.car.model}` : 'Registered Vehicle',
                 staff: b.staff,
-                hasRating: b.rating && b.rating.length > 0
+                hasRating: b.rating && b.rating.length > 0,
+                ratingValue: b.rating?.[0]?.rating || 0,
+                ratingFeedback: b.rating?.[0]?.feedback || ''
             }));
 
             setBookings(formatted);

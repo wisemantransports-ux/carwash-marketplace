@@ -10,7 +10,7 @@ import {
     AlertCircle, 
     Truck,
     Lock,
-    CheckCircle2
+    Star
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -30,7 +30,6 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Stable state for staff selection to ensure immediate UI feedback and persistence
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -53,7 +52,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 1. Status Check (preemptive)
+            // 1. Restricted Mode Pre-Check
             const { data: profile, error: profileError } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
@@ -95,7 +94,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 4. Fetch Bookings with Full Relational Joins
+                // 4. Fetch Bookings with Full Relational Joins & Ratings
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -106,7 +105,8 @@ export default function BusinessDashboardPage() {
                         customer:users!bookings_customer_id_fkey ( name, email ),
                         service:services!bookings_service_id_fkey ( name, price ),
                         car:cars!bookings_car_id_fkey ( make, model ),
-                        staff:employees!bookings_staff_id_fkey ( name )
+                        staff:employees!bookings_staff_id_fkey ( name ),
+                        rating:ratings!booking_id ( rating, feedback )
                     `)
                     .eq("business_id", bizData.id)
                     .order("booking_time", { ascending: true });
@@ -166,7 +166,6 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // Optimistic update for immediate stability
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -176,11 +175,11 @@ export default function BusinessDashboardPage() {
                 .eq("id", bookingId);
 
             if (error) throw error;
-            toast({ title: "Employee assigned successfully." });
+            // Removed notification as requested to avoid sync overlap
             await fetchData(true);
         } catch (e: any) {
             setLocalStaffAssignments(prev => {
-                const next = { ...next };
+                const next = { ...prev };
                 delete next[bookingId];
                 return next;
             });
@@ -199,7 +198,7 @@ export default function BusinessDashboardPage() {
         </div>
     );
 
-    const BookingTable = ({ list, isPending = false }: { list: any[], isPending?: boolean }) => (
+    const BookingTable = ({ list, isPending = false, isHistory = false }: { list: any[], isPending?: boolean, isHistory?: boolean }) => (
         <Table>
             <TableHeader>
                 <TableRow className="bg-muted/50">
@@ -209,13 +208,16 @@ export default function BusinessDashboardPage() {
                     <TableHead className="font-bold">Car Make & Model</TableHead>
                     <TableHead className="font-bold">Staff</TableHead>
                     <TableHead className="font-bold">Timing</TableHead>
-                    <TableHead className="text-right font-bold pr-6">Action</TableHead>
+                    <TableHead className={cn("text-right font-bold pr-6", isHistory && "text-center")}>
+                        {isHistory ? "Feedback" : "Action"}
+                    </TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {list.length > 0 ? list.map((booking) => {
                     const currentStaffId = localStaffAssignments[booking.id] || booking.staff_id || "";
                     const isStaffAssigned = !!currentStaffId;
+                    const rating = booking.rating?.[0];
 
                     return (
                         <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
@@ -227,20 +229,24 @@ export default function BusinessDashboardPage() {
                             </TableCell>
                             <TableCell className="text-sm font-bold">{booking.car?.make} {booking.car?.model}</TableCell>
                             <TableCell>
-                                <select
-                                    className="h-8 w-full max-w-[150px] rounded-md border bg-background px-2 py-1 text-xs font-bold cursor-pointer"
-                                    value={currentStaffId}
-                                    onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
-                                >
-                                    <option value="">Select Staff</option>
-                                    {staffList?.map((staff) => (<option key={staff.id} value={staff.id}>{staff.name}</option>))}
-                                </select>
+                                {isHistory ? (
+                                    <span className="text-xs font-medium">{booking.staff?.name || 'Unassigned'}</span>
+                                ) : (
+                                    <select
+                                        className="h-8 w-full max-w-[150px] rounded-md border bg-background px-2 py-1 text-xs font-bold cursor-pointer"
+                                        value={currentStaffId}
+                                        onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
+                                    >
+                                        <option value="">Select Staff</option>
+                                        {staffList?.map((staff) => (<option key={staff.id} value={staff.id}>{staff.name}</option>))}
+                                    </select>
+                                )}
                             </TableCell>
                             <TableCell className="text-xs">
                                 <div className="font-bold">{new Date(booking.booking_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
                                 <div className="text-muted-foreground uppercase">{new Date(booking.booking_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                             </TableCell>
-                            <TableCell className="text-right pr-6">
+                            <TableCell className={cn("text-right pr-6", isHistory && "text-center")}>
                                 {isPending ? (
                                     <div className="flex justify-end gap-2">
                                         <Button 
@@ -251,6 +257,19 @@ export default function BusinessDashboardPage() {
                                         >Accept ✅</Button>
                                         <Button size="sm" variant="destructive" className="h-8 text-[10px] font-bold uppercase" onClick={() => updateStatus(booking.id, "rejected")}>Reject ❌</Button>
                                     </div>
+                                ) : isHistory ? (
+                                    rating ? (
+                                        <div className="flex flex-col items-center gap-1">
+                                            <div className="flex gap-0.5">
+                                                {Array.from({length: 5}).map((_, i) => (
+                                                    <Star key={i} className={cn("h-3 w-3", i < rating.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300")} />
+                                                ))}
+                                            </div>
+                                            {rating.feedback && <span className="text-[10px] text-muted-foreground italic line-clamp-1 max-w-[100px]">"{rating.feedback}"</span>}
+                                        </div>
+                                    ) : (
+                                        <span className="text-[10px] text-muted-foreground italic">No rating</span>
+                                    )
                                 ) : (
                                     <Badge variant="outline" className="uppercase text-[10px] py-1">{booking.status}</Badge>
                                 )}
@@ -293,7 +312,7 @@ export default function BusinessDashboardPage() {
                 </TabsList>
                 <TabsContent value="pending"><Card className="shadow-2xl overflow-hidden"><BookingTable list={pendingList} isPending /></Card></TabsContent>
                 <TabsContent value="active"><Card className="shadow-2xl overflow-hidden"><BookingTable list={activeList} /></Card></TabsContent>
-                <TabsContent value="completed"><Card className="shadow-2xl overflow-hidden"><BookingTable list={completedList} /></Card></TabsContent>
+                <TabsContent value="completed"><Card className="shadow-2xl overflow-hidden"><BookingTable list={completedList} isHistory /></Card></TabsContent>
             </Tabs>
         </div>
     );

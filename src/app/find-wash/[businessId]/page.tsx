@@ -6,7 +6,7 @@ import type { User as ProfileUser, Service } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Banknote, Loader2, ArrowLeft, ShieldCheck, MapPin, Star, Store, UserCircle } from 'lucide-react';
+import { Clock, Banknote, Loader2, ArrowLeft, ShieldCheck, MapPin, Star, Store, UserCircle, Car as CarIcon } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -18,12 +18,14 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
     const [services, setServices] = useState<Service[]>([]);
     const [ratings, setRatings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        setMounted(true);
         const loadData = async () => {
             setLoading(true);
             try {
-                // 1. Resolve Business Record first (handling UUID or UID)
+                // 1. Resolve Business Record
                 const { data: bRec } = await supabase
                     .from('businesses')
                     .select('*')
@@ -33,7 +35,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                 if (bRec) {
                     setBizRecord(bRec);
 
-                    // 2. Fetch Owner Info from users_with_access using owner_id
+                    // 2. Fetch Owner Info
                     const { data: userData } = await supabase
                         .from('users_with_access')
                         .select('*')
@@ -48,33 +50,41 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                         } as ProfileUser);
                     }
 
-                    // 3. Fetch Services using the Business UUID
+                    // 3. Fetch Services
                     const { data: svcsData } = await supabase
                         .from('services')
                         .select('*')
                         .eq('business_id', bRec.id);
                     setServices(svcsData || []);
 
-                    // 4. Fetch Recent Ratings using the Business UUID
-                    const { data: ratingsData } = await supabase
-                        .from('ratings')
+                    // 4. Fetch Verified Ratings & Reviews using requested Logic
+                    const { data: reviewsData } = await supabase
+                        .from('bookings')
                         .select(`
-                            id,
-                            rating,
-                            feedback,
-                            created_at,
-                            customer:customer_id ( name )
+                            booking_time,
+                            rating:ratings!booking_id ( rating, feedback ),
+                            customer:users!bookings_customer_id_fkey ( name ),
+                            service:services!bookings_service_id_fkey ( name ),
+                            car:cars!bookings_car_id_fkey ( make, model )
                         `)
                         .eq('business_id', bRec.id)
-                        .order('created_at', { ascending: false })
-                        .limit(3);
+                        .eq('status', 'completed')
+                        .not('ratings', 'is', null)
+                        .order('booking_time', { ascending: false });
                     
-                    setRatings((ratingsData || []).map(r => ({
-                        ...r,
-                        createdAt: r.created_at
-                    })));
-                } else {
-                    console.error("No business record found for ID:", businessId);
+                    const formattedReviews = (reviewsData || [])
+                        .filter(b => b.rating && b.rating.length > 0)
+                        .map(b => ({
+                            id: Math.random().toString(), // local id for list
+                            customerName: b.customer?.name || 'Customer',
+                            rating: b.rating[0].rating,
+                            review: b.rating[0].feedback,
+                            serviceName: b.service?.name,
+                            carDetails: b.car ? `${b.car.make} ${b.car.model}` : null,
+                            bookingTime: b.booking_time
+                        }));
+
+                    setRatings(formattedReviews);
                 }
             } catch (e) {
                 console.error('Error loading business details:', e);
@@ -85,7 +95,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
         loadData();
     }, [businessId]);
 
-    if (loading) {
+    if (!mounted || loading) {
         return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
     }
 
@@ -107,7 +117,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
         : "5.0";
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background pb-20">
              <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b">
                 <div className="container mx-auto px-4 h-16 flex items-center justify-between">
                 <Link href="/find-wash" className="flex items-center gap-2 text-primary font-bold hover:opacity-80 transition-opacity">
@@ -134,8 +144,8 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                     <div className="md:col-span-2 space-y-8">
                         <div className="flex flex-col md:flex-row gap-8 items-start">
                             <div className="relative h-48 w-full md:w-64 rounded-2xl overflow-hidden border shadow-xl shrink-0 bg-muted">
-                                {business.avatarUrl ? (
-                                    <Image src={business.avatarUrl} alt={business.name} fill className="object-cover" />
+                                {bizRecord.logo_url ? (
+                                    <Image src={bizRecord.logo_url} alt={business.name} fill className="object-cover" />
                                 ) : (
                                     <div className="h-full w-full flex items-center justify-center text-muted-foreground">
                                         <Store className="h-12 w-12 opacity-20" />
@@ -152,38 +162,41 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                                 </div>
                                 <h1 className="text-4xl font-extrabold">{business.name}</h1>
                                 <div className="flex flex-col gap-2 text-muted-foreground">
-                                    <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {bizRecord?.address || 'Gaborone'}, {bizRecord?.city || 'Botswana'}</span>
+                                    <span className="flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" /> {bizRecord?.address || 'Gaborone'}, {bizRecord?.city || 'Botswana'}</span>
                                     <div className="flex items-center gap-1.5 pt-1">
                                         <div className="flex">
                                             {[1, 2, 3, 4, 5].map((s) => (
-                                                <Star key={s} className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
+                                                <Star key={s} className={cn("h-3.5 w-3.5", s <= Math.round(Number(avgRating)) ? "text-yellow-400 fill-yellow-400" : "text-gray-200")} />
                                             ))}
                                         </div>
                                         <span className="text-sm font-bold text-foreground">{avgRating}</span>
                                         <span className="text-sm text-muted-foreground">({ratings.length} verified reviews)</span>
                                     </div>
                                 </div>
-                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                <p className="text-sm text-muted-foreground leading-relaxed italic">
                                     {business.description || "Welcome to our professional car wash facility. We take pride in delivering showroom-quality results for every vehicle."}
                                 </p>
                             </div>
                         </div>
 
                         <div className="space-y-6">
-                            <h2 className="text-2xl font-bold border-b pb-2">Service Catalog</h2>
+                            <h2 className="text-2xl font-bold border-b pb-2 flex items-center gap-2">
+                                <Banknote className="h-5 w-5 text-primary" />
+                                Service Packages
+                            </h2>
                             <div className="grid gap-4">
                                 {services.length > 0 ? services.map(service => (
-                                    <Card key={service.id} className="group hover:border-primary transition-colors bg-card">
+                                    <Card key={service.id} className="group hover:border-primary transition-colors bg-card shadow-sm">
                                         <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div className="space-y-1">
                                                 <CardTitle className="text-xl group-hover:text-primary transition-colors">{service.name}</CardTitle>
-                                                <CardDescription>{service.description}</CardDescription>
-                                                <div className="flex items-center gap-4 text-xs font-medium pt-2">
-                                                    <span className="flex items-center gap-1.5 bg-muted px-2 py-1 rounded"><Clock className="h-3 w-3" /> {service.duration} min</span>
-                                                    <span className="flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-1 rounded font-bold"><Banknote className="h-3 w-3" /> P{service.price.toFixed(2)}</span>
+                                                <CardDescription className="line-clamp-2 text-xs">{service.description}</CardDescription>
+                                                <div className="flex items-center gap-4 text-[10px] font-bold pt-2">
+                                                    <span className="flex items-center gap-1.5 bg-muted px-2 py-1 rounded text-muted-foreground uppercase"><Clock className="h-3 w-3" /> {service.duration} min</span>
+                                                    <span className="flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-1 rounded uppercase tracking-wider"><Banknote className="h-3 w-3" /> P{Number(service.price).toFixed(2)}</span>
                                                 </div>
                                             </div>
-                                            <Button asChild className="shrink-0">
+                                            <Button asChild className="shrink-0 rounded-full font-bold">
                                                 <Link href="/login">Sign In to Book</Link>
                                             </Button>
                                         </CardHeader>
@@ -202,16 +215,16 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                             <CardHeader>
                                 <CardTitle className="text-lg flex items-center gap-2">
                                     <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                                    Recent Reviews
+                                    Verified Reviews
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 {ratings.length > 0 ? ratings.map((review) => (
-                                    <div key={review.id} className="space-y-2 border-b last:border-0 pb-4 last:pb-0">
+                                    <div key={review.id} className="space-y-3 border-b last:border-0 pb-6 last:pb-0">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <UserCircle className="h-4 w-4 text-muted-foreground" />
-                                                <span className="text-xs font-bold">{review.customer?.name || 'Customer'}</span>
+                                                <span className="text-xs font-bold">{review.customerName}</span>
                                             </div>
                                             <div className="flex">
                                                 {Array.from({ length: 5 }).map((_, i) => (
@@ -219,12 +232,18 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                                                 ))}
                                             </div>
                                         </div>
-                                        {review.feedback && (
-                                            <p className="text-xs text-muted-foreground italic leading-relaxed">
-                                                &quot;{review.feedback}&quot;
-                                            </p>
-                                        )}
-                                        <p className="text-[10px] text-muted-foreground">{new Date(review.created_at).toLocaleDateString()}</p>
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                <Badge variant="outline" className="h-4 px-1.5 text-[8px] border-primary/20 text-primary font-bold uppercase">{review.serviceName}</Badge>
+                                                {review.carDetails && <span className="flex items-center gap-1"><CarIcon className="h-2.5 w-2.5" /> {review.carDetails}</span>}
+                                            </div>
+                                            {review.review && (
+                                                <p className="text-xs text-foreground font-medium leading-relaxed bg-white/50 p-2 rounded-lg border border-dashed italic">
+                                                    &quot;{review.review}&quot;
+                                                </p>
+                                            )}
+                                        </div>
+                                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">{new Date(review.bookingTime).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                                     </div>
                                 )) : (
                                     <div className="text-center py-8">
@@ -234,13 +253,16 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                             </CardContent>
                         </Card>
 
-                        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8 text-center space-y-6">
+                        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8 text-center space-y-6 sticky top-24">
                             <div className="space-y-2">
                                 <h3 className="text-xl font-bold">Ready to book?</h3>
                                 <p className="text-sm text-muted-foreground">Join the marketplace to manage your vehicle details and track bookings.</p>
                             </div>
-                            <Button asChild size="lg" className="w-full"><Link href="/signup">Create Free Account</Link></Button>
-                            <p className="text-[10px] text-muted-foreground italic">Registration is quick and free for customers.</p>
+                            <Button asChild size="lg" className="w-full shadow-xl font-bold rounded-full transition-transform hover:scale-105 active:scale-95"><Link href="/signup">Create Free Account</Link></Button>
+                            <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground italic font-medium">
+                                <ShieldCheck className="h-3 w-3" />
+                                Registration is quick and free for customers.
+                            </div>
                         </div>
                     </div>
                 </div>
