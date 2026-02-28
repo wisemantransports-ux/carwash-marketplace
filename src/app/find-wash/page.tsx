@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Clock, Trophy, Tags } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Clock, Trophy, Tags, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,12 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 function BusinessCard({ business }: { business: any }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  if (!mounted) return <Skeleton className="h-[500px] w-full rounded-2xl" />;
-
-  const rating = Number(business.rating || 0);
+  const rating = Number(business.avg_rating || business.rating || 0);
   const reviews = Number(business.review_count || 0);
 
   return (
@@ -114,6 +109,8 @@ export default function PublicFindWashPage() {
     const load = async () => {
       setLoading(true);
       try {
+        // High resiliency query: strictly verified partners using basic business table fields
+        // to avoid permission issues with guests querying bookings/ratings directly.
         const { data, error } = await supabase
             .from('businesses')
             .select('*, services(id, name, price)')
@@ -132,11 +129,16 @@ export default function PublicFindWashPage() {
   }, []);
 
   const filtered = businesses.filter(b => 
-    b.name.toLowerCase().includes(search.toLowerCase()) || 
+    b.name?.toLowerCase().includes(search.toLowerCase()) || 
     (b.city && b.city.toLowerCase().includes(search.toLowerCase()))
   );
 
-  if (!mounted) return null;
+  if (!mounted) return (
+    <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+        <Loader2 className="animate-spin h-10 w-10 text-primary" />
+        <p className="text-muted-foreground animate-pulse">Syncing marketplace...</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background">

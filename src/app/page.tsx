@@ -4,7 +4,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, Star, ShieldCheck, UserCheck, TrendingUp, Store } from "lucide-react";
+import { MapPin, Star, ShieldCheck, UserCheck, TrendingUp, Store, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -14,12 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 function BusinessCard({ business }: { business: any }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  if (!mounted) return <Skeleton className="h-[400px] w-full rounded-2xl" />;
-
-  const rating = Number(business.rating || 0);
+  const rating = Number(business.rating || business.avg_rating || 0);
   const reviews = Number(business.review_count || 0);
 
   return (
@@ -92,6 +87,7 @@ export default function Home() {
     async function load() {
       setLoading(true);
       try {
+        // High resiliency query for verified partners
         const { data, error } = await supabase
             .from('businesses')
             .select('*')
@@ -109,7 +105,12 @@ export default function Home() {
     load();
   }, []);
 
-  if (!mounted) return null;
+  if (!mounted) return (
+    <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+        <Loader2 className="animate-spin h-10 w-10 text-primary" />
+        <p className="text-muted-foreground animate-pulse">Entering marketplace...</p>
+    </div>
+  );
 
   return (
     <div className="flex flex-col min-h-screen bg-background">

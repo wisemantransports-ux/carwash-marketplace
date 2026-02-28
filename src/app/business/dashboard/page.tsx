@@ -13,7 +13,8 @@ import {
     Lock,
     Star,
     Mail,
-    User
+    User,
+    CheckCircle2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -33,6 +34,7 @@ export default function BusinessDashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
+    // Local state to keep UI snappy and consistent during refreshes
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -55,14 +57,15 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            const { data: profile } = await supabase
+            // 1. Check Access Status via the high-level view (prevents RLS recursion)
+            const { data: accessCheck } = await supabase
                 .from('users_with_access')
                 .select('paid, trial_expiry')
                 .eq('id', authUser.id)
                 .maybeSingle();
 
-            const isPaid = profile?.paid === true;
-            const isTrialValid = profile?.trial_expiry ? new Date(profile.trial_expiry) > new Date() : false;
+            const isPaid = accessCheck?.paid === true;
+            const isTrialValid = accessCheck?.trial_expiry ? new Date(accessCheck.trial_expiry) > new Date() : false;
             
             if (!isPaid && !isTrialValid) {
                 setIsRestricted(true);
@@ -73,6 +76,7 @@ export default function BusinessDashboardPage() {
 
             setIsRestricted(false);
 
+            // 2. Fetch Business Info
             const { data: bizData } = await supabase
                 .from('businesses')
                 .select('*')
@@ -82,6 +86,7 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
+                // 3. Fetch Employees for the dropdown
                 const { data: staffData } = await supabase
                     .from("employees")
                     .select("id, name")
@@ -90,6 +95,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
+                // 4. Fetch Bookings with Explicit Relationship Names
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -114,7 +120,7 @@ export default function BusinessDashboardPage() {
                 setFetchError("Business profile not found.");
             }
         } catch (error: any) {
-            console.error("[DASHBOARD] Fetch failure:", error);
+            console.error("[DASHBOARD] Fetch failure:", JSON.stringify(error, null, 2));
             setFetchError(error.message || "A database error occurred.");
         } finally {
             setLoading(false);
@@ -150,6 +156,7 @@ export default function BusinessDashboardPage() {
                 description: status === 'accepted' ? "Service moved to active queue." : "Request removed."
             });
             
+            // Clear local tracking for this item
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -165,6 +172,7 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
+        // Optimistically update local state to activate "Accept" button
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -177,6 +185,7 @@ export default function BusinessDashboardPage() {
             toast({ title: "Employee assigned successfully." });
             await fetchData(true);
         } catch (e: any) {
+            // Revert on error
             setLocalStaffAssignments(prev => {
                 const next = { ...prev };
                 delete next[bookingId];
@@ -186,7 +195,12 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    if (!mounted) return <div className="flex justify-center py-32"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
+    if (!mounted) return (
+        <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+            <Loader2 className="animate-spin h-10 w-10 text-primary" />
+            <p className="text-muted-foreground animate-pulse">Initializing operations...</p>
+        </div>
+    );
 
     if (isRestricted) return (
         <div className="flex flex-col items-center justify-center py-20 bg-muted/10 border-2 border-dashed rounded-3xl m-8 text-center">
@@ -215,6 +229,7 @@ export default function BusinessDashboardPage() {
                 </TableHeader>
                 <TableBody>
                     {list.length > 0 ? list.map((booking) => {
+                        // Prioritize local state during background refresh
                         const currentStaffId = localStaffAssignments[booking.id] || booking.staff_id || "";
                         const isStaffAssigned = !!currentStaffId;
                         const rating = booking.rating?.[0];
