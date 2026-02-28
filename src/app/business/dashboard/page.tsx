@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
     Loader2, 
@@ -56,7 +56,7 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch ALL Bookings with EXACT relations requested
+                // 2. Fetch Pending Bookings with EXACT relations requested
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -131,7 +131,7 @@ export default function BusinessDashboardPage() {
         try {
             const { error } = await supabase
                 .from("bookings")
-                .update({ staff_id: staffId })
+                .update({ staff_id: staffId || null })
                 .eq("id", bookingId);
 
             if (error) throw error;
