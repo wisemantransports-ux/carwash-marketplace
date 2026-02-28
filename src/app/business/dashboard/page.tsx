@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
@@ -62,7 +61,7 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff List for assignment
+                // 2. Fetch Staff List for assignment - Use 'name' column
                 const { data: staffData, error: staffError } = await supabase
                     .from("employees")
                     .select("id, name")
@@ -71,7 +70,7 @@ export default function BusinessDashboardPage() {
                 if (staffError) console.error("Staff fetch error:", staffError);
                 setStaffList(staffData || []);
 
-                // 3. Fetch Bookings with strict relational data
+                // 3. Fetch Bookings with relations
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -101,7 +100,6 @@ export default function BusinessDashboardPage() {
                 if (bookingError) throw bookingError;
 
                 // Merge updates: If we are currently updating a row locally, preserve that local state
-                // to prevent the "flicker/revert" issue described by user
                 const mergedBookings = (bookingData || []).map(newB => {
                     if (updatingRef.current[newB.id]) {
                         const existing = bookings.find(b => b.id === newB.id);
@@ -125,14 +123,11 @@ export default function BusinessDashboardPage() {
     }, [bookings]);
 
     useEffect(() => {
-        // Initial load
         fetchData();
 
-        // Realtime subscription for instant updates
         const channel = supabase
             .channel('dashboard-sync')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, (payload) => {
-                // If the change wasn't from our own active update, refresh
                 if (!updatingRef.current[payload.new?.id]) {
                     fetchData(true);
                 }
@@ -142,7 +137,7 @@ export default function BusinessDashboardPage() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, []); // Only run on mount
+    }, []);
 
     const updateStatus = async (bookingId: string, status: string) => {
         try {
@@ -180,9 +175,9 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             
-            toast({ title: "Employee assigned", description: "The staff member has been linked to this booking." });
+            // Notification removed as requested by user to ensure smooth state 'sticking'
             
-            // Allow background sync to take over after a small delay to ensure DB consistency
+            // Allow background sync to take over after a small delay
             setTimeout(() => {
                 updatingRef.current[bookingId] = false;
                 fetchData(true);
