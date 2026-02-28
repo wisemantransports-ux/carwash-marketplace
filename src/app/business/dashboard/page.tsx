@@ -57,14 +57,15 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Staff List for assignment (using full_name)
-                // Fetch this BEFORE bookings to ensure dropdown can render
+                // 2. Fetch Staff List for assignment (using 'name' column from schema)
                 const { data: staffData, error: staffError } = await supabase
                     .from("employees")
-                    .select("id, full_name")
+                    .select("id, name")
                     .eq("business_id", bizData.id);
                 
-                if (staffError) console.error("Staff fetch error:", staffError);
+                if (staffError) {
+                    console.error("Staff fetch error details:", staffError);
+                }
                 setStaffList(staffData || []);
 
                 // 3. Fetch Bookings with relations
@@ -77,7 +78,7 @@ export default function BusinessDashboardPage() {
                         staff_id,
                         customer:users!bookings_customer_id_fkey (
                             id,
-                            full_name,
+                            name,
                             email
                         ),
                         services (
@@ -102,7 +103,7 @@ export default function BusinessDashboardPage() {
             }
         } catch (error: any) {
             console.error("[DASHBOARD] Fetch error:", error);
-            setFetchError("Unable to load operational data. Check connection.");
+            setFetchError(error.message || "Unable to load operational data. Check connection.");
         } finally {
             setLoading(false);
         }
@@ -140,7 +141,6 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             toast({ title: "Staff Assigned", description: "Detailer choice persisted successfully." });
-            // Crucial: refresh data to make sure the state 'sticks'
             await fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
@@ -165,7 +165,7 @@ export default function BusinessDashboardPage() {
                         {/* 1. CUSTOMER */}
                         <TableCell>
                             <div className="font-bold text-sm">
-                                {booking.customer?.full_name ?? "Unknown Customer"}
+                                {booking.customer?.name ?? "Unknown Customer"}
                             </div>
                             <div className="text-[10px] text-muted-foreground">
                                 {booking.customer?.email ?? ""}
@@ -199,7 +199,7 @@ export default function BusinessDashboardPage() {
                                 <option value="">Select Staff</option>
                                 {staffList?.map((staff) => (
                                     <option key={staff.id} value={staff.id}>
-                                        {staff.full_name}
+                                        {staff.name}
                                     </option>
                                 ))}
                             </select>
