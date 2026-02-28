@@ -57,7 +57,17 @@ export default function BusinessDashboardPage() {
             if (bizData) {
                 setBusiness(bizData);
 
-                // 2. Fetch Bookings with relations (using full_name for users)
+                // 2. Fetch Staff List for assignment (using full_name)
+                // Fetch this BEFORE bookings to ensure dropdown can render
+                const { data: staffData, error: staffError } = await supabase
+                    .from("employees")
+                    .select("id, full_name")
+                    .eq("business_id", bizData.id);
+                
+                if (staffError) console.error("Staff fetch error:", staffError);
+                setStaffList(staffData || []);
+
+                // 3. Fetch Bookings with relations
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -86,13 +96,6 @@ export default function BusinessDashboardPage() {
                 
                 if (bookingError) throw bookingError;
                 setBookings(bookingData || []);
-
-                // 3. Fetch Staff List for assignment (using full_name)
-                const { data: staffData } = await supabase
-                    .from("employees")
-                    .select("id, full_name")
-                    .eq("business_id", bizData.id);
-                setStaffList(staffData || []);
 
             } else {
                 setFetchError("Business profile not found. Please complete your profile setup.");
@@ -137,7 +140,8 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             toast({ title: "Staff Assigned", description: "Detailer choice persisted successfully." });
-            await fetchData(); // Await reload to ensure UI consistency
+            // Crucial: refresh data to make sure the state 'sticks'
+            await fetchData();
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
         }
@@ -158,7 +162,7 @@ export default function BusinessDashboardPage() {
             <TableBody>
                 {list.length > 0 ? list.map((booking) => (
                     <TableRow key={booking.id} className="hover:bg-muted/20 transition-colors">
-                        {/* CUSTOMER */}
+                        {/* 1. CUSTOMER */}
                         <TableCell>
                             <div className="font-bold text-sm">
                                 {booking.customer?.full_name ?? "Unknown Customer"}
@@ -168,7 +172,7 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* SERVICE INFO */}
+                        {/* 2. SERVICE INFO */}
                         <TableCell>
                             <div className="text-sm font-medium">
                                 {booking.services?.name}
@@ -178,14 +182,14 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* CAR */}
+                        {/* 3. CAR */}
                         <TableCell>
                             <div className="text-sm font-bold">
                                 {booking.cars?.make ?? "Not"} {booking.cars?.model ?? "specified"}
                             </div>
                         </TableCell>
 
-                        {/* STAFF ASSIGNMENT DROPDOWN */}
+                        {/* 4. STAFF (DROP DOWN) */}
                         <TableCell>
                             <select
                                 className="h-8 w-full max-w-[150px] rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-bold cursor-pointer"
@@ -201,7 +205,7 @@ export default function BusinessDashboardPage() {
                             </select>
                         </TableCell>
 
-                        {/* TIMING */}
+                        {/* 5. TIMING */}
                         <TableCell className="text-xs">
                             <div className="font-bold">
                                 {new Date(booking.booking_time).toLocaleDateString(undefined, { dateStyle: 'medium' })}
@@ -211,7 +215,7 @@ export default function BusinessDashboardPage() {
                             </div>
                         </TableCell>
 
-                        {/* ACTION */}
+                        {/* 6. ACTION */}
                         <TableCell className="text-right pr-6">
                             {isPending ? (
                                 <div className="flex justify-end gap-2">
