@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, MapPin, ShieldCheck, Upload, FileText, CheckCircle2, Phone, Tag, Building2, User } from 'lucide-react';
+import { Loader2, Store, MapPin, ShieldCheck, Upload, FileText, CheckCircle2, Phone, Tag, Building2, User, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import { ShareBusinessCard } from '@/components/app/share-business-card';
@@ -118,15 +118,19 @@ export default function BusinessProfilePage() {
 
       // RLS-Safe Payload: Only send editable fields. 
       // Do NOT include owner_id, status, or subscription fields.
-      const payload = {
+      const payload: any = {
         name: name.trim(),
         address: address.trim(),
         city: city.trim(),
         type,
         whatsapp_number: whatsapp.trim(),
         logo_url: logoUrl,
-        business_type: businessType
       };
+
+      // Only include business_type if it hasn't been locked yet
+      if (!profile?.business_type) {
+        payload.business_type = businessType;
+      }
 
       const { error: updateError } = await supabase
         .from('businesses')
@@ -145,6 +149,8 @@ export default function BusinessProfilePage() {
   };
 
   if (!mounted || loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+
+  const isStructureLocked = !!profile?.business_type;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-12 animate-in fade-in duration-500">
@@ -242,13 +248,24 @@ export default function BusinessProfilePage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="btype" className="font-bold text-xs uppercase">Business Structure</Label>
-                      <Select value={businessType} onValueChange={(v: any) => setBusinessType(v)}>
-                        <SelectTrigger className="font-medium"><SelectValue /></SelectTrigger>
+                      <Select 
+                        value={businessType} 
+                        onValueChange={(v: any) => setBusinessType(v)}
+                        disabled={isStructureLocked}
+                      >
+                        <SelectTrigger className={cn("font-medium", isStructureLocked && "bg-muted cursor-not-allowed opacity-80")}>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="individual">Individual / Micro-Business</SelectItem>
                           <SelectItem value="registered">Registered Entity (CIPA)</SelectItem>
                         </SelectContent>
                       </Select>
+                      {isStructureLocked && (
+                        <p className="text-[10px] text-muted-foreground italic flex items-center gap-1">
+                          <Info className="h-2.5 w-2.5" /> Structure is locked after registration.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
