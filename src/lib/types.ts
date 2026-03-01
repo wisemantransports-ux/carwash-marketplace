@@ -155,3 +155,35 @@ export type BusinessEarning = {
     service?: { name: string; price: number };
   };
 };
+
+export type CarListingStatus = 'available' | 'sold' | 'archived';
+
+export type CarListing = {
+  id: string;
+  business_id: string;
+  make: string;
+  model: string;
+  year: number;
+  price: number;
+  mileage: number;
+  description: string;
+  image_url: string;
+  status: CarListingStatus;
+  created_at: string;
+};
+
+export type TestDriveRequestStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
+
+export type TestDriveRequest = {
+  id: string;
+  car_listing_id: string;
+  customer_id: string;
+  requested_time: string;
+  status: TestDriveRequestStatus;
+  staff_id?: string; // Assigned employee
+  created_at: string;
+  // Joins
+  car_listing?: CarListing;
+  customer?: { name: string; phone?: string; email: string };
+  staff?: Employee;
+};
