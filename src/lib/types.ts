@@ -35,6 +35,7 @@ export type Service = {
   name: string;
   description?: string;
   price: number;
+  duration?: number;
   currency_code?: string;
   created_at?: string;
 };
@@ -156,7 +157,7 @@ export type BusinessEarning = {
   };
 };
 
-export type CarListingStatus = 'available' | 'sold' | 'archived';
+export type CarListingStatus = 'available' | 'sold' | 'archived' | 'active';
 
 export type CarListing = {
   id: string;
@@ -169,9 +170,10 @@ export type CarListing = {
   price: number;
   mileage: number;
   location?: string;
-  images?: string[];
-  image_url: string;
+  images?: string[]; // Array support
+  image_url: string; // Main image fallback
   status: CarListingStatus;
+  description: string;
   created_at: string;
   // Joined data
   business?: {
