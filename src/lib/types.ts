@@ -163,14 +163,14 @@ export type CarListing = {
   id: string;
   business_id: string;
   owner_id?: string;
-  title: string; // Fixed: title is mandatory in DB
+  title: string; 
   make: string;
   model: string;
   year: number;
   price: number;
   mileage: number;
   location?: string;
-  images: string[]; // Corrected: Must be an array
+  images: string[];
   status: CarListingStatus;
   description: string;
   created_at: string;
@@ -181,6 +181,7 @@ export type CarListing = {
     logo_url?: string;
     subscription_plan?: string;
     whatsapp_number?: string;
+    verification_status?: string;
   };
 };
 
@@ -201,4 +202,27 @@ export type TestDriveRequest = {
   car_listing?: CarListing;
   customer?: { name: string; phone?: string; email: string };
   staff?: Employee;
+};
+
+export type SparePartCondition = 'new' | 'used' | 'refurbished';
+export type SparePartStatus = 'active' | 'archived' | 'sold_out';
+
+export type SparePart = {
+  id: string;
+  business_id: string;
+  name: string;
+  category: string;
+  price: number;
+  condition: SparePartCondition;
+  images: string[];
+  stock_quantity: number;
+  description: string;
+  status: SparePartStatus;
+  created_at: string;
+  // Joined data
+  business?: {
+    name: string;
+    city: string;
+    verification_status: string;
+  };
 };
