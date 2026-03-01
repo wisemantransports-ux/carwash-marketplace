@@ -116,7 +116,7 @@ function BusinessCard({ business }: { business: any }) {
   );
 }
 
-function CarCardSimple({ car }: { car: CarListing }) {
+function CarCardSimple({ car }: { car: any }) {
   const displayImage = getDisplayImage(car.images, 'https://picsum.photos/seed/car/600/400');
 
   return (
@@ -146,7 +146,7 @@ function CarCardSimple({ car }: { car: CarListing }) {
             <MapPin className="h-3 w-3" /> {car.business?.city || 'Botswana'}
           </div>
           <div className="flex items-center gap-1">
-            <Clock className="h-3 w-3" /> {car.mileage?.toLocaleString() || 0} KM
+            <Clock className="h-3 w-3" /> {Number(car.mileage || 0).toLocaleString()} KM
           </div>
         </div>
       </CardHeader>
@@ -159,7 +159,7 @@ function CarCardSimple({ car }: { car: CarListing }) {
   );
 }
 
-function SparePartCardSimple({ part }: { part: SparePart }) {
+function SparePartCardSimple({ part }: { part: any }) {
   const displayImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/400/300');
 
   return (
@@ -208,8 +208,8 @@ function MarketplaceContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<any[]>([]);
-  const [cars, setCars] = useState<CarListing[]>([]);
-  const [spareParts, setSpareParts] = useState<SparePart[]>([]);
+  const [cars, setCars] = useState<any[]>([]);
+  const [spareParts, setSpareParts] = useState<any[]>([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -236,24 +236,21 @@ function MarketplaceContent() {
     }
     setLoading(true);
     try {
-      /**
-       * FETCH Verified Businesses (Source of truth for verification)
-       * Check both status columns for maximum discovery reliability.
-       */
-      const { data: bizData } = await supabase
+      // 1. Fetch Verified Businesses (Resilient pattern)
+      const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*')
           .or('verification_status.eq.verified,status.eq.verified')
           .order('name', { ascending: true });
+      
+      if (bizError) throw bizError;
       
       const verifiedBusinesses = bizData || [];
       const verifiedIds = verifiedBusinesses.map(b => b.id);
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
-        /**
-         * FETCH Verified Cars
-         */
+        // 2. Fetch Cars from Verified Partners (Resilient manual filtering)
         const { data: carData } = await supabase
           .from('car_listing')
           .select(`
@@ -264,11 +261,9 @@ function MarketplaceContent() {
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
-        setCars((carData as any[]) || []);
+        setCars(carData || []);
 
-        /**
-         * FETCH Verified Spare Parts
-         */
+        // 3. Fetch Spare Parts from Verified Partners
         const { data: partData } = await supabase
           .from('spare_parts')
           .select(`
@@ -279,14 +274,18 @@ function MarketplaceContent() {
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
         
-        setSpareParts((partData as any[]) || []);
+        setSpareParts(partData || []);
       } else {
         setCars([]);
         setSpareParts([]);
       }
 
-    } catch (e) {
-      console.error('Directory Fetch Failure:', e);
+    } catch (e: any) {
+      console.error('Directory Fetch Failure:', {
+        message: e.message,
+        details: e.details,
+        code: e.code
+      });
     } finally {
       setLoading(false);
     }
@@ -329,7 +328,6 @@ function MarketplaceContent() {
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
-    // Interleave and sort by date
     return [...bizList, ...carList, ...partList].sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
@@ -408,11 +406,12 @@ function MarketplaceContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
           {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
-                  <Card key={i} className="overflow-hidden bg-card rounded-2xl">
+                  <Card key={i} className="overflow-hidden bg-card rounded-2xl h-[500px]">
                     <Skeleton className="h-48 w-full" />
-                    <div className="p-4 space-y-2">
+                    <div className="p-4 space-y-4">
                       <Skeleton className="h-6 w-3/4" />
                       <Skeleton className="h-4 w-1/2" />
+                      <Skeleton className="h-10 w-full" />
                     </div>
                   </Card>
               ))

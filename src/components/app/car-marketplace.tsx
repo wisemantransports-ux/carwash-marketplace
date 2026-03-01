@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -17,15 +16,30 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 /**
- * @fileOverview Car Discovery Marketplace Component
- * Displays a grid of verified car listings with filtering and sorting.
- * Respects RLS by fetching only public fields and active status from verified partners.
+ * Robust image parsing for Postgres array columns
  */
+function getDisplayImage(images: any, fallback: string): string {
+  if (!images) return fallback;
+  if (Array.isArray(images) && images.length > 0) return images[0];
+  if (typeof images === 'string') {
+    try {
+      if (images.startsWith('[') || images.startsWith('{')) {
+        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
+        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      }
+      const parts = images.replace(/[{}]/g, '').split(',');
+      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
+    } catch {
+      return images;
+    }
+  }
+  return fallback;
+}
 
-export function CarCard({ car }: { car: CarListing }) {
+export function CarCard({ car }: { car: any }) {
   const isPremiumDealer = car.business?.subscription_plan === 'Pro' || car.business?.subscription_plan === 'Enterprise';
-  // Use the first image from the array column
-  const displayImage = (car.images && car.images.length > 0) ? car.images[0] : 'https://picsum.photos/seed/car/600/400';
+  const displayImage = getDisplayImage(car.images, 'https://picsum.photos/seed/car/600/400');
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
@@ -35,7 +49,6 @@ export function CarCard({ car }: { car: CarListing }) {
           alt={`${car.make} ${car.model} ${car.year}`}
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-110"
-          data-ai-hint="car exterior"
         />
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           <Badge className="bg-white/90 text-black backdrop-blur-sm border-none shadow-sm uppercase text-[10px] font-black">
@@ -67,14 +80,14 @@ export function CarCard({ car }: { car: CarListing }) {
           </div>
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            <span>{car.mileage.toLocaleString()} KM</span>
+            <span>{Number(car.mileage || 0).toLocaleString()} KM</span>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="flex-grow pb-4">
         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 italic">
-          {car.description || "No description provided."}
+          {car.description || "View this verified vehicle listing from one of our partners."}
         </p>
       </CardContent>
 
@@ -101,25 +114,41 @@ export default function CarMarketplace() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      /**
-       * Query optimized for public marketplace.
-       * - Status: Filters for 'active' or 'available' vehicles.
-       * - Business !inner join: Ensures only car listings from VERIFIED businesses are shown.
-       */
+      // 1. Fetch verified businesses first (Resilient pattern)
+      const { data: verifiedBiz, error: bizError } = await supabase
+        .from('businesses')
+        .select('id')
+        .or('verification_status.eq.verified,status.eq.verified');
+      
+      if (bizError) throw bizError;
+      
+      const verifiedIds = (verifiedBiz || []).map(b => b.id);
+      
+      if (verifiedIds.length === 0) {
+        setListings([]);
+        return;
+      }
+
+      // 2. Fetch listings linked to verified partners
       const { data, error } = await supabase
         .from('car_listing')
         .select(`
-          id, title, make, model, year, price, mileage, location, images, description, status, created_at,
-          business:business_id!inner ( name, city, subscription_plan, verification_status )
+          id, title, make, model, year, price, mileage, location, images, description, status, created_at, business_id,
+          business:business_id ( name, city, subscription_plan, verification_status )
         `)
         .in('status', ['active', 'available'])
-        .eq('business.verification_status', 'verified')
+        .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setListings((data as CarListing[]) || []);
+      setListings((data as any[]) || []);
     } catch (e: any) {
-      console.error("Marketplace fetch error:", e);
+      console.error("Marketplace fetch failure details:", {
+        message: e.message,
+        details: e.details,
+        hint: e.hint,
+        code: e.code
+      });
     } finally {
       setLoading(false);
     }
@@ -130,20 +159,7 @@ export default function CarMarketplace() {
     fetchListings();
   }, [fetchListings]);
 
-  if (!mounted) return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Card key={i} className="overflow-hidden bg-card rounded-2xl">
-          <Skeleton className="h-56 w-full" />
-          <div className="p-6 space-y-4">
-            <Skeleton className="h-6 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
+  if (!mounted) return null;
 
   const filtered = listings.filter(l => {
     const matchesSearch = l.make.toLowerCase().includes(search.toLowerCase()) || 
@@ -211,7 +227,7 @@ export default function CarMarketplace() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {loading ? (
           Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="overflow-hidden bg-card rounded-2xl">
+            <Card key={i} className="overflow-hidden bg-card rounded-2xl h-[500px]">
               <Skeleton className="h-56 w-full" />
               <div className="p-6 space-y-4">
                 <Skeleton className="h-6 w-3/4" />

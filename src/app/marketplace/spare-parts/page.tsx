@@ -16,25 +16,22 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 /**
- * @fileOverview Spare Parts Marketplace (Public)
- * Handles public discovery of genuine automotive components.
- * 
- * FETCHING & RLS:
- * - Fetches only 'active' parts.
- * - Joins with 'businesses' to ensure only VERIFIED sellers appear.
- * - RLS policy on Supabase allows public SELECT for these conditions.
+ * Robust image parsing for Postgres array columns
  */
-
 function getDisplayImage(images: any, fallback: string): string {
   if (!images) return fallback;
   if (Array.isArray(images) && images.length > 0) return images[0];
   if (typeof images === 'string') {
     try {
-      const parsed = JSON.parse(images);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      if (images.startsWith('[') || images.startsWith('{')) {
+        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
+        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      }
+      const parts = images.replace(/[{}]/g, '').split(',');
+      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
     } catch {
-      const cleaned = images.replace(/[{}]/g, '').split(',');
-      if (cleaned.length > 0 && cleaned[0]) return cleaned[0].replace(/"/g, '');
+      return images;
     }
   }
   return fallback;
@@ -113,23 +110,41 @@ export default function SparePartsMarketplacePage() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // Robust multi-table fetch:
-      // 1. Join with business to ensure we only see parts from verified partners.
-      // 2. Status 'active' ensures it's available for purchase.
+      // 1. Fetch verified businesses first (Resilient pattern)
+      const { data: verifiedBiz, error: bizError } = await supabase
+        .from('businesses')
+        .select('id')
+        .or('verification_status.eq.verified,status.eq.verified');
+      
+      if (bizError) throw bizError;
+      
+      const verifiedIds = (verifiedBiz || []).map(b => b.id);
+      
+      if (verifiedIds.length === 0) {
+        setParts([]);
+        return;
+      }
+
+      // 2. Fetch parts linked to verified partners
       const { data, error } = await supabase
         .from('spare_parts')
         .select(`
-          id, name, category, price, condition, images, stock_quantity, description, status, created_at,
-          business:business_id!inner ( name, city, verification_status )
+          id, name, category, price, condition, images, stock_quantity, description, status, created_at, business_id,
+          business:business_id ( name, city, verification_status )
         `)
         .eq('status', 'active')
-        .eq('business.verification_status', 'verified')
+        .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setParts(data || []);
     } catch (e: any) {
-      console.error("Spare Parts Discovery Error:", e);
+      console.error("Spare Parts fetch failure details:", {
+        message: e.message,
+        details: e.details,
+        hint: e.hint,
+        code: e.code
+      });
     } finally {
       setLoading(false);
     }
@@ -139,6 +154,8 @@ export default function SparePartsMarketplacePage() {
     setMounted(true);
     fetchParts();
   }, [fetchParts]);
+
+  if (!mounted) return null;
 
   const filtered = parts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -152,8 +169,6 @@ export default function SparePartsMarketplacePage() {
   });
 
   const categories = Array.from(new Set(parts.map(p => p.category))).sort();
-
-  if (!mounted) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -182,7 +197,7 @@ export default function SparePartsMarketplacePage() {
           </div>
           <h1 className="text-4xl font-black tracking-tight text-slate-900">Genuine Automotive Components</h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Discover thousands of genuine parts from verified retailers across Botswana. Quality guaranteed through partner verification.
+            Discover genuine parts from verified retailers across Botswana. Quality guaranteed through partner verification.
           </p>
         </div>
 
