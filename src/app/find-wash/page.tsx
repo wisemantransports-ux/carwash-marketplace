@@ -7,7 +7,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, Clock, History, Package } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, Clock, History, Package, Tags } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -162,7 +162,7 @@ function SparePartCardSimple({ part }: { part: SparePart }) {
           </Badge>
         </div>
         <div className="absolute bottom-2 right-2">
-          <Badge className="bg-primary text-white font-black px-2 py-1 text-xs shadow-lg">
+          <Badge className="bg-primary text-white font-black px-3 py-1 text-xs shadow-lg">
             P{Number(part.price).toLocaleString()}
           </Badge>
         </div>
@@ -224,12 +224,12 @@ function MarketplaceContent() {
       
       setBusinesses(bizData || []);
 
-      // 2. Fetch Active Cars from Verified Partners
+      // 2. Fetch Active Cars from Verified Partners (Explicit business_id join)
       const { data: carData } = await supabase
         .from('car_listing')
         .select(`
           *,
-          business:businesses!inner ( name, city, verification_status )
+          business:business_id!inner ( name, city, verification_status )
         `)
         .in('status', ['active', 'available'])
         .eq('business.verification_status', 'verified')
@@ -237,12 +237,12 @@ function MarketplaceContent() {
 
       setCars((carData as any) || []);
 
-      // 3. Fetch Spare Parts from Verified Partners
+      // 3. Fetch Spare Parts from Verified Partners (Explicit business_id join)
       const { data: partData } = await supabase
         .from('spare_parts')
         .select(`
           *,
-          business:businesses!inner ( name, city, verification_status )
+          business:business_id!inner ( name, city, verification_status )
         `)
         .eq('status', 'active')
         .eq('business.verification_status', 'verified')
@@ -295,7 +295,7 @@ function MarketplaceContent() {
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
-    // Combine all and sort by created_at descending (or name if missing)
+    // Combined mixed list
     return [...bizList, ...carList, ...partList].sort((a, b) => {
       const dateA = new Date(a.created_at || a.updated_at || 0).getTime();
       const dateB = new Date(b.created_at || b.updated_at || 0).getTime();

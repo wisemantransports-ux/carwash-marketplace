@@ -245,12 +245,12 @@ function CustomerHomeContent() {
       
       setBusinesses(bizData || []);
 
-      // 2. Fetch Cars from Verified Partners
+      // 2. Fetch Cars from Verified Partners (Explicit business_id join)
       const { data: carData } = await supabase
         .from('car_listing')
         .select(`
           *,
-          business:businesses!inner ( name, city, verification_status )
+          business:business_id!inner ( name, city, verification_status )
         `)
         .in('status', ['active', 'available'])
         .eq('business.verification_status', 'verified')
@@ -258,12 +258,12 @@ function CustomerHomeContent() {
 
       setCars((carData as any) || []);
 
-      // 3. Fetch Spare Parts from Verified Partners
+      // 3. Fetch Spare Parts from Verified Partners (Explicit business_id join)
       const { data: partData } = await supabase
         .from('spare_parts')
         .select(`
           *,
-          business:businesses!inner ( name, city, verification_status )
+          business:business_id!inner ( name, city, verification_status )
         `)
         .eq('status', 'active')
         .eq('business.verification_status', 'verified')
@@ -308,7 +308,7 @@ function CustomerHomeContent() {
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
-    // Interleave all results and sort by creation date
+    // Combined list sorted by activity
     return [...bizList, ...carList, ...partList].sort((a, b) => {
       const dateA = new Date(a.created_at || a.updated_at || 0).getTime();
       const dateB = new Date(b.created_at || b.updated_at || 0).getTime();
@@ -326,7 +326,7 @@ function CustomerHomeContent() {
             <ShieldCheck className="h-3 w-3" />
             <span>Verified Marketplace Partners</span>
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Partner Directory</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Automotive Partner Directory</h1>
           
           <div className="space-y-4">
             <div className="relative max-w-2xl">
