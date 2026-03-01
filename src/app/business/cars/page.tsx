@@ -4,11 +4,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CarListing, Business } from '@/lib/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, CarFront, MoreHorizontal, Trash2, Edit, ExternalLink, AlertCircle, ShieldAlert, History } from 'lucide-react';
+import { Loader2, Plus, CarFront, MoreHorizontal, Trash2, MoreVertical, ExternalLink, AlertCircle, ShieldAlert, History } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -42,7 +42,7 @@ export default function BusinessCarsPage() {
           .eq('business_id', biz.id)
           .order('created_at', { ascending: false });
         
-        setListings(cars || []);
+        setListings((cars as CarListing[]) || []);
       }
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Load Error', description: e.message });
@@ -146,7 +146,7 @@ export default function BusinessCarsPage() {
                 <Card key={car.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all group">
                   <div className="relative aspect-video bg-muted">
                     <Image 
-                      src={car.image_url || 'https://picsum.photos/seed/car/600/400'} 
+                      src={car.images?.[0] || 'https://picsum.photos/seed/car/600/400'} 
                       alt={`${car.make} ${car.model}`} 
                       fill 
                       className="object-cover"
@@ -218,7 +218,7 @@ export default function BusinessCarsPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="relative h-10 w-16 rounded overflow-hidden border">
-                          <Image src={car.image_url} alt="Car" fill className="object-cover" />
+                          <Image src={car.images?.[0] || 'https://picsum.photos/seed/car/200/150'} alt="Car" fill className="object-cover" />
                         </div>
                         <div className="flex flex-col">
                           <span className="font-bold text-sm">{car.year} {car.make} {car.model}</span>

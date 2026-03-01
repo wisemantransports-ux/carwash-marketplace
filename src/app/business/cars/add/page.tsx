@@ -87,7 +87,7 @@ export default function AddCarListingPage() {
       
       const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
 
-      // 2. Insert Listing
+      // 2. Insert Listing - Using 'images' array column
       const { error } = await supabase.from('car_listing').insert({
         business_id: business.id,
         make: make.trim(),
@@ -96,7 +96,7 @@ export default function AddCarListingPage() {
         price: parseFloat(price),
         mileage: parseInt(mileage),
         description: description.trim(),
-        image_url: publicUrl,
+        images: [publicUrl], // Array type
         status: 'active'
       });
 
@@ -208,7 +208,7 @@ export default function AddCarListingPage() {
           </Button>
 
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3">
-            <Info className="h-5 w-5 text-blue-600 shrink-0" />
+            <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0" />
             <p className="text-[10px] text-blue-800 leading-relaxed font-medium">
               Verified partners receive a trust seal on their listings. Buyers can request test drives directly through your profile.
             </p>

@@ -170,8 +170,7 @@ export type CarListing = {
   price: number;
   mileage: number;
   location?: string;
-  images?: string[]; // Array support
-  image_url: string; // Main image fallback
+  images: string[]; // Corrected: Must be an array
   status: CarListingStatus;
   description: string;
   created_at: string;
@@ -181,6 +180,7 @@ export type CarListing = {
     city: string;
     logo_url?: string;
     subscription_plan?: string;
+    whatsapp_number?: string;
   };
 };
 

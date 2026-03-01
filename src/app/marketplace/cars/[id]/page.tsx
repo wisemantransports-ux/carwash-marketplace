@@ -37,7 +37,7 @@ export default function CarDetailPage() {
     async function loadCar() {
       setLoading(true);
       try {
-        // Query restricted to public fields and active status
+        // Query restricted to public fields and active status. Using 'images' array.
         const { data, error } = await supabase
           .from('car_listing')
           .select(`
@@ -49,7 +49,7 @@ export default function CarDetailPage() {
           .maybeSingle();
         
         if (error) throw error;
-        setCar(data);
+        setCar(data as CarListing);
       } catch (e) {
         console.error("Detail Error:", e);
       } finally {
@@ -75,8 +75,8 @@ export default function CarDetailPage() {
     </div>
   );
 
-  // Normalizing images array for carousel
-  const images = car.images && car.images.length > 0 ? car.images : [car.image_url];
+  // images is a mandatory array in CarListing type now
+  const images = car.images && car.images.length > 0 ? car.images : ['https://picsum.photos/seed/car/800/600'];
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20">

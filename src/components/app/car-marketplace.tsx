@@ -24,14 +24,14 @@ import { cn } from '@/lib/utils';
 
 export function CarCard({ car }: { car: CarListing }) {
   const isPremiumDealer = car.business?.subscription_plan === 'Pro' || car.business?.subscription_plan === 'Enterprise';
-  // Use the first image from the array if it exists, otherwise fallback to main image_url
-  const displayImage = (car.images && car.images.length > 0) ? car.images[0] : car.image_url;
+  // Use the first image from the array column
+  const displayImage = (car.images && car.images.length > 0) ? car.images[0] : 'https://picsum.photos/seed/car/600/400';
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
       <Link href={`/marketplace/cars/${car.id}`} className="relative h-56 w-full overflow-hidden bg-muted">
         <Image
-          src={displayImage || 'https://picsum.photos/seed/car/600/400'}
+          src={displayImage}
           alt={`${car.make} ${car.model} ${car.year}`}
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-110"
@@ -101,7 +101,7 @@ export default function CarMarketplace() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // Query optimized for public marketplace (no owner_id fetched)
+      // Query optimized for public marketplace. Explicitly selecting 'images'.
       const { data, error } = await supabase
         .from('car_listing')
         .select(`
@@ -112,7 +112,7 @@ export default function CarMarketplace() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setListings(data || []);
+      setListings((data as CarListing[]) || []);
     } catch (e: any) {
       console.error("Marketplace fetch error:", e);
     } finally {
