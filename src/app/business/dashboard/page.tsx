@@ -9,11 +9,8 @@ import {
     RefreshCw, 
     AlertCircle, 
     Truck,
-    Lock,
     Star,
-    Mail,
     User,
-    CheckCircle2,
     Info,
     ArrowUpCircle
 } from "lucide-react";
@@ -122,8 +119,10 @@ export default function BusinessDashboardPage() {
         
         const now = new Date();
         const isStarter = business.subscription_plan === 'Starter';
-        const isTrialActive = business.sub_end_date ? new Date(business.sub_end_date) > now : false;
+        const trialExpiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
+        const isTrialActive = trialExpiry ? trialExpiry > now : false;
         
+        // Quota only applies to Starter plan users who are NOT in trial
         if (!isStarter || isTrialActive) return null;
 
         const currentMonthBookings = bookings.filter(b => {
@@ -256,10 +255,10 @@ export default function BusinessDashboardPage() {
                                         <div className="flex justify-end gap-2">
                                             <Button 
                                                 size="sm" 
-                                                disabled={!isStaffAssigned}
+                                                disabled={!isStaffAssigned || quotaInfo?.isAtLimit}
                                                 className={cn(
                                                     "h-8 text-[10px] font-bold uppercase", 
-                                                    isStaffAssigned ? "bg-green-600 hover:bg-green-700" : "bg-muted text-muted-foreground"
+                                                    isStaffAssigned && !quotaInfo?.isAtLimit ? "bg-green-600 hover:bg-green-700" : "bg-muted text-muted-foreground"
                                                 )}
                                                 onClick={() => updateStatus(booking.id, "accepted")}
                                             >Accept ✅</Button>
@@ -362,6 +361,22 @@ export default function BusinessDashboardPage() {
                     </Button>
                 </div>
             </div>
+
+            {quotaInfo?.isAtLimit && (
+                <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800 animate-pulse">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertTitle className="font-bold text-lg">Monthly Limit Reached</AlertTitle>
+                    <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
+                        <div className="space-y-1">
+                            <p>You have reached your limit of 15 requests for this month.</p>
+                            <p className="text-xs opacity-80 font-bold uppercase tracking-widest">Upgrade to get more requests!</p>
+                        </div>
+                        <Button size="lg" className="bg-red-600 hover:bg-red-700 shadow-xl font-bold" asChild>
+                            <Link href="/business/subscription">Upgrade to Pro</Link>
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            )}
 
             {fetchError && (
                 <Alert variant="destructive">
