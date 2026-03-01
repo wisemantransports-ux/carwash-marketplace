@@ -236,21 +236,21 @@ function CustomerHomeContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch Businesses
+      // 1. Fetch Verified Businesses
       const { data: bizData } = await supabase
           .from('businesses')
           .select('*, services(*)')
           .eq('verification_status', 'verified')
-          .order('rating', { ascending: false });
+          .order('name', { ascending: true });
       
       setBusinesses(bizData || []);
 
-      // 2. Fetch Cars
+      // 2. Fetch Cars from Verified Partners
       const { data: carData } = await supabase
         .from('car_listing')
         .select(`
           *,
-          business:business_id!inner ( name, city, verification_status )
+          business:businesses!inner ( name, city, verification_status )
         `)
         .in('status', ['active', 'available'])
         .eq('business.verification_status', 'verified')
@@ -258,12 +258,12 @@ function CustomerHomeContent() {
 
       setCars((carData as any) || []);
 
-      // 3. Fetch Spare Parts
+      // 3. Fetch Spare Parts from Verified Partners
       const { data: partData } = await supabase
         .from('spare_parts')
         .select(`
           *,
-          business:business_id!inner ( name, city, verification_status )
+          business:businesses!inner ( name, city, verification_status )
         `)
         .eq('status', 'active')
         .eq('business.verification_status', 'verified')
@@ -297,20 +297,23 @@ function CustomerHomeContent() {
                            c.make.toLowerCase().includes(search.toLowerCase()) ||
                            c.model.toLowerCase().includes(search.toLowerCase()) ||
                            (c.location && c.location.toLowerCase().includes(search.toLowerCase()));
-      const matchesCategory = category === 'all' || category === 'Cars';
+      const matchesCategory = category === 'all' || category.toLowerCase() === 'cars';
       return matchesSearch && matchesCategory;
     }).map(c => ({ ...c, itemType: 'car' as const }));
 
     const partList = spareParts.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
                            p.category.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = category === 'all' || category === 'Spare';
+      const matchesCategory = category === 'all' || category.toLowerCase() === 'spare';
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
-    return [...bizList, ...carList, ...partList].sort((a, b) => 
-      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-    );
+    // Interleave all results and sort by creation date
+    return [...bizList, ...carList, ...partList].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.updated_at || 0).getTime();
+      const dateB = new Date(b.created_at || b.updated_at || 0).getTime();
+      return dateB - dateA;
+    });
   }, [businesses, cars, spareParts, search, category]);
 
   if (!mounted) return null;

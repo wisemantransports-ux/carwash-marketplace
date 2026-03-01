@@ -220,7 +220,7 @@ function MarketplaceContent() {
           .from('businesses')
           .select('*')
           .eq('verification_status', 'verified')
-          .order('created_at', { ascending: false });
+          .order('name', { ascending: true });
       
       setBusinesses(bizData || []);
 
@@ -229,7 +229,7 @@ function MarketplaceContent() {
         .from('car_listing')
         .select(`
           *,
-          business:business_id!inner ( name, city, verification_status )
+          business:businesses!inner ( name, city, verification_status )
         `)
         .in('status', ['active', 'available'])
         .eq('business.verification_status', 'verified')
@@ -242,7 +242,7 @@ function MarketplaceContent() {
         .from('spare_parts')
         .select(`
           *,
-          business:business_id!inner ( name, city, verification_status )
+          business:businesses!inner ( name, city, verification_status )
         `)
         .eq('status', 'active')
         .eq('business.verification_status', 'verified')
@@ -275,9 +275,7 @@ function MarketplaceContent() {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
       const bizCategory = b.category || 'Wash';
-      const matchesCategory = category === 'all' || 
-                             (category === 'Wash' && bizCategory === 'Wash') ||
-                             (category === 'Spare' && bizCategory === 'Spare');
+      const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
       return matchesSearch && matchesCategory;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
@@ -286,21 +284,23 @@ function MarketplaceContent() {
                            c.make.toLowerCase().includes(search.toLowerCase()) ||
                            c.model.toLowerCase().includes(search.toLowerCase()) ||
                            (c.location && c.location.toLowerCase().includes(search.toLowerCase()));
-      const matchesCategory = category === 'all' || category === 'Cars';
+      const matchesCategory = category === 'all' || category.toLowerCase() === 'cars';
       return matchesSearch && matchesCategory;
     }).map(c => ({ ...c, itemType: 'car' as const }));
 
     const partList = spareParts.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
                            p.category.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = category === 'all' || category === 'Spare';
+      const matchesCategory = category === 'all' || category.toLowerCase() === 'spare';
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
-    // Combine all and sort by created_at descending
-    return [...bizList, ...carList, ...partList].sort((a, b) => 
-      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-    );
+    // Combine all and sort by created_at descending (or name if missing)
+    return [...bizList, ...carList, ...partList].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.updated_at || 0).getTime();
+      const dateB = new Date(b.created_at || b.updated_at || 0).getTime();
+      return dateB - dateA;
+    });
   }, [businesses, cars, spareParts, search, category]);
 
   if (!mounted) return null;
