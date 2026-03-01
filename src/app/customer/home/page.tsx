@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,13 +5,20 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Tags } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Tags, Filter, Droplets, ShoppingCart, Car as CarIcon } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+
+const CATEGORIES = [
+  { id: 'all', label: 'All', icon: Filter },
+  { id: 'Wash', label: 'Car Wash', icon: Droplets },
+  { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart },
+  { id: 'Cars', label: 'Car Sales', icon: CarIcon },
+];
 
 function BusinessCard({ business }: { business: any }) {
   const rating = Number(business.rating || 0);
@@ -105,6 +111,7 @@ function BusinessCard({ business }: { business: any }) {
 export default function CustomerHomePage() {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -130,10 +137,16 @@ export default function CustomerHomePage() {
     load();
   }, []);
 
-  const filtered = businesses.filter(b => 
-    b.name.toLowerCase().includes(search.toLowerCase()) || 
-    (b.city && b.city.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = businesses.filter(b => {
+    const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase()) || 
+                         (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
+    
+    // Default to 'Wash' if category is missing in DB
+    const bizCategory = b.category || 'Wash';
+    const matchesCategory = category === 'all' || bizCategory === category;
+    
+    return matchesSearch && matchesCategory;
+  });
 
   if (!mounted) return null;
 
@@ -147,14 +160,31 @@ export default function CustomerHomePage() {
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-primary">Find Your Perfect Wash</h1>
           
-          <div className="relative max-w-2xl pt-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search by name or city..." 
-              className="pl-10 h-12 bg-card shadow-sm border-2"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="space-y-4">
+            <div className="relative max-w-2xl">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search by name or city..." 
+                className="pl-10 h-12 bg-card shadow-sm border-2"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map(cat => (
+                <Button 
+                  key={cat.id} 
+                  variant={category === cat.id ? 'default' : 'outline'} 
+                  size="sm" 
+                  className="rounded-full px-4 font-bold h-9 transition-all shadow-sm"
+                  onClick={() => setCategory(cat.id)}
+                >
+                  <cat.icon className={cn("h-3.5 w-3.5 mr-2", category === cat.id ? "text-white" : "text-primary")} />
+                  {cat.label}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -178,7 +208,7 @@ export default function CustomerHomePage() {
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
             <p className="text-xl font-bold">No verified partners found.</p>
-            <Button variant="outline" className="mt-4" onClick={() => setSearch('')}>Clear Search</Button>
+            <Button variant="outline" className="mt-4" onClick={() => { setSearch(''); setCategory('all'); }}>Clear Filters</Button>
           </div>
         )}
       </div>

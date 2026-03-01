@@ -101,6 +101,14 @@ function MarketplaceContent() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
+  // Sync state with URL if user navigates back/forward or from landing
+  useEffect(() => {
+    const q = searchParams.get('q');
+    const cat = searchParams.get('category');
+    if (q !== null) setSearch(q);
+    if (cat !== null) setCategory(cat);
+  }, [searchParams]);
+
   useEffect(() => {
     setMounted(true);
     const load = async () => {
@@ -132,7 +140,11 @@ function MarketplaceContent() {
   const filtered = businesses.filter(b => {
     const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                          (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
-    const matchesCategory = category === 'all' || b.category === category;
+    
+    // Default to 'Wash' if category is missing in DB
+    const bizCategory = b.category || 'Wash';
+    const matchesCategory = category === 'all' || bizCategory === category;
+    
     return matchesSearch && matchesCategory;
   });
 
