@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -17,8 +18,8 @@ import { cn } from '@/lib/utils';
 
 /**
  * @fileOverview Car Discovery Marketplace Component
- * Displays a grid of active car listings with filtering and sorting.
- * Respects RLS by fetching only public fields and active status.
+ * Displays a grid of verified car listings with filtering and sorting.
+ * Respects RLS by fetching only public fields and active status from verified partners.
  */
 
 export function CarCard({ car }: { car: CarListing }) {
@@ -100,14 +101,19 @@ export default function CarMarketplace() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // Query optimized for public marketplace. Including 'available' and 'active' status.
+      /**
+       * Query optimized for public marketplace.
+       * - Status: Filters for 'active' or 'available' vehicles.
+       * - Business !inner join: Ensures only car listings from VERIFIED businesses are shown.
+       */
       const { data, error } = await supabase
         .from('car_listing')
         .select(`
           id, title, make, model, year, price, mileage, location, images, description, status, created_at,
-          business:business_id ( name, city, subscription_plan )
+          business:business_id!inner ( name, city, subscription_plan, verification_status )
         `)
         .in('status', ['active', 'available'])
+        .eq('business.verification_status', 'verified')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -221,7 +227,7 @@ export default function CarMarketplace() {
         ) : (
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-            <p className="text-xl font-bold text-muted-foreground">No active car listings found.</p>
+            <p className="text-xl font-bold text-muted-foreground">No verified car listings found.</p>
             <Button variant="link" onClick={() => { setSearch(''); setMakeFilter('all'); }} className="font-bold">
               View All Active Listings
             </Button>

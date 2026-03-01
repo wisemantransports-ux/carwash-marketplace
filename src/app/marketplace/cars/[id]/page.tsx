@@ -22,7 +22,7 @@ import {
 /**
  * @fileOverview Car Listing Detail Page
  * Provides full vehicle specifications, image gallery, and seller context.
- * Strictly filters for 'active' status and hides sensitive ownership data.
+ * Strictly filters for 'active' or 'available' status and hides sensitive ownership data.
  */
 
 export default function CarDetailPage() {
@@ -37,15 +37,15 @@ export default function CarDetailPage() {
     async function loadCar() {
       setLoading(true);
       try {
-        // Query restricted to public fields and active status. Using 'images' array.
+        // Query restricted to public fields and active/available status.
         const { data, error } = await supabase
           .from('car_listing')
           .select(`
             id, title, make, model, year, price, mileage, location, images, description, status, created_at,
-            business:business_id ( name, city, logo_url, subscription_plan, whatsapp_number )
+            business:business_id ( name, city, logo_url, subscription_plan, whatsapp_number, verification_status )
           `)
           .eq('id', id)
-          .eq('status', 'active')
+          .in('status', ['active', 'available'])
           .maybeSingle();
         
         if (error) throw error;
@@ -75,7 +75,6 @@ export default function CarDetailPage() {
     </div>
   );
 
-  // images is a mandatory array in CarListing type now
   const images = car.images && car.images.length > 0 ? car.images : ['https://picsum.photos/seed/car/800/600'];
 
   return (
@@ -91,7 +90,7 @@ export default function CarDetailPage() {
             </h1>
           </div>
           <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase">
-            Active Listing
+            {car.status} Listing
           </Badge>
         </div>
       </header>
@@ -180,9 +179,9 @@ export default function CarDetailPage() {
                     )}
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xl font-bold text-slate-900">{car.business?.name || "Verified Individual"}</p>
+                    <p className="text-xl font-bold text-slate-900">{car.business?.name || "Verified Seller"}</p>
                     <p className="text-xs text-muted-foreground flex items-center gap-1 font-medium">
-                      <MapPin className="h-3 w-3" /> {car.business?.city || "Gaborone, Botswana"}
+                      <MapPin className="h-3 w-3" /> {car.business?.city || "Botswana"}
                     </p>
                   </div>
                 </div>
