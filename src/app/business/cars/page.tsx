@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -8,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, CarFront, MoreHorizontal, Trash2, MoreVertical, ExternalLink, AlertCircle, ShieldAlert, History } from 'lucide-react';
+import { Loader2, Plus, CarFront, MoreHorizontal, Trash2, Edit, ExternalLink, AlertCircle, ShieldAlert, History } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -169,6 +168,11 @@ export default function BusinessCarsPage() {
                       <Button variant="outline" size="sm" className="h-8 text-xs font-bold" onClick={() => updateStatus(car.id, 'sold')}>
                         Mark Sold
                       </Button>
+                      <Button variant="secondary" size="sm" className="h-8 text-xs font-bold" asChild>
+                        <Link href={`/business/cars/edit/${car.id}`}>
+                          <Edit className="mr-1 h-3 w-3" /> Edit
+                        </Link>
+                      </Button>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -177,6 +181,11 @@ export default function BusinessCarsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/business/cars/edit/${car.id}`}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit Details
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateStatus(car.id, 'archived')}>
                           Archive Listing
                         </DropdownMenuItem>
@@ -235,9 +244,14 @@ export default function BusinessCarsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
-                      <Button variant="ghost" size="sm" onClick={() => updateStatus(car.id, 'active')} className="h-8 text-[10px] font-black uppercase">
-                        Relist
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" asChild className="h-8 text-[10px] font-black uppercase">
+                          <Link href={`/business/cars/edit/${car.id}`}>Edit</Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => updateStatus(car.id, 'active')} className="h-8 text-[10px] font-black uppercase text-primary">
+                          Relist
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
