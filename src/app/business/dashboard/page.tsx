@@ -3,31 +3,27 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
     Loader2, 
     RefreshCw, 
     AlertCircle, 
     Truck,
-    Star,
     User,
     Mail,
     Phone,
     Calendar,
     CheckCircle2,
     Banknote,
-    UserCheck,
-    Info,
-    ArrowUpCircle,
-    MoreHorizontal
+    MoreHorizontal,
+    Info
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
     DropdownMenu, 
     DropdownMenuContent, 
@@ -44,7 +40,7 @@ type BookingWithDetails = {
     booking_time: string;
     status: string;
     price: number;
-    customer: { name: string; email: string; whatsapp_number?: string };
+    customer: { name: string; email: string; phone?: string };
     service: { name: string };
     car: { make: string; model: string };
     staff: { id: string; name: string } | null;
@@ -100,7 +96,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 3. Fetch Bookings with exact 8-column required fields
+                // 3. Fetch Bookings with exact required 8-column data mapping
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -108,7 +104,7 @@ export default function BusinessDashboardPage() {
                         booking_time,
                         status,
                         price,
-                        customer:users!bookings_customer_id_fkey ( name, email, whatsapp_number ),
+                        customer:users!bookings_customer_id_fkey ( name, email, phone ),
                         service:services!bookings_service_id_fkey ( name ),
                         car:cars!bookings_car_id_fkey ( make, model ),
                         staff:employees!bookings_staff_id_fkey ( id, name )
@@ -171,13 +167,14 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    // Plan Quota Logic
+    // Quota logic for Starter plans
     const quotaInfo = useMemo(() => {
         if (!business) return null;
         const now = new Date();
         const isStarter = business.subscription_plan === 'Starter';
         const trialExpiry = business.sub_end_date ? new Date(business.sub_end_date) : null;
         const isTrialActive = trialExpiry ? trialExpiry > now : false;
+        
         if (!isStarter || isTrialActive) return null;
 
         const currentMonthBookings = bookings.filter(b => {
@@ -193,7 +190,7 @@ export default function BusinessDashboardPage() {
     if (!mounted) return (
         <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
             <Loader2 className="animate-spin h-10 w-10 text-primary" />
-            <p className="text-muted-foreground animate-pulse">Establishing secure connection...</p>
+            <p className="text-muted-foreground animate-pulse font-medium">Initializing ops center...</p>
         </div>
     );
 
@@ -205,7 +202,7 @@ export default function BusinessDashboardPage() {
                         <TableHead className="font-bold whitespace-nowrap">Customer Name</TableHead>
                         <TableHead className="font-bold whitespace-nowrap">Email</TableHead>
                         <TableHead className="font-bold whitespace-nowrap">Phone</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap">Service</TableHead>
+                        <TableHead className="font-bold whitespace-nowrap">Service Name</TableHead>
                         <TableHead className="font-bold whitespace-nowrap">Car Make & Model</TableHead>
                         <TableHead className="font-bold whitespace-nowrap">Assigned Staff</TableHead>
                         <TableHead className="font-bold whitespace-nowrap">Booking Time</TableHead>
@@ -233,12 +230,12 @@ export default function BusinessDashboardPage() {
                             <TableCell className="text-xs font-medium">
                                 <div className="flex items-center gap-2">
                                     <Phone className="h-3 w-3 text-primary" />
-                                    {booking.customer?.whatsapp_number || 'N/A'}
+                                    {booking.customer?.phone || 'N/A'}
                                 </div>
                             </TableCell>
                             <TableCell>
                                 <Badge variant="secondary" className="font-bold text-[10px] uppercase tracking-tight">
-                                    {booking.service?.name || 'Standard Wash'}
+                                    {booking.service?.name || 'Wash Service'}
                                 </Badge>
                             </TableCell>
                             <TableCell className="text-xs font-bold">
@@ -276,7 +273,7 @@ export default function BusinessDashboardPage() {
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-48">
-                                        <DropdownMenuLabel>Manage Booking</DropdownMenuLabel>
+                                        <DropdownMenuLabel>Operations</DropdownMenuLabel>
                                         <DropdownMenuSeparator />
                                         {booking.status === 'requested' && (
                                             <DropdownMenuItem 
@@ -301,7 +298,7 @@ export default function BusinessDashboardPage() {
                                             onClick={() => updateBookingStatus(booking.id, 'rejected')}
                                             className="text-destructive focus:text-destructive focus:bg-destructive/10 font-bold"
                                         >
-                                            <AlertCircle className="mr-2 h-4 w-4" /> Reject/Cancel
+                                            <AlertCircle className="mr-2 h-4 w-4" /> Cancel Booking
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
@@ -328,8 +325,8 @@ export default function BusinessDashboardPage() {
         <div className="space-y-8 animate-in fade-in duration-500 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div className="space-y-1">
-                    <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business?.name || 'Operations'}</h1>
-                    <p className="text-muted-foreground font-medium">Manage wash requests and staff assignments in real-time.</p>
+                    <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business?.name || 'Operations Dashboard'}</h1>
+                    <p className="text-muted-foreground font-medium">Real-time booking management and detailer assignment.</p>
                 </div>
                 
                 <div className="flex items-center gap-3">
@@ -342,7 +339,7 @@ export default function BusinessDashboardPage() {
                         </Badge>
                     )}
                     <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-9 px-4 border-primary/20">
-                        <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Queue
+                        <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Records
                     </Button>
                 </div>
             </div>
