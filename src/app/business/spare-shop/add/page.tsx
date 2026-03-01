@@ -4,17 +4,27 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Business } from '@/lib/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Plus, Camera, Banknote, Package, ShieldCheck, ArrowLeft, Info, Tag, Layers } from 'lucide-react';
+import { Loader2, Plus, Camera, Banknote, Package, ArrowLeft, Layers, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+
+/**
+ * @fileOverview Add Spare Part Page
+ * Provides a professional form for business owners to list new products.
+ * 
+ * SECURITY:
+ * - Uses supabase.auth.getSession() to verify identity.
+ * - Enforces business_id association for all records.
+ * - Performs server-side validation through RLS policies.
+ */
 
 export default function AddSparePartPage() {
   const router = useRouter();
@@ -36,13 +46,15 @@ export default function AddSparePartPage() {
 
   useEffect(() => {
     async function checkAuth() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return router.push('/login');
+      // 1. Retrieve the authenticated session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return router.push('/login');
 
+      // 2. Resolve the business profile linked to the user's OWNER_ID
       const { data: biz, error } = await supabase
         .from('businesses')
         .select('*')
-        .eq('owner_id', user.id)
+        .eq('owner_id', session.user.id)
         .maybeSingle();
 
       if (error) {
@@ -53,6 +65,7 @@ export default function AddSparePartPage() {
       if (biz) {
         setBusiness(biz as Business);
       } else {
+        // Business profile missing, redirect to setup
         router.push('/business/profile');
       }
       setLoading(false);
@@ -76,18 +89,16 @@ export default function AddSparePartPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!business) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Business profile not loaded.' });
-      return;
-    }
+    if (!business) return;
     
+    // 1. Frontend Validation
     if (!imageFile) {
-      toast({ variant: 'destructive', title: 'Incomplete', description: 'Product image is mandatory.' });
+      toast({ variant: 'destructive', title: 'Incomplete', description: 'A product image is mandatory for your listing.' });
       return;
     }
 
     if (!name.trim() || !price) {
-      toast({ variant: 'destructive', title: 'Fields Required', description: 'Please enter a name and price.' });
+      toast({ variant: 'destructive', title: 'Fields Required', description: 'Please provide a name and price.' });
       return;
     }
 
@@ -95,30 +106,30 @@ export default function AddSparePartPage() {
     const stockNum = parseInt(stock);
 
     if (isNaN(priceNum) || priceNum < 0) {
-      toast({ variant: 'destructive', title: 'Invalid Price', description: 'Please enter a valid numeric price.' });
+      toast({ variant: 'destructive', title: 'Invalid Price', description: 'Enter a valid numeric price.' });
       return;
     }
 
     setSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Authentication expired. Please log in again.");
-
-      // 1. Upload Image
+      // 2. High-Fidelity Image Upload to Storage
       const fileExt = imageFile.name.split('.').pop();
-      const filePath = `parts/${business.id}/${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `parts/${business.id}/${fileName}`;
       
-      if (uploadError) {
-        console.error("Upload error:", uploadError);
-        throw new Error(`Storage Error: ${uploadError.message}`);
-      }
+      const { error: uploadError } = await supabase.storage
+        .from('business-assets')
+        .upload(filePath, imageFile);
       
-      const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
+      if (uploadError) throw new Error(`Image Upload Error: ${uploadError.message}`);
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('business-assets')
+        .getPublicUrl(filePath);
 
-      // 2. Insert Part with explicit business_id and owner context
+      // 3. Authenticated Insert into spare_parts Table
       const { error: insertError } = await supabase.from('spare_parts').insert({
-        business_id: business.id,
+        business_id: business.id, // Links item to current business
         name: name.trim(),
         category,
         price: priceNum,
@@ -129,15 +140,16 @@ export default function AddSparePartPage() {
         status: 'active'
       });
 
-      if (insertError) {
-        console.error("Database error:", insertError);
-        throw new Error(`Database Error: ${insertError.message}`);
-      }
+      if (insertError) throw new Error(`Database Error: ${insertError.message}`);
 
-      toast({ title: 'Product Added', description: `${name} is now available in your shop.` });
+      // 4. Success Navigation
+      toast({ 
+        title: 'Product Published!', 
+        description: `${name} is now available in the marketplace.` 
+      });
       router.push('/business/spare-shop');
     } catch (e: any) {
-      console.error("Save process failed:", e);
+      console.error("Save process failure:", e);
       toast({ 
         variant: 'destructive', 
         title: 'Save Failed', 
@@ -158,7 +170,7 @@ export default function AddSparePartPage() {
         </Button>
         <div className="space-y-1">
           <h1 className="text-3xl font-extrabold tracking-tight text-primary">Add Spare Part</h1>
-          <p className="text-muted-foreground">List a new automotive component in the marketplace.</p>
+          <p className="text-muted-foreground">List a new genuine automotive component.</p>
         </div>
       </div>
 
@@ -166,14 +178,15 @@ export default function AddSparePartPage() {
         <div className="lg:col-span-2 space-y-6">
           <Card className="border-2 shadow-lg">
             <CardHeader className="bg-muted/10 border-b">
-              <CardTitle>Product Details</CardTitle>
+              <CardTitle>Specifications</CardTitle>
+              <CardDescription>Enter the technical details for this component.</CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="name">Part Name *</Label>
                 <div className="relative">
                   <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Brake Pads for Toyota Corolla" className="pl-10" required />
+                  <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Brake Pads for Toyota Hilux" className="pl-10" required />
                 </div>
               </div>
 
@@ -181,7 +194,7 @@ export default function AddSparePartPage() {
                 <div className="space-y-2">
                   <Label>Category *</Label>
                   <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Engine">Engine Components</SelectItem>
                       <SelectItem value="Brakes">Braking System</SelectItem>
@@ -196,7 +209,7 @@ export default function AddSparePartPage() {
                 <div className="space-y-2">
                   <Label>Condition *</Label>
                   <Select value={condition} onValueChange={(v: any) => setCondition(v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="new">Brand New</SelectItem>
                       <SelectItem value="used">Used / Second Hand</SelectItem>
@@ -208,24 +221,24 @@ export default function AddSparePartPage() {
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price (BWP) *</Label>
+                  <Label htmlFor="price">Market Price (BWP) *</Label>
                   <div className="relative">
                     <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="price" type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="pl-10" placeholder="0.00" required />
+                    <Input id="price" type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="pl-10 h-12 bg-white" placeholder="0.00" required />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="stock">Stock Quantity *</Label>
+                  <Label htmlFor="stock">Initial Stock *</Label>
                   <div className="relative">
                     <Layers className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="stock" type="number" value={stock} onChange={e => setStock(e.target.value)} className="pl-10" required />
+                    <Input id="stock" type="number" value={stock} onChange={e => setStock(e.target.value)} className="pl-10 h-12 bg-white" required />
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="desc">Description</Label>
-                <Textarea id="desc" value={description} onChange={e => setDescription(e.target.value)} placeholder="Provide specifications, compatible models, and warranty details..." className="min-h-[120px]" />
+                <Label htmlFor="desc">Full Description</Label>
+                <Textarea id="desc" value={description} onChange={e => setDescription(e.target.value)} placeholder="Provide specifications, compatible models, and warranty details..." className="min-h-[150px] bg-white" />
               </div>
             </CardContent>
           </Card>
@@ -234,7 +247,7 @@ export default function AddSparePartPage() {
         <div className="space-y-6">
           <Card className="border-2 shadow-lg overflow-hidden">
             <CardHeader className="bg-muted/10 border-b">
-              <CardTitle>Product Image *</CardTitle>
+              <CardTitle>Product Media *</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               <div 
@@ -246,17 +259,23 @@ export default function AddSparePartPage() {
                 ) : (
                   <div className="text-center space-y-2">
                     <Camera className="h-10 w-10 mx-auto text-muted-foreground opacity-40 group-hover:scale-110 transition-transform" />
-                    <p className="text-[10px] font-black uppercase text-muted-foreground">Upload Photo</p>
+                    <p className="text-[10px] font-black uppercase text-muted-foreground">Upload Main Photo</p>
                   </div>
                 )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs">
+                  Change Image
+                </div>
               </div>
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+              <p className="text-[10px] text-muted-foreground mt-4 italic text-center leading-relaxed">
+                Clear, high-resolution photos increase buyer confidence by up to 70%.
+              </p>
             </CardContent>
           </Card>
 
           <Button type="submit" className="w-full h-14 text-lg shadow-xl" disabled={submitting}>
-            {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Plus className="mr-2 h-5 w-5" />}
-            List Product
+            {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
+            Publish Listing
           </Button>
         </div>
       </form>

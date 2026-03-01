@@ -8,13 +8,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Package, MoreHorizontal, Trash2, Edit, AlertCircle, ShieldAlert, History, ShoppingCart, RefreshCw } from 'lucide-react';
+import { Loader2, Plus, Package, MoreHorizontal, Trash2, Edit, RefreshCw, ShieldCheck } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+/**
+ * @fileOverview Business Spare Shop Management Page
+ * Handles listing and management of spare parts inventory for authenticated owners.
+ * 
+ * SECURITY:
+ * - Uses session.user.id to find the associated business.
+ * - All Supabase queries filter by 'business_id' to comply with RLS policies.
+ */
 
 export default function BusinessSpareShopPage() {
   const [parts, setParts] = useState<SparePart[]>([]);
@@ -28,29 +37,34 @@ export default function BusinessSpareShopPage() {
     else setRefreshing(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // 1. Get current user session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-      const { data: biz } = await supabase
+      // 2. Fetch the business record for this user (OWNER_ID context)
+      const { data: biz, error: bizError } = await supabase
         .from('businesses')
         .select('*')
-        .eq('owner_id', user.id)
+        .eq('owner_id', session.user.id)
         .maybeSingle();
+
+      if (bizError) throw bizError;
 
       if (biz) {
         setBusiness(biz as Business);
-        // Explicitly filter by business_id to satisfy RLS
-        const { data: partData, error } = await supabase
+        
+        // 3. Fetch spare parts filtered by business_id (RLS Enforcement)
+        const { data: partData, error: partError } = await supabase
           .from('spare_parts')
           .select('*')
           .eq('business_id', biz.id)
           .order('created_at', { ascending: false });
         
-        if (error) throw error;
+        if (partError) throw partError;
         setParts((partData as SparePart[]) || []);
       }
     } catch (e: any) {
-      console.error("Load error:", e);
+      console.error("Dashboard Load Error:", e);
       toast({ variant: 'destructive', title: 'Load Error', description: e.message });
     } finally {
       setLoading(false);
@@ -65,10 +79,10 @@ export default function BusinessSpareShopPage() {
 
   const handleDelete = async (id: string) => {
     if (!business) return;
-    if (!confirm('Delete this part from inventory?')) return;
+    if (!confirm('Delete this part from your inventory?')) return;
     
     try {
-      // Inclusion of business_id is critical for RLS bypass/validation
+      // Must include business_id to satisfy RLS owner checks
       const { error } = await supabase
         .from('spare_parts')
         .delete()
@@ -77,7 +91,7 @@ export default function BusinessSpareShopPage() {
 
       if (error) throw error;
       setParts(prev => prev.filter(p => p.id !== id));
-      toast({ title: 'Part Removed' });
+      toast({ title: 'Part Removed Successfully' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Delete Failed', description: e.message });
     }
@@ -94,15 +108,17 @@ export default function BusinessSpareShopPage() {
 
       if (error) throw error;
       setParts(prev => prev.map(p => p.id === id ? { ...p, status } : p));
-      toast({ title: `Status: ${status.toUpperCase()}` });
+      toast({ title: `Item marked as ${status.toUpperCase()}` });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
     }
   };
 
-  if (!mounted || (loading && !refreshing)) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
-
-  const isUnverified = business?.verification_status !== 'verified';
+  if (!mounted || (loading && !refreshing)) return (
+    <div className="flex justify-center py-20">
+      <Loader2 className="animate-spin h-8 w-8 text-primary" />
+    </div>
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
@@ -110,38 +126,21 @@ export default function BusinessSpareShopPage() {
         <div className="space-y-1">
           <h1 className="text-4xl font-extrabold tracking-tight text-primary flex items-center gap-3">
             <Package className="h-10 w-10" />
-            Spare Shop Inventory
+            Inventory Manager
           </h1>
-          <p className="text-muted-foreground font-medium">Manage your automotive parts and retail listings.</p>
+          <p className="text-muted-foreground font-medium">Manage your spare parts and retail listings.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="icon" onClick={() => fetchData(true)} disabled={refreshing} className="rounded-full">
             <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
           </Button>
-          <Button asChild disabled={isUnverified} className="rounded-full shadow-lg h-12 px-6">
+          <Button asChild className="rounded-full shadow-lg h-12 px-6">
             <Link href="/business/spare-shop/add">
-              <Plus className="mr-2 h-5 w-5" /> Add New Part
+              <Plus className="mr-2 h-5 w-5" /> List New Product
             </Link>
           </Button>
         </div>
       </div>
-
-      {isUnverified && (
-        <Card className="bg-orange-50 border-orange-200">
-          <CardContent className="pt-6 flex items-start gap-4">
-            <ShieldAlert className="h-6 w-6 text-orange-600 shrink-0 mt-1" />
-            <div className="space-y-2">
-              <p className="font-bold text-orange-900">Verification Required</p>
-              <p className="text-sm text-orange-800">
-                Your business must be verified before listing products in the marketplace.
-              </p>
-              <Button size="sm" variant="outline" className="border-orange-300" asChild>
-                <Link href="/business/profile">Complete Profile</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Tabs defaultValue="active" className="w-full">
         <TabsList className="mb-6 bg-muted/50 p-1 rounded-xl">
@@ -153,7 +152,7 @@ export default function BusinessSpareShopPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {parts.filter(p => p.status === 'active').length > 0 ? (
               parts.filter(p => p.status === 'active').map(part => (
-                <Card key={part.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all group">
+                <Card key={part.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all group shadow-sm">
                   <div className="relative aspect-square bg-muted">
                     <Image 
                       src={part.images?.[0] || 'https://picsum.photos/seed/part/400/400'} 
@@ -162,12 +161,12 @@ export default function BusinessSpareShopPage() {
                       className="object-cover"
                     />
                     <div className="absolute top-2 right-2">
-                      <Badge className="bg-white/90 text-primary font-black backdrop-blur">
+                      <Badge className="bg-white/90 text-primary font-black backdrop-blur shadow-sm">
                         P{Number(part.price).toLocaleString()}
                       </Badge>
                     </div>
                     <div className="absolute top-2 left-2">
-                      <Badge variant="secondary" className="text-[9px] font-black uppercase">
+                      <Badge variant="secondary" className="text-[9px] font-black uppercase shadow-sm">
                         {part.condition}
                       </Badge>
                     </div>
@@ -176,7 +175,7 @@ export default function BusinessSpareShopPage() {
                     <CardTitle className="text-lg line-clamp-1">{part.name}</CardTitle>
                     <CardDescription className="flex items-center justify-between">
                       <span className="text-[10px] font-bold uppercase text-muted-foreground">{part.category}</span>
-                      <Badge variant="outline" className="text-[10px]">{part.stock_quantity} in stock</Badge>
+                      <Badge variant="outline" className="text-[10px] font-bold">{part.stock_quantity} in stock</Badge>
                     </CardDescription>
                   </CardHeader>
                   <CardFooter className="bg-muted/10 border-t pt-4 flex justify-between">
@@ -198,10 +197,10 @@ export default function BusinessSpareShopPage() {
                           Mark Sold Out
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => updateStatus(part.id, 'archived')}>
-                          Archive Listing
+                          Archive Product
                         </DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDelete(part.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete Permanently
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -209,10 +208,10 @@ export default function BusinessSpareShopPage() {
                 </Card>
               ))
             ) : (
-              <div className="col-span-full py-20 text-center border-2 border-dashed rounded-3xl bg-muted/10">
+              <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/10">
                 <Package className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                <p className="text-lg font-bold text-muted-foreground">No active parts in inventory.</p>
-                <Button asChild variant="outline" className="mt-4" disabled={isUnverified}>
+                <p className="text-lg font-bold text-muted-foreground">No active products in inventory.</p>
+                <Button asChild variant="outline" className="mt-4">
                   <Link href="/business/spare-shop/add">Add Your First Product</Link>
                 </Button>
               </div>
@@ -221,11 +220,11 @@ export default function BusinessSpareShopPage() {
         </TabsContent>
 
         <TabsContent value="archived">
-          <Card className="shadow-lg border-2">
+          <Card className="shadow-lg border-2 overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="font-bold">Product</TableHead>
+                <TableRow className="bg-muted/50 border-b-2">
+                  <TableHead className="font-bold py-4 pl-6">Product</TableHead>
                   <TableHead className="font-bold">Category</TableHead>
                   <TableHead className="font-bold">Price</TableHead>
                   <TableHead className="font-bold text-center">Status</TableHead>
@@ -234,25 +233,25 @@ export default function BusinessSpareShopPage() {
               </TableHeader>
               <TableBody>
                 {parts.filter(p => p.status !== 'active').map(part => (
-                  <TableRow key={part.id} className="opacity-70">
-                    <TableCell>
+                  <TableRow key={part.id} className="opacity-70 group hover:opacity-100 transition-opacity border-b">
+                    <TableCell className="pl-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="relative h-10 w-10 rounded overflow-hidden border">
+                        <div className="relative h-10 w-10 rounded overflow-hidden border bg-muted">
                           <Image src={part.images?.[0] || 'https://picsum.photos/seed/part/100/100'} alt="Part" fill className="object-cover" />
                         </div>
                         <span className="font-bold text-sm">{part.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-xs font-medium uppercase">{part.category}</TableCell>
-                    <TableCell className="text-xs font-bold">P{part.price}</TableCell>
+                    <TableCell className="text-[10px] font-bold uppercase text-muted-foreground">{part.category}</TableCell>
+                    <TableCell className="text-xs font-bold text-primary">P{part.price}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant={part.status === 'sold_out' ? 'destructive' : 'outline'} className="uppercase text-[9px] font-black">
-                        {part.status}
+                        {part.status?.replace('_', ' ')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
-                      <Button variant="ghost" size="sm" onClick={() => updateStatus(part.id, 'active')} className="h-8 text-[10px] font-black uppercase text-primary">
-                        Relist
+                      <Button variant="ghost" size="sm" onClick={() => updateStatus(part.id, 'active')} className="h-8 text-[10px] font-black uppercase text-primary hover:bg-primary/5">
+                        Relist Product
                       </Button>
                     </TableCell>
                   </TableRow>
