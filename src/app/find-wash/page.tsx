@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, Suspense, useCallback } from 'react';
+import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -174,7 +174,7 @@ function MarketplaceContent() {
           .from('businesses')
           .select('*')
           .eq('verification_status', 'verified')
-          .order('rating', { ascending: false });
+          .order('created_at', { ascending: false });
       
       if (bizError) throw bizError;
       setBusinesses(bizData || []);
@@ -213,23 +213,31 @@ function MarketplaceContent() {
     router.push(`/find-wash?${params.toString()}`);
   };
 
+  const filteredItems = useMemo(() => {
+    const filteredBiz = businesses.filter(b => {
+      const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
+                           (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
+      const bizCategory = b.category || 'Wash';
+      const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
+      return matchesSearch && matchesCategory;
+    }).map(b => ({ ...b, itemType: 'business' as const }));
+
+    const filteredCars = cars.filter(c => {
+      const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
+                           c.make.toLowerCase().includes(search.toLowerCase()) ||
+                           c.model.toLowerCase().includes(search.toLowerCase()) ||
+                           (c.location && c.location.toLowerCase().includes(search.toLowerCase()));
+      const matchesCategory = category === 'all' || category === 'Cars';
+      return matchesSearch && matchesCategory;
+    }).map(c => ({ ...c, itemType: 'car' as const }));
+
+    // Combine and sort by created_at descending
+    return [...filteredBiz, ...filteredCars].sort((a, b) => 
+      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    );
+  }, [businesses, cars, search, category]);
+
   if (!mounted) return null;
-
-  const filteredBusinesses = businesses.filter(b => {
-    const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
-                         (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
-    const bizCategory = b.category || 'Wash';
-    const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
-    return matchesSearch && matchesCategory;
-  });
-
-  const filteredCars = cars.filter(c => {
-    const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
-                         c.make.toLowerCase().includes(search.toLowerCase()) ||
-                         c.model.toLowerCase().includes(search.toLowerCase()) ||
-                         (c.location && c.location.toLowerCase().includes(search.toLowerCase()));
-    return category === 'Cars' || category === 'all' ? matchesSearch : false;
-  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -265,7 +273,7 @@ function MarketplaceContent() {
           
           <Button size="lg" className="rounded-2xl shadow-xl h-14 px-8 font-black bg-blue-600 hover:bg-blue-700" asChild>
             <Link href="/marketplace/cars">
-              Browse Full Showroom <ArrowRight className="ml-2 h-5 w-5" />
+              Browse Full Showroom <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
         </div>
@@ -297,23 +305,6 @@ function MarketplaceContent() {
           </div>
         </div>
 
-        {category === 'Cars' && (
-          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in zoom-in duration-300">
-            <div className="flex items-center gap-4">
-              <div className="bg-white p-3 rounded-xl shadow-sm">
-                <CarIcon className="h-6 w-6 text-primary" />
-              </div>
-              <div className="space-y-1">
-                <p className="font-bold text-slate-900">Looking for actual vehicles?</p>
-                <p className="text-sm text-muted-foreground">View real-time listings from these verified dealerships.</p>
-              </div>
-            </div>
-            <Button asChild variant="default" className="rounded-full px-8 h-11 font-bold">
-              <Link href="/marketplace/cars">Go to Full showroom <ArrowRight className="ml-2 h-4 w-4" /></Link>
-            </Button>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
           {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
@@ -325,32 +316,20 @@ function MarketplaceContent() {
                     </div>
                   </Card>
               ))
-          ) : (
-            <>
-              {/* Show Car Listings if in "Cars" category */}
-              {category === 'Cars' ? (
-                filteredCars.length > 0 ? filteredCars.map(car => (
-                  <CarCardSimple key={car.id} car={car} />
-                )) : (
-                  <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
-                    <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                    <p className="text-muted-foreground font-bold text-lg">No verified car listings found.</p>
-                    <Button variant="link" onClick={() => handleCategoryChange('all')} className="font-bold">View All Partners</Button>
-                  </div>
-                )
+          ) : filteredItems.length > 0 ? (
+            filteredItems.map((item: any) => (
+              item.itemType === 'business' ? (
+                <BusinessCard key={item.id} business={item} />
               ) : (
-                /* Show Business Profiles for Wash/Spare/All */
-                filteredBusinesses.length > 0 ? filteredBusinesses.map(business => (
-                  <BusinessCard key={business.id} business={business} />
-                )) : (
-                  <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
-                    <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                    <p className="text-muted-foreground font-bold text-lg">No verified partners found in this category.</p>
-                    <Button variant="link" onClick={() => handleCategoryChange('all')} className="font-bold">View All Partners</Button>
-                  </div>
-                )
-              )}
-            </>
+                <CarCardSimple key={item.id} car={item} />
+              )
+            ))
+          ) : (
+            <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
+              <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+              <p className="text-muted-foreground font-bold text-lg">No verified listings found matching your search.</p>
+              <Button variant="link" onClick={() => handleCategoryChange('all')} className="font-bold">View All Partners</Button>
+            </div>
           )}
         </div>
       </main>

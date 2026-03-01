@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, Suspense, useCallback } from 'react';
+import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -115,7 +115,7 @@ function CarCardSimple({ car }: { car: CarListing }) {
   const displayImage = (car.images && car.images.length > 0) ? car.images[0] : 'https://picsum.photos/seed/car/600/400';
 
   return (
-    <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
+    <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
       <Link href={`/marketplace/cars/${car.id}`} className="relative h-48 w-full overflow-hidden bg-muted">
         <Image
           src={displayImage}
@@ -145,8 +145,13 @@ function CarCardSimple({ car }: { car: CarListing }) {
           </div>
         </div>
       </CardHeader>
+      <CardContent className="flex-grow">
+        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+          {car.description || "View this premium vehicle listing from one of our verified partners."}
+        </p>
+      </CardContent>
       <CardFooter className="pt-0 mt-auto">
-        <Button asChild variant="outline" className="w-full font-bold rounded-xl h-9 text-xs">
+        <Button asChild variant="outline" className="w-full font-bold h-11">
           <Link href={`/marketplace/cars/${car.id}`}>View Showroom</Link>
         </Button>
       </CardFooter>
@@ -216,21 +221,28 @@ function CustomerHomeContent() {
     loadData();
   }, [loadData]);
 
-  const filteredBusinesses = businesses.filter(b => {
-    const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase()) || 
-                         (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
-    const bizCategory = b.category || 'Wash';
-    const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
-    return matchesSearch && matchesCategory;
-  });
+  const unifiedList = useMemo(() => {
+    const filteredBiz = businesses.filter(b => {
+      const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase()) || 
+                           (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
+      const bizCategory = b.category || 'Wash';
+      const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
+      return matchesSearch && matchesCategory;
+    }).map(b => ({ ...b, itemType: 'business' as const }));
 
-  const filteredCars = cars.filter(c => {
-    const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
-                         c.make.toLowerCase().includes(search.toLowerCase()) ||
-                         c.model.toLowerCase().includes(search.toLowerCase()) ||
-                         (c.location && c.location.toLowerCase().includes(search.toLowerCase()));
-    return category === 'Cars' || category === 'all' ? matchesSearch : false;
-  });
+    const filteredCars = cars.filter(c => {
+      const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
+                           c.make.toLowerCase().includes(search.toLowerCase()) ||
+                           c.model.toLowerCase().includes(search.toLowerCase()) ||
+                           (c.location && c.location.toLowerCase().includes(search.toLowerCase()));
+      const matchesCategory = category === 'all' || category === 'Cars';
+      return matchesSearch && matchesCategory;
+    }).map(c => ({ ...c, itemType: 'car' as const }));
+
+    return [...filteredBiz, ...filteredCars].sort((a, b) => 
+      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    );
+  }, [businesses, cars, search, category]);
 
   if (!mounted) return null;
 
@@ -273,58 +285,32 @@ function CustomerHomeContent() {
         </div>
       </div>
 
-      {category === 'Cars' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-          <div className="flex items-center gap-4">
-            <div className="bg-white p-3 rounded-xl shadow-sm">
-              <CarIcon className="h-6 w-6 text-blue-600" />
-            </div>
-            <div className="space-y-1">
-              <p className="font-bold text-blue-900">Vehicle Discovery Showroom</p>
-              <p className="text-sm text-blue-800">Browse individual car listings from these verified dealers.</p>
-            </div>
-          </div>
-          <Button asChild variant="outline" className="bg-white border-blue-200 hover:bg-blue-50 rounded-full h-11 font-bold">
-            <Link href="/marketplace/cars">Full Showroom <ArrowRight className="ml-2 h-4 w-4" /></Link>
-          </Button>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-12">
         {loading ? (
           Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="overflow-hidden bg-card">
+            <Card key={i} className="overflow-hidden bg-card h-[580px]">
               <Skeleton className="h-48 w-full" />
               <div className="p-6 space-y-4">
                 <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-32 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
             </Card>
           ))
-        ) : (
-          <>
-            {category === 'Cars' ? (
-              filteredCars.length > 0 ? filteredCars.map(car => (
-                <CarCardSimple key={car.id} car={car} />
-              )) : (
-                <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
-                  <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                  <p className="text-muted-foreground font-bold text-lg">No verified car listings found.</p>
-                  <Button variant="outline" className="mt-4" onClick={() => setCategory('all')}>View All Partners</Button>
-                </div>
-              )
+        ) : unifiedList.length > 0 ? (
+          unifiedList.map((item: any) => (
+            item.itemType === 'business' ? (
+              <BusinessCard key={item.id} business={item} />
             ) : (
-              filteredBusinesses.length > 0 ? filteredBusinesses.map(business => (
-                <BusinessCard key={business.id} business={business} />
-              )) : (
-                <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
-                  <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                  <p className="text-xl font-bold">No verified partners found in this category.</p>
-                  <Button variant="outline" className="mt-4" onClick={() => { setSearch(''); setCategory('all'); }}>Clear Filters</Button>
-                </div>
-              )
-            )}
-          </>
+              <CarCardSimple key={item.id} car={item} />
+            )
+          ))
+        ) : (
+          <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
+            <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+            <p className="text-xl font-bold">No verified partners or listings found.</p>
+            <Button variant="outline" className="mt-4" onClick={() => { setSearch(''); setCategory('all'); }}>Clear Filters</Button>
+          </div>
         )}
       </div>
     </div>
