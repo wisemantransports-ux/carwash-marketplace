@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,16 @@ import {
     Star,
     Mail,
     User,
-    CheckCircle2
+    CheckCircle2,
+    Info,
+    ArrowUpCircle
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
@@ -27,13 +30,11 @@ export default function BusinessDashboardPage() {
     const [bookings, setBookings] = useState<any[]>([]);
     const [staffList, setStaffList] = useState<any[]>([]);
     const [business, setBusiness] = useState<any>(null);
-    const [isRestricted, setIsRestricted] = useState(false);
     const [loading, setLoading] = useState(true);
     const [mounted, setMounted] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Local state to keep UI snappy and consistent during refreshes
     const [localStaffAssignments, setLocalStaffAssignments] = useState<Record<string, string>>({});
 
     const fetchData = useCallback(async (isSilent = false) => {
@@ -77,7 +78,7 @@ export default function BusinessDashboardPage() {
                 
                 setStaffList(staffData || []);
 
-                // 3. Fetch Bookings with 7-column required joins
+                // 3. Fetch All Bookings for Quota and Operations
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -115,6 +116,35 @@ export default function BusinessDashboardPage() {
         fetchData();
     }, [fetchData]);
 
+    // Plan & Quota Logic
+    const quotaInfo = useMemo(() => {
+        if (!business) return null;
+        
+        const now = new Date();
+        const isStarter = business.subscription_plan === 'Starter';
+        const isTrialActive = business.sub_end_date ? new Date(business.sub_end_date) > now : false;
+        
+        if (!isStarter || isTrialActive) return null;
+
+        const currentMonthBookings = bookings.filter(b => {
+            if (!b.booking_time) return false;
+            const bDate = new Date(b.booking_time);
+            return bDate.getMonth() === now.getMonth() && bDate.getFullYear() === now.getFullYear();
+        }).length;
+
+        const limit = 15;
+        const remaining = Math.max(0, limit - currentMonthBookings);
+        const percentUsed = (currentMonthBookings / limit) * 100;
+
+        return {
+            remaining,
+            total: limit,
+            isAtLimit: remaining <= 0,
+            isApproachingLimit: remaining <= 3,
+            percentUsed
+        };
+    }, [business, bookings]);
+
     const updateStatus = async (bookingId: string, status: string) => {
         try {
             const { error } = await supabase
@@ -138,7 +168,6 @@ export default function BusinessDashboardPage() {
     const handleAssignStaff = async (bookingId: string, staffId: string) => {
         if (!staffId) return;
         
-        // Optimistic local state update
         setLocalStaffAssignments(prev => ({ ...prev, [bookingId]: staffId }));
 
         try {
@@ -283,9 +312,55 @@ export default function BusinessDashboardPage() {
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary">{business?.name || 'Operations'}</h1>
                     <p className="text-muted-foreground font-medium">Manage your active bookings and staff assignments.</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full">
-                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Queue
-                </Button>
+                
+                <div className="flex items-center gap-3">
+                    {quotaInfo && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="flex flex-col items-end">
+                                        <Badge 
+                                            variant="outline" 
+                                            className={cn(
+                                                "px-3 py-1 font-black text-[10px] uppercase cursor-help transition-all",
+                                                quotaInfo.isAtLimit ? "bg-red-50 text-red-700 border-red-200 animate-pulse" : 
+                                                quotaInfo.isApproachingLimit ? "bg-orange-50 text-orange-700 border-orange-200" : 
+                                                "bg-blue-50 text-blue-700 border-blue-200"
+                                            )}
+                                        >
+                                            {quotaInfo.remaining} / {quotaInfo.total} Requests Left
+                                        </Badge>
+                                        <div className="w-full h-1 bg-muted mt-1 rounded-full overflow-hidden">
+                                            <div 
+                                                className={cn("h-full transition-all duration-1000", quotaInfo.isAtLimit ? "bg-red-500" : "bg-primary")} 
+                                                style={{ width: `${100 - quotaInfo.percentUsed}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs p-4 space-y-2">
+                                    <p className="font-bold flex items-center gap-2">
+                                        <Info className="h-4 w-4 text-blue-500" />
+                                        Starter Plan Quota
+                                    </p>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Your trial has ended. Starter accounts are limited to 15 bookings per calendar month.
+                                    </p>
+                                    <Button size="sm" variant="outline" className="w-full text-[10px] h-7 font-black uppercase mt-2 group" asChild>
+                                        <Link href="/business/subscription">
+                                            <ArrowUpCircle className="h-3 w-3 mr-1 text-primary group-hover:animate-bounce" /> 
+                                            Upgrade to Premium
+                                        </Link>
+                                    </Button>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                    
+                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-9 px-4 border-primary/20">
+                        <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Queue
+                    </Button>
+                </div>
             </div>
 
             {fetchError && (
