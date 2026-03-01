@@ -1,19 +1,20 @@
 
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Tags, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Tags, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, Clock, History } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { CarListing } from '@/lib/types';
 
 const CATEGORIES = [
   { id: 'all', label: 'All Partners', icon: Filter },
@@ -110,9 +111,53 @@ function BusinessCard({ business }: { business: any }) {
   );
 }
 
+function CarCardSimple({ car }: { car: CarListing }) {
+  const displayImage = (car.images && car.images.length > 0) ? car.images[0] : 'https://picsum.photos/seed/car/600/400';
+
+  return (
+    <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
+      <Link href={`/marketplace/cars/${car.id}`} className="relative h-48 w-full overflow-hidden bg-muted">
+        <Image
+          src={displayImage}
+          alt={car.title}
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-110"
+        />
+        <div className="absolute top-2 left-2">
+          <Badge className="bg-white/90 text-black shadow-sm uppercase text-[9px] font-black">
+            {car.year}
+          </Badge>
+        </div>
+        <div className="absolute bottom-2 right-2">
+          <Badge className="bg-primary text-white font-black px-2 py-1 text-xs shadow-lg">
+            P{Number(car.price).toLocaleString()}
+          </Badge>
+        </div>
+      </Link>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg font-bold line-clamp-1">{car.title}</CardTitle>
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-bold uppercase">
+          <div className="flex items-center gap-1">
+            <MapPin className="h-3 w-3" /> {car.location || car.business?.city || 'Botswana'}
+          </div>
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3" /> {car.mileage.toLocaleString()} KM
+          </div>
+        </div>
+      </CardHeader>
+      <CardFooter className="pt-0 mt-auto">
+        <Button asChild variant="outline" className="w-full font-bold rounded-xl h-9 text-xs">
+          <Link href={`/marketplace/cars/${car.id}`}>View Showroom</Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
 function CustomerHomeContent() {
   const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<any[]>([]);
+  const [cars, setCars] = useState<CarListing[]>([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -132,36 +177,59 @@ function CustomerHomeContent() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    setMounted(true);
-    async function load() {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-            .from('businesses')
-            .select('*, services(*)')
-            .eq('verification_status', 'verified')
-            .order('rating', { ascending: false });
-        
-        if (error) throw error;
-        setBusinesses(data || []);
-      } catch (e: any) {
-        console.error('Marketplace Error:', e);
-      } finally {
-        setLoading(false);
-      }
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch Businesses
+      const { data: bizData, error: bizError } = await supabase
+          .from('businesses')
+          .select('*, services(*)')
+          .eq('verification_status', 'verified')
+          .order('rating', { ascending: false });
+      
+      if (bizError) throw bizError;
+      setBusinesses(bizData || []);
+
+      // 2. Fetch Cars
+      const { data: carData, error: carError } = await supabase
+        .from('car_listing')
+        .select(`
+          id, title, make, model, year, price, mileage, location, images, description, status, created_at,
+          business:business_id!inner ( name, city, verification_status )
+        `)
+        .in('status', ['active', 'available'])
+        .eq('business.verification_status', 'verified')
+        .order('created_at', { ascending: false });
+
+      if (carError) throw carError;
+      setCars((carData as any) || []);
+
+    } catch (e: any) {
+      console.error('Marketplace Error:', e);
+    } finally {
+      setLoading(false);
     }
-    load();
   }, []);
 
-  const filtered = businesses.filter(b => {
+  useEffect(() => {
+    setMounted(true);
+    loadData();
+  }, [loadData]);
+
+  const filteredBusinesses = businesses.filter(b => {
     const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase()) || 
                          (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
-    
     const bizCategory = b.category || 'Wash';
     const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
-    
     return matchesSearch && matchesCategory;
+  });
+
+  const filteredCars = cars.filter(c => {
+    const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
+                         c.make.toLowerCase().includes(search.toLowerCase()) ||
+                         c.model.toLowerCase().includes(search.toLowerCase()) ||
+                         (c.location && c.location.toLowerCase().includes(search.toLowerCase()));
+    return category === 'Cars' || category === 'all' ? matchesSearch : false;
   });
 
   if (!mounted) return null;
@@ -180,7 +248,7 @@ function CustomerHomeContent() {
             <div className="relative max-w-2xl">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Search partners by name or city..." 
+                placeholder="Search partners, parts, or cars..." 
                 className="pl-10 h-12 bg-card shadow-sm border-2"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -206,23 +274,23 @@ function CustomerHomeContent() {
       </div>
 
       {category === 'Cars' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="flex items-center gap-4">
             <div className="bg-white p-3 rounded-xl shadow-sm">
               <CarIcon className="h-6 w-6 text-blue-600" />
             </div>
             <div className="space-y-1">
-              <p className="font-bold text-blue-900">Vehicle Discovery</p>
+              <p className="font-bold text-blue-900">Vehicle Discovery Showroom</p>
               <p className="text-sm text-blue-800">Browse individual car listings from these verified dealers.</p>
             </div>
           </div>
-          <Button asChild variant="outline" className="bg-white border-blue-200 hover:bg-blue-50 rounded-full">
-            <Link href="/marketplace/cars">View Car Listings <ArrowRight className="ml-2 h-4 w-4" /></Link>
+          <Button asChild variant="outline" className="bg-white border-blue-200 hover:bg-blue-50 rounded-full h-11 font-bold">
+            <Link href="/marketplace/cars">Full Showroom <ArrowRight className="ml-2 h-4 w-4" /></Link>
           </Button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-12">
         {loading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="overflow-hidden bg-card">
@@ -233,16 +301,30 @@ function CustomerHomeContent() {
               </div>
             </Card>
           ))
-        ) : filtered.length > 0 ? (
-          filtered.map(business => (
-            <BusinessCard key={business.id} business={business} />
-          ))
         ) : (
-          <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
-            <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-            <p className="text-xl font-bold">No verified partners found in this category.</p>
-            <Button variant="outline" className="mt-4" onClick={() => { setSearch(''); setCategory('all'); }}>Clear Filters</Button>
-          </div>
+          <>
+            {category === 'Cars' ? (
+              filteredCars.length > 0 ? filteredCars.map(car => (
+                <CarCardSimple key={car.id} car={car} />
+              )) : (
+                <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
+                  <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+                  <p className="text-muted-foreground font-bold text-lg">No verified car listings found.</p>
+                  <Button variant="outline" className="mt-4" onClick={() => setCategory('all')}>View All Partners</Button>
+                </div>
+              )
+            ) : (
+              filteredBusinesses.length > 0 ? filteredBusinesses.map(business => (
+                <BusinessCard key={business.id} business={business} />
+              )) : (
+                <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
+                  <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+                  <p className="text-xl font-bold">No verified partners found in this category.</p>
+                  <Button variant="outline" className="mt-4" onClick={() => { setSearch(''); setCategory('all'); }}>Clear Filters</Button>
+                </div>
+              )
+            )}
+          </>
         )}
       </div>
     </div>
