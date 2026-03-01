@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -14,6 +13,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { CarListing, SparePart } from '@/lib/types';
+
+/**
+ * @fileOverview Unified Automotive Partner Directory
+ * Handles the "All Partners" mixed-media view and specialized sector filtering.
+ */
 
 const CATEGORIES = [
   { id: 'all', label: 'All Partners', icon: Filter },
@@ -122,7 +126,7 @@ function CarCardSimple({ car }: { car: CarListing }) {
         <CardTitle className="text-lg font-bold line-clamp-1">{car.title}</CardTitle>
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-bold uppercase">
           <div className="flex items-center gap-1">
-            <MapPin className="h-3 w-3" /> {car.location || car.business?.city || 'Botswana'}
+            <MapPin className="h-3 w-3" /> {car.business?.city || 'Botswana'}
           </div>
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" /> {car.mileage.toLocaleString()} KM
@@ -215,7 +219,9 @@ function MarketplaceContent() {
     }
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses
+      /**
+       * FETCHVerified Businesses
+       */
       const { data: bizData } = await supabase
           .from('businesses')
           .select('*')
@@ -224,11 +230,13 @@ function MarketplaceContent() {
       
       setBusinesses(bizData || []);
 
-      // 2. Fetch Active Cars from Verified Partners (Explicit business_id join)
+      /**
+       * FETCH Verified Cars
+       */
       const { data: carData } = await supabase
         .from('car_listing')
         .select(`
-          *,
+          id, title, make, model, year, price, mileage, images, description, status, created_at,
           business:business_id!inner ( name, city, verification_status )
         `)
         .in('status', ['active', 'available'])
@@ -237,11 +245,13 @@ function MarketplaceContent() {
 
       setCars((carData as any) || []);
 
-      // 3. Fetch Spare Parts from Verified Partners (Explicit business_id join)
+      /**
+       * FETCH Verified Spare Parts
+       */
       const { data: partData } = await supabase
         .from('spare_parts')
         .select(`
-          *,
+          id, name, category, price, condition, images, stock_quantity, description, status, created_at,
           business:business_id!inner ( name, city, verification_status )
         `)
         .eq('status', 'active')
@@ -282,8 +292,7 @@ function MarketplaceContent() {
     const carList = cars.filter(c => {
       const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
                            c.make.toLowerCase().includes(search.toLowerCase()) ||
-                           c.model.toLowerCase().includes(search.toLowerCase()) ||
-                           (c.location && c.location.toLowerCase().includes(search.toLowerCase()));
+                           c.model.toLowerCase().includes(search.toLowerCase());
       const matchesCategory = category === 'all' || category.toLowerCase() === 'cars';
       return matchesSearch && matchesCategory;
     }).map(c => ({ ...c, itemType: 'car' as const }));
@@ -295,10 +304,10 @@ function MarketplaceContent() {
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
-    // Combined mixed list
+    // Interleave and sort by date
     return [...bizList, ...carList, ...partList].sort((a, b) => {
-      const dateA = new Date(a.created_at || a.updated_at || 0).getTime();
-      const dateB = new Date(b.created_at || b.updated_at || 0).getTime();
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
     });
   }, [businesses, cars, spareParts, search, category]);
