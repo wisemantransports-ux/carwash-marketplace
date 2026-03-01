@@ -161,15 +161,25 @@ export type CarListingStatus = 'available' | 'sold' | 'archived';
 export type CarListing = {
   id: string;
   business_id: string;
+  owner_id?: string;
+  title?: string;
   make: string;
   model: string;
   year: number;
   price: number;
   mileage: number;
-  description: string;
+  location?: string;
+  images?: string[];
   image_url: string;
   status: CarListingStatus;
   created_at: string;
+  // Joined data
+  business?: {
+    name: string;
+    city: string;
+    logo_url?: string;
+    subscription_plan?: string;
+  };
 };
 
 export type TestDriveRequestStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
@@ -182,6 +192,9 @@ export type TestDriveRequest = {
   status: TestDriveRequestStatus;
   staff_id?: string; // Assigned employee
   created_at: string;
+  // Form submission fields (optional overrides)
+  customer_name?: string;
+  customer_phone?: string;
   // Joins
   car_listing?: CarListing;
   customer?: { name: string; phone?: string; email: string };
