@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
@@ -17,7 +16,8 @@ import {
     CheckCircle2,
     Banknote,
     MoreHorizontal,
-    Info
+    Info,
+    ShieldCheck
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -32,6 +32,7 @@ import {
     DropdownMenuSeparator, 
     DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
@@ -43,7 +44,7 @@ type BookingWithDetails = {
     customer: { name: string; email: string; phone?: string };
     service: { name: string };
     car: { make: string; model: string };
-    staff: { id: string; name: string } | null;
+    staff: { id: string; name: string; phone: string; image_url: string } | null;
 };
 
 export default function BusinessDashboardPage() {
@@ -90,13 +91,13 @@ export default function BusinessDashboardPage() {
                 // 2. Fetch Employees for assignment
                 const { data: staffData } = await supabase
                     .from("employees")
-                    .select("id, name")
+                    .select("id, name, phone, image_url")
                     .eq("business_id", bizData.id)
                     .order('name');
                 
                 setStaffList(staffData || []);
 
-                // 3. Fetch Bookings with exact required 8-column data mapping
+                // 3. Fetch Bookings with enhanced employee data
                 const { data: bookingData, error: bookingError } = await supabase
                     .from("bookings")
                     .select(`
@@ -107,7 +108,7 @@ export default function BusinessDashboardPage() {
                         customer:users!bookings_customer_id_fkey ( name, email, phone ),
                         service:services!bookings_service_id_fkey ( name ),
                         car:cars!bookings_car_id_fkey ( make, model ),
-                        staff:employees!bookings_staff_id_fkey ( id, name )
+                        staff:employees!bookings_staff_id_fkey ( id, name, phone, image_url )
                     `)
                     .eq("business_id", bizData.id)
                     .order("booking_time", { ascending: false });
@@ -200,11 +201,10 @@ export default function BusinessDashboardPage() {
                 <TableHeader>
                     <TableRow className="bg-muted/50 border-b-2">
                         <TableHead className="font-bold whitespace-nowrap">Customer Name</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap">Email</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap">Phone</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap">Service Name</TableHead>
+                        <TableHead className="font-bold whitespace-nowrap">Customer Phone</TableHead>
+                        <TableHead className="font-bold whitespace-nowrap">Service Info</TableHead>
                         <TableHead className="font-bold whitespace-nowrap">Car Make & Model</TableHead>
-                        <TableHead className="font-bold whitespace-nowrap">Assigned Staff</TableHead>
+                        <TableHead className="font-bold whitespace-nowrap">Assigned Employee</TableHead>
                         <TableHead className="font-bold whitespace-nowrap">Booking Time</TableHead>
                         <TableHead className="text-right font-bold pr-6">Actions</TableHead>
                     </TableRow>
@@ -221,16 +221,10 @@ export default function BusinessDashboardPage() {
                                     {booking.customer?.name || 'N/A'}
                                 </div>
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                                <div className="flex items-center gap-2">
-                                    <Mail className="h-3 w-3" />
-                                    {booking.customer?.email || 'N/A'}
-                                </div>
-                            </TableCell>
                             <TableCell className="text-xs font-medium">
                                 <div className="flex items-center gap-2">
                                     <Phone className="h-3 w-3 text-primary" />
-                                    {booking.customer?.phone || 'N/A'}
+                                    {booking.customer?.phone || 'Phone not available'}
                                 </div>
                             </TableCell>
                             <TableCell>
@@ -241,18 +235,33 @@ export default function BusinessDashboardPage() {
                             <TableCell className="text-xs font-bold">
                                 {booking.car?.make} {booking.car?.model || 'N/A'}
                             </TableCell>
-                            <TableCell className="min-w-[160px]">
-                                <select
-                                    className="h-8 w-full rounded-md border bg-background px-2 text-[11px] font-bold cursor-pointer outline-none focus:ring-1 focus:ring-primary"
-                                    value={booking.staff?.id || ""}
-                                    onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
-                                    disabled={booking.status === 'completed' || booking.status === 'rejected'}
-                                >
-                                    <option value="">Unassigned</option>
-                                    {staffList.map((s) => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                </select>
+                            <TableCell className="min-w-[220px]">
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <Avatar className="h-7 w-7 border shadow-sm shrink-0">
+                                            <AvatarImage src={booking.staff?.image_url} alt={booking.staff?.name} className="object-cover" />
+                                            <AvatarFallback className="text-[8px] bg-primary/5 text-primary">
+                                                <User className="h-3 w-3" />
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <select
+                                            className="h-8 flex-1 rounded-md border bg-background px-2 text-[11px] font-bold cursor-pointer outline-none focus:ring-1 focus:ring-primary"
+                                            value={booking.staff?.id || ""}
+                                            onChange={(e) => handleAssignStaff(booking.id, e.target.value)}
+                                            disabled={booking.status === 'completed' || booking.status === 'rejected'}
+                                        >
+                                            <option value="">Unassigned</option>
+                                            {staffList.map((s) => (
+                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {booking.staff && (
+                                        <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold pl-9">
+                                            <Phone className="h-2 w-2" /> {booking.staff.phone || 'Phone not available'}
+                                        </div>
+                                    )}
+                                </div>
                             </TableCell>
                             <TableCell className="text-[11px] font-medium whitespace-nowrap">
                                 <div className="flex items-center gap-2">
@@ -306,7 +315,7 @@ export default function BusinessDashboardPage() {
                         </TableRow>
                     )) : (
                         <TableRow>
-                            <TableCell colSpan={8} className="h-48 text-center text-muted-foreground italic">
+                            <TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic">
                                 <div className="flex flex-col items-center gap-2 opacity-40">
                                     <Truck className="h-10 w-10" />
                                     <p>No requests available.</p>

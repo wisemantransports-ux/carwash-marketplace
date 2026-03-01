@@ -97,9 +97,17 @@ export default function EmployeeRegistryPage() {
         e.preventDefault();
         if (!businessId) return;
 
-        // Validation
-        if (!name.trim() || !phone.trim() || !idReference.trim()) {
-            toast({ variant: 'destructive', title: 'Missing Info', description: 'Name, Phone, and ID are required.' });
+        // Validation - ENFORCED AS PER REQUIREMENTS
+        if (!name.trim()) {
+            toast({ variant: 'destructive', title: 'Name Required', description: 'Please enter the employee full name.' });
+            return;
+        }
+        if (!phone.trim()) {
+            toast({ variant: 'destructive', title: 'Phone Required', description: 'A contact phone number is mandatory.' });
+            return;
+        }
+        if (!imageFile) {
+            toast({ variant: 'destructive', title: 'Photo Required', description: 'A staff photo is mandatory for identification.' });
             return;
         }
 
@@ -130,7 +138,7 @@ export default function EmployeeRegistryPage() {
                     business_id: businessId,
                     name: name.trim(),
                     phone: phone.trim(),
-                    id_reference: idReference.trim(),
+                    id_reference: idReference.trim() || 'NOT_PROVIDED',
                     image_url: uploadedImageUrl
                 });
             
@@ -165,7 +173,7 @@ export default function EmployeeRegistryPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary">Team Management</h1>
-                    <p className="text-muted-foreground">Manage your professional detailers and their verified identity details.</p>
+                    <p className="text-muted-foreground">Register your professional detailers with verified identity and photos.</p>
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" size="icon" onClick={() => fetchData()} disabled={loading} className="rounded-full">
@@ -180,30 +188,33 @@ export default function EmployeeRegistryPage() {
                         <DialogContent className="max-w-md">
                             <DialogHeader>
                                 <DialogTitle>New Team Member</DialogTitle>
-                                <DialogDescription>Register a detailer. Omang/ID and Phone are required.</DialogDescription>
+                                <DialogDescription>Mandatory: Name, Phone, and Photo upload required.</DialogDescription>
                             </DialogHeader>
                             <form onSubmit={handleAddEmployee} className="space-y-4 py-4">
-                                <div className="flex justify-center">
+                                <div className="flex flex-col items-center gap-4">
+                                    <Label className="text-center font-bold">Staff Photo *</Label>
                                     <div 
-                                        className="relative h-24 w-24 rounded-full overflow-hidden border-2 bg-muted group cursor-pointer"
+                                        className="relative h-32 w-32 rounded-full overflow-hidden border-4 border-dashed bg-muted group cursor-pointer hover:border-primary transition-colors"
                                         onClick={() => fileInputRef.current?.click()}
                                     >
                                         {imagePreview ? (
                                             <Image src={imagePreview} alt="Preview" fill className="object-cover" />
                                         ) : (
-                                            <div className="h-full w-full flex items-center justify-center">
+                                            <div className="h-full w-full flex flex-col items-center justify-center gap-1">
                                                 <User className="h-10 w-10 text-muted-foreground opacity-40" />
+                                                <span className="text-[10px] font-bold text-muted-foreground uppercase">Upload</span>
                                             </div>
                                         )}
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                                             <Upload className="h-5 w-5" />
                                         </div>
                                     </div>
+                                    <p className="text-[10px] text-muted-foreground">Mandatory for customer-facing verification.</p>
                                 </div>
                                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="name">Full Name (per ID) *</Label>
+                                    <Label htmlFor="name">Full Name *</Label>
                                     <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Full legal name" required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -212,8 +223,8 @@ export default function EmployeeRegistryPage() {
                                         <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="77123456" required />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="idref">Omang / ID *</Label>
-                                        <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="ID number" required />
+                                        <Label htmlFor="idref">Omang / ID (Optional)</Label>
+                                        <Input id="idref" value={idReference} onChange={e => setIdReference(e.target.value)} placeholder="ID number" />
                                     </div>
                                 </div>
                                 <DialogFooter className="pt-4">
@@ -248,9 +259,9 @@ export default function EmployeeRegistryPage() {
                     <Table>
                         <TableHeader>
                             <TableRow className="bg-muted/30">
-                                <TableHead className="pl-6 py-4 font-bold">Detailer</TableHead>
+                                <TableHead className="pl-6 py-4 font-bold">Detailer Profile</TableHead>
                                 <TableHead className="font-bold">Contact</TableHead>
-                                <TableHead className="font-bold">ID Reference</TableHead>
+                                <TableHead className="font-bold">Identity Ref</TableHead>
                                 <TableHead className="text-right pr-6 font-bold">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -281,12 +292,12 @@ export default function EmployeeRegistryPage() {
                                         <TableCell>
                                             <div className="flex items-center gap-2 text-sm font-medium">
                                                 <div className="bg-muted p-1.5 rounded-lg"><PhoneIcon className="h-3.5 w-3.5 text-primary" /></div>
-                                                {employee.phone}
+                                                {employee.phone || 'Phone not available'}
                                             </div>
                                         </TableCell>
                                         <TableCell>
                                             <code className="text-[10px] font-black bg-primary/5 text-primary px-2 py-1 rounded border border-primary/10">
-                                                {employee.id_reference}
+                                                {employee.id_reference || '---'}
                                             </code>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
@@ -320,13 +331,6 @@ export default function EmployeeRegistryPage() {
                     </Table>
                 </CardContent>
             </Card>
-
-            <div className="flex items-center justify-center gap-2 p-4 bg-muted/20 border-2 border-dashed rounded-xl opacity-50">
-                <Info className="h-4 w-4" />
-                <span className="text-[10px] font-mono tracking-tighter uppercase font-black">
-                    Connected Business ID: {businessId || 'Not Resolved'}
-                </span>
-            </div>
         </div>
     );
 }

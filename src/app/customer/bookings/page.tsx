@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, MapPin, Star, Repeat, Loader2, Car as CarIcon, XCircle, UserCheck, Phone, CheckCircle2 } from "lucide-react";
+import { Calendar, Clock, MapPin, Star, Repeat, Loader2, Car as CarIcon, XCircle, UserCheck, Phone, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
@@ -27,8 +26,8 @@ import { cn } from "@/lib/utils";
 
 function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => void }) {
   const isUpcoming = !['completed', 'cancelled', 'rejected'].includes(booking.status);
-  const canCancel = ['requested', 'pending', 'confirmed'].includes(booking.status);
-  const isConfirmed = booking.status === 'confirmed';
+  const canCancel = ['requested', 'pending', 'confirmed', 'accepted'].includes(booking.status);
+  const isConfirmed = booking.status === 'confirmed' || booking.status === 'accepted';
   
   const [cancelling, setCancelling] = useState(false);
   const [finishing, setFinishing] = useState(false);
@@ -97,8 +96,8 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow overflow-hidden flex flex-col h-full">
-      <CardHeader className="pb-3">
+    <Card className="hover:shadow-md transition-shadow overflow-hidden flex flex-col h-full border-2">
+      <CardHeader className="pb-3 bg-muted/10">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 border shadow-sm">
@@ -117,27 +116,61 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
               booking.status === 'completed' ? 'secondary' : 
               ['cancelled', 'rejected'].includes(booking.status) ? 'destructive' : 'default'
             }
-            className="uppercase text-[10px]"
+            className="uppercase text-[10px] font-black px-3"
           >
             {booking.status}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 pb-4 flex-grow">
-        <div className="bg-muted/30 p-3 rounded-lg space-y-2">
+      <CardContent className="space-y-4 pb-4 flex-grow pt-4">
+        <div className="bg-muted/30 p-3 rounded-lg space-y-2 border">
             <div className="flex justify-between items-center text-sm font-bold">
                 <span className="text-primary">{booking.service_name}</span>
-                <span>P{Number(booking.price || 0).toFixed(2)}</span>
+                <span className="text-primary/80">P{Number(booking.price || 0).toFixed(2)}</span>
             </div>
-            <div className="flex items-center gap-4 text-[11px] text-muted-foreground font-medium">
+            <div className="flex items-center gap-4 text-[11px] text-muted-foreground font-bold">
                 <span className="flex items-center gap-1"><CarIcon className="h-3.5 w-3.5" /> {booking.car_details}</span>
             </div>
         </div>
 
-        <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-widest text-muted-foreground">
+        <div className="flex items-center gap-2 font-black text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/10 p-2 rounded border border-dashed">
             <Calendar className="h-3.5 w-3.5 text-primary" /> {dateStr}
-            <span className="mx-1">•</span>
+            <span className="mx-1 opacity-20">|</span>
             <Clock className="h-3.5 w-3.5 text-primary" /> {timeStr}
+        </div>
+
+        {/* Assigned Staff Section (Enhanced Display) */}
+        <div className="mt-4 pt-4 border-t space-y-3">
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter">Service Detailer</p>
+            {booking.staff ? (
+                <div className="flex items-center gap-3 bg-primary/5 p-3 rounded-xl border border-primary/10">
+                    <Avatar className="h-12 w-12 border-2 border-white shadow-md">
+                        <AvatarImage src={booking.staff.image_url} alt={booking.staff.name} className="object-cover" />
+                        <AvatarFallback className="bg-primary/10 text-primary font-black">
+                            {booking.staff.name?.charAt(0)}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-bold flex items-center gap-1.5">
+                            {booking.staff.name}
+                            <ShieldCheck className="h-3 w-3 text-primary" />
+                        </span>
+                        <div className="flex items-center gap-1 text-[11px] text-primary font-bold mt-0.5">
+                            <Phone className="h-3 w-3" /> {booking.staff.phone || 'Phone not available'}
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center gap-3 bg-muted/20 p-3 rounded-xl border border-dashed opacity-60">
+                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                        <UserCheck className="h-6 w-6 text-muted-foreground/40" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        <span className="text-xs font-bold text-muted-foreground">Detailer Assignment Pending</span>
+                        <span className="text-[10px] text-muted-foreground">Will be assigned shortly</span>
+                    </div>
+                </div>
+            )}
         </div>
 
         {booking.status === 'completed' && booking.hasRating && (
@@ -150,34 +183,12 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
                 {booking.ratingFeedback && <p className="text-[10px] text-muted-foreground italic mt-1 line-clamp-1">"{booking.ratingFeedback}"</p>}
             </div>
         )}
-
-        <div className="mt-4 pt-4 border-t">
-            {booking.staff ? (
-                <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9">
-                        <AvatarImage src={booking.staff.image_url} alt={booking.staff.name} className="object-cover" />
-                        <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-bold">{booking.staff.name?.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col">
-                        <span className="text-xs font-bold">{booking.staff.name}</span>
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                            <Phone className="h-2.5 w-2.5" /> {booking.staff.phone}
-                        </div>
-                    </div>
-                </div>
-            ) : (
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground italic">
-                    <UserCheck className="h-3 w-3 opacity-50" />
-                    {['cancelled', 'rejected'].includes(booking.status) ? "No detailer" : "Detailer assignment pending."}
-                </div>
-            )}
-        </div>
       </CardContent>
       <CardFooter className="flex justify-between gap-2 border-t pt-3 bg-muted/5">
-        {isConfirmed && (
+        {isConfirmed && booking.status !== 'completed' && (
             <Dialog open={isFinishingOpen} onOpenChange={setIsFinishingOpen}>
                 <DialogTrigger asChild>
-                    <Button variant="default" size="sm" className="h-8 text-xs bg-green-600 hover:bg-green-700">
+                    <Button variant="default" size="sm" className="h-8 text-xs bg-green-600 hover:bg-green-700 font-bold shadow-md">
                         <CheckCircle2 className="mr-1 h-3 w-3" /> Finish & Rate
                     </Button>
                 </DialogTrigger>
@@ -222,14 +233,14 @@ function BookingCard({ booking, onRefresh }: { booking: any, onRefresh: () => vo
         )}
         
         <div className="flex gap-2 ml-auto">
-            {canCancel && (
-                <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:bg-destructive/5" onClick={handleCancel} disabled={cancelling}>
+            {canCancel && booking.status !== 'completed' && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:bg-destructive/5 font-bold" onClick={handleCancel} disabled={cancelling}>
                     {cancelling ? <Loader2 className="animate-spin h-3 w-3" /> : <XCircle className="h-3 w-3 mr-1" />}
                     Cancel
                 </Button>
             )}
             {!isUpcoming && (
-                <Button size="sm" variant="outline" className="h-8 text-xs font-bold" asChild>
+                <Button size="sm" variant="outline" className="h-8 text-xs font-bold shadow-sm" asChild>
                     <Link href={`/customer/book/${booking.business_id}`}>
                         <Repeat className="mr-1 h-3 w-3" /> Rebook
                     </Link>
@@ -303,13 +314,10 @@ export default function BookingHistoryPage() {
     const pastBookings = bookings.filter(b => ['completed', 'cancelled', 'rejected'].includes(b.status));
 
     return (
-        <div className="space-y-8 max-w-6xl mx-auto pb-12">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold tracking-tight">My Bookings</h1>
-                <Button variant="outline" size="sm" onClick={() => fetchBookings()} disabled={loading}>
-                    <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
-                    Refresh
-                </Button>
+        <div className="space-y-8 max-w-6xl mx-auto pb-12 animate-in fade-in duration-500">
+            <div className="flex flex-col gap-2">
+                <h1 className="text-4xl font-extrabold tracking-tight text-primary">My Bookings</h1>
+                <p className="text-muted-foreground text-lg">Manage your active washes and track your service history.</p>
             </div>
 
             <Tabs defaultValue="upcoming" className="w-full">
@@ -318,7 +326,7 @@ export default function BookingHistoryPage() {
                     <TabsTrigger value="past" className="rounded-lg font-bold">History ({pastBookings.length})</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="upcoming" className="mt-8 animate-in fade-in">
+                <TabsContent value="upcoming" className="mt-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     {upcomingBookings.length > 0 ? (
                         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                             {upcomingBookings.map(b => (
@@ -326,14 +334,20 @@ export default function BookingHistoryPage() {
                             ))}
                         </div>
                     ) : (
-                        <div className="text-center py-24 border-2 border-dashed rounded-3xl bg-muted/10">
-                            <p className="text-lg font-bold text-muted-foreground">No upcoming bookings found.</p>
-                            <Button asChild className="mt-4 shadow-lg"><Link href="/customer/home">Book a Wash Now</Link></Button>
+                        <div className="text-center py-24 border-2 border-dashed rounded-3xl bg-muted/10 flex flex-col items-center gap-4">
+                            <div className="p-6 bg-background rounded-full shadow-sm">
+                                <CarIcon className="h-12 w-12 text-primary/20" />
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-xl font-bold text-muted-foreground">No upcoming bookings found.</p>
+                                <p className="text-sm text-muted-foreground opacity-60">Ready for a fresh shine? Find a verified wash nearby.</p>
+                            </div>
+                            <Button asChild className="mt-4 shadow-lg rounded-full px-8"><Link href="/customer/home">Book a Wash Now</Link></Button>
                         </div>
                     )}
                 </TabsContent>
 
-                <TabsContent value="past" className="mt-8 animate-in fade-in">
+                <TabsContent value="past" className="mt-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {pastBookings.map(b => (
                             <BookingCard key={b.booking_id} booking={b} onRefresh={fetchBookings} />
