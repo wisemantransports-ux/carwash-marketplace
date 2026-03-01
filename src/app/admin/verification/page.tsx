@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Mail, Store, AlertCircle, Filter, CheckCircle2, XCircle, FileText, Camera, User, RefreshCw, MapPin, Phone } from "lucide-react";
+import { Mail, Store, Filter, CheckCircle2, XCircle, FileText, Camera, User, RefreshCw, MapPin, Phone, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -27,10 +27,22 @@ export default function BusinessVerificationPage() {
         setLoading(true);
         try {
             // Fetch all businesses with owner details
+            // Explicitly selecting columns to avoid issues with large objects or restricted fields
             let query = supabase
                 .from('businesses')
                 .select(`
-                    *,
+                    id,
+                    name,
+                    address,
+                    city,
+                    business_type,
+                    verification_status,
+                    status,
+                    id_number,
+                    whatsapp_number,
+                    selfie_url,
+                    certificate_url,
+                    created_at,
                     owner:owner_id ( name, email )
                 `);
             
@@ -39,11 +51,24 @@ export default function BusinessVerificationPage() {
 
             const { data, error } = await query.order('created_at', { ascending: false });
             
-            if (error) throw error;
+            if (error) {
+                console.error("PostgREST Error:", {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code
+                });
+                throw error;
+            }
+            
             setBusinesses(data || []);
         } catch (e: any) {
             console.error("Verification fetch error:", e);
-            toast({ variant: 'destructive', title: 'Fetch Error', description: e.message });
+            toast({ 
+                variant: 'destructive', 
+                title: 'Fetch Error', 
+                description: e.message || 'Unable to retrieve verification queue. Check your connection.' 
+            });
         } finally {
             setLoading(false);
         }
@@ -58,10 +83,9 @@ export default function BusinessVerificationPage() {
         try {
             const updatePayload: any = { 
                 verification_status: status,
-                status: status === 'verified' ? 'active' : 'pending' 
+                status: status === 'verified' ? 'verified' : 'pending' 
             };
             
-            // If approving a registered business, ensure the special tag is set
             if (status === 'verified' && type === 'registered') {
                 updatePayload.special_tag = 'CIPA Verified';
             }
@@ -87,7 +111,7 @@ export default function BusinessVerificationPage() {
         return (
             <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
                 <RefreshCw className="animate-spin h-10 w-10 text-primary" />
-                <p className="text-muted-foreground animate-pulse">Loading verification queue...</p>
+                <p className="text-muted-foreground animate-pulse font-medium">Initializing registration center...</p>
             </div>
         );
     }
