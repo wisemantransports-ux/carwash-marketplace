@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -108,12 +109,27 @@ function BusinessCard({ business }: { business: any }) {
   );
 }
 
-export default function CustomerHomePage() {
+function CustomerHomeContent() {
+  const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<any[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    const cat = searchParams.get('category');
+    
+    if (q !== null) setSearch(q);
+    
+    if (cat !== null) {
+      const match = CATEGORIES.find(c => c.id.toLowerCase() === cat.toLowerCase());
+      setCategory(match ? match.id : 'all');
+    } else {
+      setCategory('all');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     setMounted(true);
@@ -141,7 +157,6 @@ export default function CustomerHomePage() {
     const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase()) || 
                          (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
     
-    // Default to 'Wash' if category is missing in DB
     const bizCategory = b.category || 'Wash';
     const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
     
@@ -213,5 +228,13 @@ export default function CustomerHomePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CustomerHomePage() {
+  return (
+    <Suspense fallback={null}>
+      <CustomerHomeContent />
+    </Suspense>
   );
 }

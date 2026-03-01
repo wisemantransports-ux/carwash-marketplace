@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -94,6 +94,7 @@ function BusinessCard({ business }: { business: any }) {
 }
 
 function MarketplaceContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
@@ -101,7 +102,6 @@ function MarketplaceContent() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
-  // Sync state with URL if user navigates back/forward or from landing
   useEffect(() => {
     const q = searchParams.get('q');
     const cat = searchParams.get('category');
@@ -109,7 +109,6 @@ function MarketplaceContent() {
     if (q !== null) setSearch(q);
     
     if (cat !== null) {
-      // Find matching category ID case-insensitively
       const match = CATEGORIES.find(c => c.id.toLowerCase() === cat.toLowerCase());
       setCategory(match ? match.id : 'all');
     } else {
@@ -143,13 +142,21 @@ function MarketplaceContent() {
     load();
   }, []);
 
+  const handleCategoryChange = (catId: string) => {
+    setCategory(catId);
+    // Update URL without full refresh to maintain deep links
+    const params = new URLSearchParams(searchParams.toString());
+    if (catId === 'all') params.delete('category');
+    else params.set('category', catId);
+    router.push(`/find-wash?${params.toString()}`);
+  };
+
   if (!mounted) return null;
 
   const filtered = businesses.filter(b => {
     const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                          (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
     
-    // Default to 'Wash' if category is missing in DB
     const bizCategory = b.category || 'Wash';
     const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
     
@@ -193,7 +200,6 @@ function MarketplaceContent() {
           </Button>
         </div>
 
-        {/* Search and Filters */}
         <div className="space-y-6">
           <div className="relative max-w-2xl">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -212,7 +218,7 @@ function MarketplaceContent() {
                 variant={category.toLowerCase() === cat.id.toLowerCase() ? 'default' : 'outline'} 
                 size="sm" 
                 className="rounded-full px-6 font-bold h-10 transition-all shadow-sm"
-                onClick={() => setCategory(cat.id)}
+                onClick={() => handleCategoryChange(cat.id)}
               >
                 <cat.icon className={cn("h-4 w-4 mr-2", category.toLowerCase() === cat.id.toLowerCase() ? "text-white" : "text-primary")} />
                 {cat.label}
@@ -240,7 +246,7 @@ function MarketplaceContent() {
               <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
                   <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
                   <p className="text-muted-foreground font-bold text-lg">No verified partners found in this category.</p>
-                  <Button variant="link" onClick={() => { setSearch(''); setCategory('all'); }} className="font-bold">View All Partners</Button>
+                  <Button variant="link" onClick={() => handleCategoryChange('all')} className="font-bold">View All Partners</Button>
               </div>
           )}
         </div>
