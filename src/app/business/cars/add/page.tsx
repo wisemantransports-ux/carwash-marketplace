@@ -88,7 +88,7 @@ export default function AddCarListingPage() {
       const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
 
       // 2. Insert Listing
-      const { error } = await supabase.from('car_listings').insert({
+      const { error } = await supabase.from('car_listing').insert({
         business_id: business.id,
         make: make.trim(),
         model: model.trim(),
@@ -97,7 +97,7 @@ export default function AddCarListingPage() {
         mileage: parseInt(mileage),
         description: description.trim(),
         image_url: publicUrl,
-        status: 'available'
+        status: 'active'
       });
 
       if (error) throw error;

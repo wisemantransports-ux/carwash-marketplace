@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -38,7 +39,7 @@ export default function CarDetailPage() {
       try {
         // Query restricted to public fields and active status
         const { data, error } = await supabase
-          .from('car_listings')
+          .from('car_listing')
           .select(`
             id, title, make, model, year, price, mileage, location, images, description, status, created_at,
             business:business_id ( name, city, logo_url, subscription_plan, whatsapp_number )

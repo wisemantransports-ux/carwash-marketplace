@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -102,7 +103,7 @@ export default function CarMarketplace() {
     try {
       // Query optimized for public marketplace (no owner_id fetched)
       const { data, error } = await supabase
-        .from('car_listings')
+        .from('car_listing')
         .select(`
           id, title, make, model, year, price, mileage, location, images, description, status, created_at,
           business:business_id ( name, city, subscription_plan )

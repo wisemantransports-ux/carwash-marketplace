@@ -37,7 +37,7 @@ export default function BusinessCarsPage() {
       if (biz) {
         setBusiness(biz as Business);
         const { data: cars } = await supabase
-          .from('car_listings')
+          .from('car_listing')
           .select('*')
           .eq('business_id', biz.id)
           .order('created_at', { ascending: false });
@@ -59,7 +59,7 @@ export default function BusinessCarsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this listing?')) return;
     try {
-      const { error } = await supabase.from('car_listings').delete().eq('id', id);
+      const { error } = await supabase.from('car_listing').delete().eq('id', id);
       if (error) throw error;
       setListings(prev => prev.filter(l => l.id !== id));
       toast({ title: 'Listing Deleted' });
@@ -70,7 +70,7 @@ export default function BusinessCarsPage() {
 
   const updateStatus = async (id: string, status: CarListing['status']) => {
     try {
-      const { error } = await supabase.from('car_listings').update({ status }).eq('id', id);
+      const { error } = await supabase.from('car_listing').update({ status }).eq('id', id);
       if (error) throw error;
       setListings(prev => prev.map(l => l.id === id ? { ...l, status } : l));
       toast({ title: `Status Updated to ${status.toUpperCase()}` });
@@ -135,14 +135,14 @@ export default function BusinessCarsPage() {
 
       <Tabs defaultValue="active" className="w-full">
         <TabsList className="mb-6 bg-muted/50 p-1 rounded-xl">
-          <TabsTrigger value="active" className="rounded-lg font-bold">Active Listings ({listings.filter(l => l.status === 'available').length})</TabsTrigger>
-          <TabsTrigger value="sold" className="rounded-lg font-bold">Sold & Archived ({listings.filter(l => l.status !== 'available').length})</TabsTrigger>
+          <TabsTrigger value="active" className="rounded-lg font-bold">Active Listings ({listings.filter(l => l.status === 'available' || l.status === 'active').length})</TabsTrigger>
+          <TabsTrigger value="sold" className="rounded-lg font-bold">Sold & Archived ({listings.filter(l => l.status !== 'available' && l.status !== 'active').length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {listings.filter(l => l.status === 'available').length > 0 ? (
-              listings.filter(l => l.status === 'available').map(car => (
+            {listings.filter(l => l.status === 'available' || l.status === 'active').length > 0 ? (
+              listings.filter(l => l.status === 'available' || l.status === 'active').map(car => (
                 <Card key={car.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all group">
                   <div className="relative aspect-video bg-muted">
                     <Image 
@@ -213,7 +213,7 @@ export default function BusinessCarsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {listings.filter(l => l.status !== 'available').map(car => (
+                {listings.filter(l => l.status !== 'available' && l.status !== 'active').map(car => (
                   <TableRow key={car.id} className="opacity-70 grayscale">
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -235,13 +235,13 @@ export default function BusinessCarsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right pr-6">
-                      <Button variant="ghost" size="sm" onClick={() => updateStatus(car.id, 'available')} className="h-8 text-[10px] font-black uppercase">
+                      <Button variant="ghost" size="sm" onClick={() => updateStatus(car.id, 'active')} className="h-8 text-[10px] font-black uppercase">
                         Relist
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
-                {listings.filter(l => l.status !== 'available').length === 0 && (
+                {listings.filter(l => l.status !== 'available' && l.status !== 'active').length === 0 && (
                   <TableRow>
                     <TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic">
                       No archived listings found.
