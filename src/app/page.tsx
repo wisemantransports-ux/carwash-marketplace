@@ -4,11 +4,11 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, Star, ShieldCheck, UserCheck, TrendingUp, Store, Loader2, Search, ShoppingCart, Car as CarIcon, Droplets, Check, Zap, ArrowRight } from "lucide-react";
+import { MapPin, Star, ShieldCheck, UserCheck, TrendingUp, Store, Loader2, Search, ShoppingCart, Car as CarIcon, Droplets, Check, Zap, ArrowRight, Clock } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -83,38 +83,108 @@ function BusinessCard({ business }: { business: any }) {
   );
 }
 
+function CarCardLanding({ car }: { car: any }) {
+  const displayImage = (car.images && car.images.length > 0) ? car.images[0] : 'https://picsum.photos/seed/car/600/400';
+
+  return (
+    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl h-full group">
+      <div className="relative h-48 w-full overflow-hidden bg-muted">
+        <Image
+          src={displayImage}
+          alt={car.title}
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-110"
+        />
+        <div className="absolute top-2 left-2">
+          <Badge className="bg-white/90 text-black shadow-sm uppercase text-[9px] font-black">
+            {car.year}
+          </Badge>
+        </div>
+        <div className="absolute bottom-2 right-2">
+          <Badge className="bg-primary text-white font-black px-2 py-1 text-xs shadow-lg">
+            P{Number(car.price).toLocaleString()}
+          </Badge>
+        </div>
+      </div>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xl font-bold line-clamp-1">{car.title}</CardTitle>
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-bold uppercase">
+          <div className="flex items-center gap-1">
+            <MapPin className="h-3 w-3" /> {car.business?.city || 'Botswana'}
+          </div>
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3" /> {car.mileage.toLocaleString()} KM
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-grow pb-4">
+        <p className="text-xs text-muted-foreground line-clamp-2 italic">
+          {car.description || "View this verified vehicle listing."}
+        </p>
+      </CardContent>
+      <CardFooter className="pt-0">
+        <Button asChild variant="outline" className="w-full font-bold rounded-xl h-11 border-2">
+          <Link href={`/marketplace/cars/${car.id}`}>View Details</Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const [businesses, setBusinesses] = useState<any[]>([]);
+  const [cars, setCars] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     setMounted(true);
-    async function load() {
+    async function loadData() {
       if (!isSupabaseConfigured) {
         setLoading(false);
         return;
       }
       setLoading(true);
       try {
-        const { data, error } = await supabase
+        // 1. Fetch Verified Businesses
+        const { data: bizData } = await supabase
             .from('businesses')
             .select('*')
             .eq('verification_status', 'verified')
             .order('rating', { ascending: false });
         
-        if (error) throw error;
-        setBusinesses(data || []);
+        setBusinesses(bizData || []);
+
+        // 2. Fetch Verified Car Listings
+        const { data: carData } = await supabase
+          .from('car_listing')
+          .select('*, business:business_id(name, city, verification_status)')
+          .in('status', ['active', 'available'])
+          .eq('business.verification_status', 'verified')
+          .order('created_at', { ascending: false })
+          .limit(6);
+        
+        setCars(carData || []);
       } catch (e) {
         console.error("Landing page fetch error:", e);
       } finally {
         setLoading(false);
       }
     }
-    load();
+    loadData();
   }, []);
+
+  const unifiedTrending = useMemo(() => {
+    const bizItems = businesses.map(b => ({ ...b, itemType: 'business' }));
+    const carItems = cars.map(c => ({ ...c, itemType: 'car' }));
+    
+    // Mix them and sort by a plausible "trending" metric (date for now)
+    return [...bizItems, ...carItems].sort((a, b) => 
+      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    );
+  }, [businesses, cars]);
 
   if (!mounted) return (
     <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-background">
@@ -232,16 +302,16 @@ export default function LandingPage() {
           <div className="max-w-6xl mx-auto space-y-12">
             <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                 <div className="space-y-2">
-                  <h2 className="text-4xl font-extrabold tracking-tight">Trending Partners</h2>
-                  <p className="text-muted-foreground text-lg">Top-rated automotive experts providing exceptional quality.</p>
+                  <h2 className="text-4xl font-extrabold tracking-tight">Trending Marketplace Activity</h2>
+                  <p className="text-muted-foreground text-lg">Discover top-rated experts and the latest vehicle listings.</p>
                 </div>
                 <Button variant="outline" size="lg" asChild className="rounded-full px-10 h-12 font-bold shadow-sm">
-                    <Link href="/find-wash">View All Partners</Link>
+                    <Link href="/find-wash">Explore Partner Directory</Link>
                 </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {loading ? (
-                  Array.from({ length: 3 }).map((_, i) => (
+                  Array.from({ length: 6 }).map((_, i) => (
                       <Card key={i} className="overflow-hidden bg-card rounded-2xl">
                         <Skeleton className="h-48 w-full" />
                         <div className="p-6 space-y-4">
@@ -250,14 +320,16 @@ export default function LandingPage() {
                         </div>
                       </Card>
                   ))
-              ) : businesses.length > 0 ? (
-                  businesses.slice(0, 6).map(business => (
-                      <BusinessCard key={business.id} business={business} />
+              ) : unifiedTrending.length > 0 ? (
+                  unifiedTrending.slice(0, 9).map(item => (
+                      item.itemType === 'business' 
+                        ? <BusinessCard key={item.id} business={item} />
+                        : <CarCardLanding key={item.id} car={item} />
                   ))
               ) : (
                   <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-card/50">
                       <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                      <p className="text-muted-foreground font-bold">Verified partners will appear here.</p>
+                      <p className="text-muted-foreground font-bold">Verified marketplace listings will appear here.</p>
                   </div>
               )}
             </div>
@@ -265,7 +337,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing Section (Landing Page Context) */}
+      {/* Pricing Section */}
       <section id="pricing" className="py-24 bg-slate-900 text-white">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto space-y-16">
@@ -277,9 +349,9 @@ export default function LandingPage() {
             
             <div className="grid md:grid-cols-3 gap-8">
               {[
-                { name: 'Starter', price: '199', desc: 'Best for individual specialists.', features: ['15 Bookings/mo', 'Verified Badge', 'Basic Analytics'] },
-                { name: 'Pro', price: '350', desc: 'Best for established shops.', features: ['Unlimited Bookings', 'Priority Listing', 'Team Management'] },
-                { name: 'Enterprise', price: '599', desc: 'Best for multi-location groups.', features: ['Multi-Branch Control', 'Custom Reports', 'Premium Support'] },
+                { name: 'Starter', price: '150', desc: 'Best for individual specialists.', features: ['15 Bookings/mo', 'Verified Badge', 'Basic Analytics'] },
+                { name: 'Pro', price: '300', desc: 'Best for established shops.', features: ['Unlimited Bookings', 'Priority Listing', 'Team Management'] },
+                { name: 'Enterprise', price: '600', desc: 'Best for multi-location groups.', features: ['Multi-Branch Control', 'Custom Reports', 'Premium Support'] },
               ].map((plan) => (
                 <Card key={plan.name} className="bg-slate-800/50 border-slate-700 text-white hover:border-primary/50 transition-colors">
                   <CardHeader>
