@@ -8,11 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, MapPin, ShieldCheck, Upload, FileText, CheckCircle2, Phone, Tag, Building2, User, Info } from 'lucide-react';
+import { Loader2, Store, MapPin, ShieldCheck, Upload, FileText, CheckCircle2, Phone, Tag, Building2, User, Info, LayoutGrid } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import { ShareBusinessCard } from '@/components/app/share-business-card';
-import { Business, BusinessType } from '@/lib/types';
+import { Business, BusinessType, BusinessCategory } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 export default function BusinessProfilePage() {
@@ -30,6 +30,7 @@ export default function BusinessProfilePage() {
   const [whatsapp, setWhatsapp] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [businessType, setBusinessType] = useState<BusinessType>('individual');
+  const [category, setCategory] = useState<BusinessCategory>('Wash');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,6 +62,7 @@ export default function BusinessProfilePage() {
         setWhatsapp(biz.whatsapp_number || '');
         setLogoUrl(biz.logo_url || '');
         setBusinessType(biz.business_type || 'individual');
+        setCategory(biz.category || 'Wash');
       }
     } catch (error: any) {
       console.error("Fatal fetch error:", error);
@@ -117,7 +119,6 @@ export default function BusinessProfilePage() {
       if (!user) throw new Error("Not authenticated");
 
       // RLS-Safe Payload: Only send editable fields. 
-      // Do NOT include owner_id, status, or subscription fields.
       const payload: any = {
         name: name.trim(),
         address: address.trim(),
@@ -125,6 +126,7 @@ export default function BusinessProfilePage() {
         type,
         whatsapp_number: whatsapp.trim(),
         logo_url: logoUrl,
+        category,
       };
 
       // Only include business_type if it hasn't been locked yet
@@ -202,15 +204,31 @@ export default function BusinessProfilePage() {
 
           <Card className="shadow-lg border-2">
             <CardHeader className="bg-muted/10 border-b">
-              <CardTitle>Contact & Identity</CardTitle>
-              <CardDescription>Visible to all customers when browsing your services.</CardDescription>
+              <CardTitle>Contact & Marketplace Category</CardTitle>
+              <CardDescription>Visible to all customers when browsing the automotive marketplace.</CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
               <form onSubmit={handleSave} className="space-y-6">
                 <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name" className="font-bold text-xs uppercase">Business / Trading Name *</Label>
-                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sparkle Wash" required />
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name" className="font-bold text-xs uppercase">Business Name *</Label>
+                      <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sparkle Wash" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cat" className="font-bold text-xs uppercase">Marketplace Category *</Label>
+                      <Select value={category} onValueChange={(v: any) => setCategory(v)}>
+                        <SelectTrigger className="font-medium">
+                          <LayoutGrid className="h-3 w-3 mr-2 text-primary opacity-60" />
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Wash">Car Wash Service</SelectItem>
+                          <SelectItem value="Spare">Spare Parts Shop</SelectItem>
+                          <SelectItem value="Cars">Vehicle Dealership</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   
                   <div className="space-y-2">
@@ -338,23 +356,17 @@ export default function BusinessProfilePage() {
           
           <Card className="bg-primary/5 border-primary/20 overflow-hidden shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Trust Badge Guide</CardTitle>
+              <CardTitle className="text-lg">Marketplace Tip</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col items-center gap-4 text-center py-4">
                 <div className="bg-white p-4 rounded-full shadow-inner border-2 border-primary/20">
-                  {businessType === 'registered' ? (
-                    <Building2 className="h-12 w-12 text-primary" />
-                  ) : (
-                    <User className="h-12 w-12 text-muted-foreground" />
-                  )}
+                  <ShieldCheck className="h-12 w-12 text-primary" />
                 </div>
                 <div className="space-y-2">
-                  <p className="font-bold">{businessType === 'registered' ? 'Registered Entity' : 'Verified Individual'}</p>
+                  <p className="font-bold">Correct Categorization</p>
                   <p className="text-xs text-muted-foreground leading-relaxed font-medium">
-                    {businessType === 'registered' 
-                        ? "Registered businesses receive the CIPA Trust Seal, increasing visibility and credibility in the marketplace." 
-                        : "Micro-businesses are fully verified via Omang. Upgrade to a registered entity anytime to unlock the CIPA Trust Seal."}
+                    Ensure your marketplace category is correct. Wash businesses show up in the booking tool, while dealers show up in the car discovery section.
                   </p>
                 </div>
               </div>

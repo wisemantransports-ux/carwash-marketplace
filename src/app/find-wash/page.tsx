@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
@@ -7,7 +6,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,10 +14,10 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
-  { id: 'all', label: 'All Listings', icon: Filter },
+  { id: 'all', label: 'All Partners', icon: Filter },
   { id: 'Wash', label: 'Car Wash', icon: Droplets },
   { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart },
-  { id: 'Cars', label: 'Cars for Sale', icon: CarIcon },
+  { id: 'Cars', label: 'Car Sales', icon: CarIcon },
 ];
 
 function BusinessCard({ business }: { business: any }) {
@@ -79,15 +78,15 @@ function BusinessCard({ business }: { business: any }) {
           </div>
           
           <div className="bg-muted/30 p-2 rounded-lg border border-transparent">
-            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Access Level</p>
-            <p className="text-xs font-bold text-primary">Contact info revealed after booking</p>
+            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Services</p>
+            <p className="text-xs font-bold text-primary">View packages & pricing</p>
           </div>
         </div>
       </CardContent>
 
       <CardFooter className="pt-0">
         <Button asChild className="w-full font-bold rounded-xl h-11">
-          <Link href={`/find-wash/${business.id}`}>View Details & Book</Link>
+          <Link href={`/find-wash/${business.id}`}>View Profile</Link>
         </Button>
       </CardFooter>
     </Card>
@@ -157,42 +156,48 @@ function MarketplaceContent() {
       </header>
 
       <main className="container mx-auto px-4 py-12 space-y-12">
-        <div className="space-y-8 max-w-4xl">
-          <div className="space-y-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start gap-8">
+          <div className="space-y-4 max-w-4xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
               <ShieldCheck className="h-3 w-3" />
               <span>Verified Automotive Partners Only</span>
             </div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-900">Automotive Marketplace</h1>
-            <p className="text-muted-foreground text-lg leading-relaxed">Browse verified partners for car wash services, spare parts, and vehicle listings across Botswana.</p>
+            <h1 className="text-4xl font-black tracking-tight text-slate-900">Partner Directory</h1>
+            <p className="text-muted-foreground text-lg leading-relaxed">Browse verified experts for car wash services, spare parts, and dealerships across Botswana.</p>
           </div>
+          
+          <Button size="lg" className="rounded-2xl shadow-xl h-14 px-8 font-black bg-blue-600 hover:bg-blue-700" asChild>
+            <Link href="/marketplace/cars">
+              Browse Car Listings <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
+          </Button>
+        </div>
 
-          {/* Search and Filters */}
-          <div className="space-y-6">
-            <div className="relative max-w-2xl">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input 
-                  placeholder="Search by business name, parts, or city..." 
-                  className="pl-10 h-14 bg-white border-2 rounded-2xl shadow-sm text-lg"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map(cat => (
-                <Button 
-                  key={cat.id} 
-                  variant={category === cat.id ? 'default' : 'outline'} 
-                  size="sm" 
-                  className="rounded-full px-6 font-bold h-10 transition-all shadow-sm"
-                  onClick={() => setCategory(cat.id)}
-                >
-                  <cat.icon className={cn("h-4 w-4 mr-2", category === cat.id ? "text-white" : "text-primary")} />
-                  {cat.label}
-                </Button>
-              ))}
-            </div>
+        {/* Search and Filters */}
+        <div className="space-y-6">
+          <div className="relative max-w-2xl">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input 
+                placeholder="Search by business name or city..." 
+                className="pl-10 h-14 bg-white border-2 rounded-2xl shadow-sm text-lg"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map(cat => (
+              <Button 
+                key={cat.id} 
+                variant={category === cat.id ? 'default' : 'outline'} 
+                size="sm" 
+                className="rounded-full px-6 font-bold h-10 transition-all shadow-sm"
+                onClick={() => setCategory(cat.id)}
+              >
+                <cat.icon className={cn("h-4 w-4 mr-2", category === cat.id ? "text-white" : "text-primary")} />
+                {cat.label}
+              </Button>
+            ))}
           </div>
         </div>
 
@@ -215,7 +220,7 @@ function MarketplaceContent() {
               <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
                   <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
                   <p className="text-muted-foreground font-bold text-lg">No verified partners found in this category.</p>
-                  <Button variant="link" onClick={() => { setSearch(''); setCategory('all'); }} className="font-bold">View All Listings</Button>
+                  <Button variant="link" onClick={() => { setSearch(''); setCategory('all'); }} className="font-bold">View All Partners</Button>
               </div>
           )}
         </div>

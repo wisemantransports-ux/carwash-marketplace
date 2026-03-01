@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -15,9 +14,9 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
 const CATEGORIES = [
-  { id: 'Wash', label: 'Car Wash', icon: Droplets, desc: 'Book trusted wash services near you.', color: 'text-blue-600', bg: 'bg-blue-50' },
-  { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart, desc: 'Find parts for any car, verified sellers.', color: 'text-orange-600', bg: 'bg-orange-50' },
-  { id: 'Cars', label: 'Cars for Sale', icon: CarIcon, desc: 'Browse cars from verified individuals.', color: 'text-green-600', bg: 'bg-green-50' },
+  { id: 'Wash', label: 'Car Wash', icon: Droplets, desc: 'Book trusted wash services near you.', color: 'text-blue-600', bg: 'bg-blue-50', href: '/find-wash?category=Wash' },
+  { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart, desc: 'Find parts for any car, verified sellers.', color: 'text-orange-600', bg: 'bg-orange-50', href: '/find-wash?category=Spare' },
+  { id: 'Cars', label: 'Cars for Sale', icon: CarIcon, desc: 'Browse cars from verified individuals.', color: 'text-green-600', bg: 'bg-green-50', href: '/marketplace/cars' },
 ];
 
 function BusinessCard({ business }: { business: any }) {
@@ -177,7 +176,7 @@ export default function LandingPage() {
               <div className="flex flex-wrap justify-center gap-2 mt-4">
                 {CATEGORIES.map(cat => (
                   <Button key={cat.id} variant="outline" size="sm" className="rounded-full bg-white text-[10px] font-bold h-8" asChild>
-                    <Link href={`/find-wash?category=${cat.id}`}>
+                    <Link href={cat.href}>
                       <cat.icon className={cn("h-3 w-3 mr-1.5", cat.color)} />
                       {cat.label}
                     </Link>
@@ -199,7 +198,7 @@ export default function LandingPage() {
             </div>
             <div className="grid md:grid-cols-3 gap-8">
               {CATEGORIES.map((cat) => (
-                <Card key={cat.id} className="relative overflow-hidden group cursor-pointer hover:border-primary/50 transition-all duration-300 border-2 rounded-3xl" onClick={() => router.push(`/find-wash?category=${cat.id}`)}>
+                <Card key={cat.id} className="relative overflow-hidden group cursor-pointer hover:border-primary/50 transition-all duration-300 border-2 rounded-3xl" onClick={() => router.push(cat.href)}>
                   <CardHeader className={cn("pb-4", cat.bg)}>
                     <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-2 shadow-sm bg-white", cat.color)}>
                       <cat.icon className="h-6 w-6" />

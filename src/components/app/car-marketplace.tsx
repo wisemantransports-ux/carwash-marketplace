@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -101,14 +100,14 @@ export default function CarMarketplace() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // Query optimized for public marketplace. Explicitly selecting 'images'.
+      // Query optimized for public marketplace. Including 'available' and 'active' status.
       const { data, error } = await supabase
         .from('car_listing')
         .select(`
           id, title, make, model, year, price, mileage, location, images, description, status, created_at,
           business:business_id ( name, city, subscription_plan )
         `)
-        .eq('status', 'active')
+        .in('status', ['active', 'available'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
