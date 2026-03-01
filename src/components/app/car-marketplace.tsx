@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -10,11 +9,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { MapPin, Banknote, Car as CarIcon, Search, Loader2, ArrowRight, ShieldCheck, Clock, History } from 'lucide-react';
+import { MapPin, Search, Loader2, ArrowRight, ShieldCheck, Clock, History } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+
+/**
+ * @fileOverview Car Discovery Marketplace Component
+ * Displays a grid of active car listings with filtering and sorting.
+ * Respects RLS by fetching only public fields and active status.
+ */
 
 export function CarCard({ car }: { car: CarListing }) {
   const isPremiumDealer = car.business?.subscription_plan === 'Pro' || car.business?.subscription_plan === 'Enterprise';
@@ -95,7 +100,7 @@ export default function CarMarketplace() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // Query restricted to public fields per RLS policy
+      // Query optimized for public marketplace (no owner_id fetched)
       const { data, error } = await supabase
         .from('car_listings')
         .select(`

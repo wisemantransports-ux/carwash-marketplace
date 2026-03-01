@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -19,6 +18,12 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 
+/**
+ * @fileOverview Car Listing Detail Page
+ * Provides full vehicle specifications, image gallery, and seller context.
+ * Strictly filters for 'active' status and hides sensitive ownership data.
+ */
+
 export default function CarDetailPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -31,6 +36,7 @@ export default function CarDetailPage() {
     async function loadCar() {
       setLoading(true);
       try {
+        // Query restricted to public fields and active status
         const { data, error } = await supabase
           .from('car_listings')
           .select(`
@@ -38,6 +44,7 @@ export default function CarDetailPage() {
             business:business_id ( name, city, logo_url, subscription_plan, whatsapp_number )
           `)
           .eq('id', id)
+          .eq('status', 'active')
           .maybeSingle();
         
         if (error) throw error;
@@ -67,6 +74,7 @@ export default function CarDetailPage() {
     </div>
   );
 
+  // Normalizing images array for carousel
   const images = car.images && car.images.length > 0 ? car.images : [car.image_url];
 
   return (
@@ -90,7 +98,7 @@ export default function CarDetailPage() {
       <main className="container mx-auto px-4 py-8 max-w-6xl space-y-12 animate-in fade-in duration-500">
         <div className="grid lg:grid-cols-5 gap-12">
           
-          {/* Visual Showcase */}
+          {/* Visual Showcase (Images) */}
           <div className="lg:col-span-3 space-y-8">
             <Carousel className="w-full relative group">
               <CarouselContent>
@@ -142,7 +150,7 @@ export default function CarDetailPage() {
             </div>
           </div>
 
-          {/* Commerce & Context */}
+          {/* Pricing & Interaction */}
           <div className="lg:col-span-2 space-y-8">
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest bg-primary/5 w-fit px-3 py-1 rounded-full border border-primary/10">
@@ -192,26 +200,26 @@ export default function CarDetailPage() {
                 <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3">
                   <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
                   <p className="text-[10px] text-blue-800 leading-relaxed font-medium">
-                    HydroFlow manages requests to ensure seller and buyer safety. Direct contact is unlocked once your request is confirmed.
+                    Verified partners receive priority coordination. Private contact details are released once your test drive request is accepted.
                   </p>
                 </div>
               </CardContent>
             </Card>
 
             <div className="flex flex-col gap-4 p-6 bg-white border-2 rounded-3xl shadow-sm">
-              <p className="text-[10px] font-black uppercase text-muted-foreground text-center">Safety Recommendations</p>
+              <p className="text-[10px] font-black uppercase text-muted-foreground text-center">Safety Guidelines</p>
               <div className="space-y-3">
                 <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
                   <div className="h-2 w-2 rounded-full bg-green-500" />
-                  Always meet in public places.
+                  Inspect documents in person.
                 </div>
                 <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
                   <div className="h-2 w-2 rounded-full bg-green-500" />
-                  Check vehicle history via CIPA.
+                  No advance payments for viewing.
                 </div>
                 <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
                   <div className="h-2 w-2 rounded-full bg-green-500" />
-                  Never pay deposits before viewing.
+                  Meet in safe, public locations.
                 </div>
               </div>
             </div>
