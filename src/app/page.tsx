@@ -21,11 +21,15 @@ function getDisplayImage(images: any, fallback: string): string {
   if (Array.isArray(images) && images.length > 0) return images[0];
   if (typeof images === 'string') {
     try {
-      const parsed = JSON.parse(images);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      if (images.startsWith('[') || images.startsWith('{')) {
+        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
+        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      }
+      const parts = images.replace(/[{}]/g, '').split(',');
+      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
     } catch {
-      const cleaned = images.replace(/[{}]/g, '').split(',');
-      if (cleaned.length > 0 && cleaned[0]) return cleaned[0];
+      return images;
     }
   }
   return fallback;
@@ -161,7 +165,7 @@ function SparePartCardLanding({ part }: { part: any }) {
           className="object-cover transition-transform duration-500 group-hover:scale-110"
         />
         <div className="absolute top-2 left-2 flex flex-col gap-1">
-          <Badge className="bg-white/90 text-black shadow-sm uppercase text-[9px] font-black">
+          <Badge className="bg-white/90 text-black backdrop-blur-sm shadow-sm uppercase text-[9px] font-black">
             {part.category}
           </Badge>
           <Badge className={cn(
@@ -219,21 +223,22 @@ export default function LandingPage() {
       }
       setLoading(true);
       try {
-        // 1. Fetch Verified Businesses
+        // 1. Fetch Verified Businesses (Source of truth)
         const { data: bizData } = await supabase
             .from('businesses')
             .select('*')
             .eq('verification_status', 'verified')
             .order('rating', { ascending: false });
         
+        const verifiedIds = (bizData || []).map(b => b.id);
         setBusinesses(bizData || []);
 
-        // 2. Fetch Verified Car Listings
+        // 2. Fetch Verified Car Listings (Resilient manual join)
         const { data: carData } = await supabase
           .from('car_listing')
           .select('*, business:business_id(name, city, verification_status)')
           .in('status', ['active', 'available'])
-          .eq('business.verification_status', 'verified')
+          .in('business_id', verifiedIds)
           .order('created_at', { ascending: false })
           .limit(6);
         
@@ -244,7 +249,7 @@ export default function LandingPage() {
           .from('spare_parts')
           .select('*, business:business_id(name, city, verification_status)')
           .eq('status', 'active')
-          .eq('business.verification_status', 'verified')
+          .in('business_id', verifiedIds)
           .order('created_at', { ascending: false })
           .limit(6);
         

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -22,13 +23,15 @@ function getDisplayImage(images: any, fallback: string): string {
   if (Array.isArray(images) && images.length > 0) return images[0];
   if (typeof images === 'string') {
     try {
-      // Handle stringified JSON arrays
-      const parsed = JSON.parse(images);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      if (images.startsWith('[') || images.startsWith('{')) {
+        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
+        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      }
+      const parts = images.replace(/[{}]/g, '').split(',');
+      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
     } catch {
-      // Handle Postgres array literals like "{url1,url2}"
-      const cleaned = images.replace(/[{}]/g, '').split(',');
-      if (cleaned.length > 0 && cleaned[0]) return cleaned[0];
+      return images;
     }
   }
   return fallback;
@@ -42,7 +45,7 @@ const CATEGORIES = [
 ];
 
 function BusinessCard({ business }: { business: any }) {
-  const rating = Number(business.avg_rating || business.rating || 0);
+  const rating = Number(business.rating || 0);
   const reviews = Number(business.review_count || 0);
 
   return (
@@ -235,7 +238,7 @@ function MarketplaceContent() {
     setLoading(true);
     try {
       /**
-       * FETCHVerified Businesses
+       * FETCH Verified Businesses (Source of truth for verification)
        */
       const { data: bizData } = await supabase
           .from('businesses')
@@ -243,22 +246,25 @@ function MarketplaceContent() {
           .eq('verification_status', 'verified')
           .order('name', { ascending: true });
       
-      setBusinesses(bizData || []);
+      const verifiedBusinesses = bizData || [];
+      const verifiedIds = verifiedBusinesses.map(b => b.id);
+      setBusinesses(verifiedBusinesses);
 
       /**
        * FETCH Verified Cars
+       * Using simple join to avoid !inner join failures if relationships are loose.
        */
       const { data: carData } = await supabase
         .from('car_listing')
         .select(`
-          id, title, make, model, year, price, mileage, images, description, status, created_at,
-          business:business_id!inner ( name, city, verification_status )
+          id, title, make, model, year, price, mileage, images, description, status, created_at, business_id,
+          business:business_id ( name, city, verification_status )
         `)
         .in('status', ['active', 'available'])
-        .eq('business.verification_status', 'verified')
+        .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
-      setCars((carData as any) || []);
+      setCars((carData as any[]) || []);
 
       /**
        * FETCH Verified Spare Parts
@@ -266,14 +272,14 @@ function MarketplaceContent() {
       const { data: partData } = await supabase
         .from('spare_parts')
         .select(`
-          id, name, category, price, condition, images, stock_quantity, description, status, created_at,
-          business:business_id!inner ( name, city, verification_status )
+          id, name, category, price, condition, images, stock_quantity, description, status, created_at, business_id,
+          business:business_id ( name, city, verification_status )
         `)
         .eq('status', 'active')
-        .eq('business.verification_status', 'verified')
+        .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
       
-      setSpareParts((partData as any) || []);
+      setSpareParts((partData as any[]) || []);
 
     } catch (e) {
       console.error('Directory Fetch Failure:', e);
@@ -321,8 +327,8 @@ function MarketplaceContent() {
 
     // Interleave and sort by date
     return [...bizList, ...carList, ...partList].sort((a, b) => {
-      const dateA = new Date(a.created_at || 0).getTime();
-      const dateB = new Date(b.created_at || 0).getTime();
+      const dateA = new Date(a.created_at || a.updated_at || 0).getTime();
+      const dateB = new Date(b.created_at || b.updated_at || 0).getTime();
       return dateB - dateA;
     });
   }, [businesses, cars, spareParts, search, category]);

@@ -16,6 +16,28 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { CarListing, SparePart } from '@/lib/types';
 
+/**
+ * Robust image parsing for Postgres array columns
+ */
+function getDisplayImage(images: any, fallback: string): string {
+  if (!images) return fallback;
+  if (Array.isArray(images) && images.length > 0) return images[0];
+  if (typeof images === 'string') {
+    try {
+      if (images.startsWith('[') || images.startsWith('{')) {
+        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
+        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      }
+      const parts = images.replace(/[{}]/g, '').split(',');
+      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
+    } catch {
+      return images;
+    }
+  }
+  return fallback;
+}
+
 const CATEGORIES = [
   { id: 'all', label: 'All Partners', icon: Filter },
   { id: 'Wash', label: 'Car Wash', icon: Droplets },
@@ -112,7 +134,7 @@ function BusinessCard({ business }: { business: any }) {
 }
 
 function CarCardSimple({ car }: { car: CarListing }) {
-  const displayImage = (car.images && car.images.length > 0) ? car.images[0] : 'https://picsum.photos/seed/car/600/400';
+  const displayImage = getDisplayImage(car.images, 'https://picsum.photos/seed/car/600/400');
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
@@ -160,7 +182,7 @@ function CarCardSimple({ car }: { car: CarListing }) {
 }
 
 function SparePartCardSimple({ part }: { part: SparePart }) {
-  const displayImage = (part.images && part.images.length > 0) ? part.images[0] : 'https://picsum.photos/seed/part/400/300';
+  const displayImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/400/300');
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
@@ -236,40 +258,42 @@ function CustomerHomeContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses
+      // 1. Fetch Verified Businesses (Source of truth)
       const { data: bizData } = await supabase
           .from('businesses')
           .select('*, services(*)')
           .eq('verification_status', 'verified')
           .order('name', { ascending: true });
       
-      setBusinesses(bizData || []);
+      const verifiedBusinesses = bizData || [];
+      const verifiedIds = verifiedBusinesses.map(b => b.id);
+      setBusinesses(verifiedBusinesses);
 
-      // 2. Fetch Cars from Verified Partners (Explicit business_id join)
+      // 2. Fetch Cars from Verified Partners (Resilient manual join)
       const { data: carData } = await supabase
         .from('car_listing')
         .select(`
-          *,
-          business:business_id!inner ( name, city, verification_status )
+          id, title, make, model, year, price, mileage, images, description, status, created_at, business_id,
+          business:business_id ( name, city, verification_status )
         `)
         .in('status', ['active', 'available'])
-        .eq('business.verification_status', 'verified')
+        .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
-      setCars((carData as any) || []);
+      setCars((carData as any[]) || []);
 
-      // 3. Fetch Spare Parts from Verified Partners (Explicit business_id join)
+      // 3. Fetch Spare Parts from Verified Partners
       const { data: partData } = await supabase
         .from('spare_parts')
         .select(`
-          *,
-          business:business_id!inner ( name, city, verification_status )
+          id, name, category, price, condition, images, stock_quantity, description, status, created_at, business_id,
+          business:business_id ( name, city, verification_status )
         `)
         .eq('status', 'active')
-        .eq('business.verification_status', 'verified')
+        .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
       
-      setSpareParts((partData as any) || []);
+      setSpareParts((partData as any[]) || []);
 
     } catch (e: any) {
       console.error('Marketplace Error:', e);
