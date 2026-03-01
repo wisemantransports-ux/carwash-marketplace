@@ -9,15 +9,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Search, Loader2, ArrowRight, ShieldCheck, ShoppingCart, ArrowLeft, Package, Store, History } from 'lucide-react';
+import { Search, Loader2, ArrowRight, ShieldCheck, ShoppingCart, ArrowLeft, Package, Store } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 /**
- * Robust image parsing for Postgres array columns
+ * @fileOverview Spare Parts Marketplace (Public)
+ * Handles public discovery of genuine automotive components.
+ * 
+ * FETCHING & RLS:
+ * - Fetches only 'active' parts.
+ * - Joins with 'businesses' to ensure only VERIFIED sellers appear.
+ * - RLS policy on Supabase allows public SELECT for these conditions.
  */
+
 function getDisplayImage(images: any, fallback: string): string {
   if (!images) return fallback;
   if (Array.isArray(images) && images.length > 0) return images[0];
@@ -27,13 +34,13 @@ function getDisplayImage(images: any, fallback: string): string {
       if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
     } catch {
       const cleaned = images.replace(/[{}]/g, '').split(',');
-      if (cleaned.length > 0 && cleaned[0]) return cleaned[0];
+      if (cleaned.length > 0 && cleaned[0]) return cleaned[0].replace(/"/g, '');
     }
   }
   return fallback;
 }
 
-export function SparePartCard({ part }: { part: SparePart }) {
+export function SparePartCard({ part }: { part: any }) {
   const displayImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/400/300');
 
   return (
@@ -44,7 +51,6 @@ export function SparePartCard({ part }: { part: SparePart }) {
           alt={part.name}
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-110"
-          data-ai-hint="car parts"
         />
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           <Badge className="bg-white/90 text-black backdrop-blur-sm border-none shadow-sm uppercase text-[9px] font-black">
@@ -96,7 +102,7 @@ export function SparePartCard({ part }: { part: SparePart }) {
 }
 
 export default function SparePartsMarketplacePage() {
-  const [parts, setParts] = useState<SparePart[]>([]);
+  const [parts, setParts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
@@ -104,12 +110,12 @@ export default function SparePartsMarketplacePage() {
   const [sortOrder, setSortOrder] = useState('newest');
 
   const fetchParts = useCallback(async () => {
-    if (!isSupabaseConfigured) {
-      setLoading(false);
-      return;
-    }
+    if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
+      // Robust multi-table fetch:
+      // 1. Join with business to ensure we only see parts from verified partners.
+      // 2. Status 'active' ensures it's available for purchase.
       const { data, error } = await supabase
         .from('spare_parts')
         .select(`
@@ -121,9 +127,9 @@ export default function SparePartsMarketplacePage() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setParts((data as any[]) || []);
+      setParts(data || []);
     } catch (e: any) {
-      console.error("Discovery Failure:", e);
+      console.error("Spare Parts Discovery Error:", e);
     } finally {
       setLoading(false);
     }
@@ -136,8 +142,7 @@ export default function SparePartsMarketplacePage() {
 
   const filtered = parts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
-                         p.category.toLowerCase().includes(search.toLowerCase()) ||
-                         p.description?.toLowerCase().includes(search.toLowerCase());
+                         p.category.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
     return matchesSearch && matchesCategory;
   }).sort((a, b) => {
@@ -177,18 +182,18 @@ export default function SparePartsMarketplacePage() {
           </div>
           <h1 className="text-4xl font-black tracking-tight text-slate-900">Genuine Automotive Components</h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Search thousands of genuine parts from verified retailers. Secure discovery across all automotive brands.
+            Discover thousands of genuine parts from verified retailers across Botswana. Quality guaranteed through partner verification.
           </p>
         </div>
 
         <div className="flex flex-col md:flex-row gap-6 items-end justify-between bg-white/50 backdrop-blur-sm p-6 rounded-3xl border-2 shadow-sm">
           <div className="flex-1 w-full space-y-2">
-            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Universal Search</Label>
+            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Search Catalog</Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Part name, category, or description..." 
-                className="pl-10 h-12 rounded-xl bg-white border-muted shadow-none"
+                placeholder="Part name, category, or model..." 
+                className="pl-10 h-12 rounded-xl bg-white"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -197,10 +202,10 @@ export default function SparePartsMarketplacePage() {
           
           <div className="flex flex-wrap gap-4 w-full md:w-auto">
             <div className="space-y-2 flex-1 md:w-40">
-              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Component Type</Label>
+              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Category</Label>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="h-12 rounded-xl bg-white">
-                  <SelectValue placeholder="All Parts" />
+                  <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
@@ -210,13 +215,13 @@ export default function SparePartsMarketplacePage() {
             </div>
             
             <div className="space-y-2 flex-1 md:w-40">
-              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Sort Results</Label>
+              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Sort By</Label>
               <Select value={sortOrder} onValueChange={setSortOrder}>
                 <SelectTrigger className="h-12 rounded-xl bg-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="newest">Newest Arrivals</SelectItem>
+                  <SelectItem value="newest">Newest First</SelectItem>
                   <SelectItem value="price-low">Price: Low to High</SelectItem>
                   <SelectItem value="price-high">Price: High to Low</SelectItem>
                 </SelectContent>
@@ -228,7 +233,7 @@ export default function SparePartsMarketplacePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 pb-20">
           {loading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <Card key={i} className="overflow-hidden bg-card rounded-2xl">
+              <Card key={i} className="overflow-hidden bg-card rounded-2xl h-[450px]">
                 <Skeleton className="h-48 w-full" />
                 <div className="p-6 space-y-4">
                   <Skeleton className="h-6 w-3/4" />
@@ -243,7 +248,7 @@ export default function SparePartsMarketplacePage() {
           ) : (
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
               <Package className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-xl font-bold text-muted-foreground">No genuine parts match your current filters.</p>
+              <p className="text-xl font-bold text-muted-foreground">No parts found matching your criteria.</p>
               <Button variant="link" onClick={() => { setSearch(''); setCategoryFilter('all'); }} className="font-bold">
                 Reset All Filters
               </Button>

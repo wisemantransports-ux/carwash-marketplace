@@ -3,11 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { SparePart } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Loader2, MapPin, Package, ShieldCheck, ShoppingCart, Store, Info, Phone, MessageSquare, Tags, Banknote } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Package, ShieldCheck, ShoppingCart, Store, Info, Banknote, Tags, Calendar } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -15,8 +14,22 @@ import { cn } from '@/lib/utils';
 /**
  * @fileOverview Spare Part Detail Page (Public)
  * Full specification view for individual automotive components.
- * Strictly filtered for 'active' status and verified sellers.
  */
+
+function getDisplayImage(images: any, fallback: string): string {
+  if (!images) return fallback;
+  if (Array.isArray(images) && images.length > 0) return images[0];
+  if (typeof images === 'string') {
+    try {
+      const parsed = JSON.parse(images);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+    } catch {
+      const cleaned = images.replace(/[{}]/g, '').split(',');
+      if (cleaned.length > 0 && cleaned[0]) return cleaned[0].replace(/"/g, '');
+    }
+  }
+  return fallback;
+}
 
 export default function SparePartDetailPage() {
   const { id } = useParams();
@@ -67,7 +80,7 @@ export default function SparePartDetailPage() {
     </div>
   );
 
-  const images = (part.images && part.images.length > 0) ? part.images : ['https://picsum.photos/seed/part/800/600'];
+  const mainImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/800/600');
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20">
@@ -82,7 +95,7 @@ export default function SparePartDetailPage() {
             </h1>
           </div>
           <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase">
-            Genuine {part.category}
+            {part.category}
           </Badge>
         </div>
       </header>
@@ -92,23 +105,23 @@ export default function SparePartDetailPage() {
           
           <div className="lg:col-span-3 space-y-8">
             <div className="relative aspect-square sm:aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-muted">
-              <Image src={images[0]} alt={part.name} fill className="object-cover" priority data-ai-hint="car parts" />
+              <Image src={mainImage} alt={part.name} fill className="object-cover" priority />
             </div>
             
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
+              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5 transition-transform hover:scale-105">
                 <Tags className="h-5 w-5 text-primary opacity-60" />
                 <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Condition</span>
                 <span className="font-bold text-sm capitalize">{part.condition}</span>
               </div>
-              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
+              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5 transition-transform hover:scale-105">
                 <Package className="h-5 w-5 text-primary opacity-60" />
-                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Availability</span>
+                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Stock</span>
                 <span className={cn("font-bold text-sm", part.stock_quantity > 0 ? "text-green-600" : "text-destructive")}>
-                  {part.stock_quantity > 0 ? `${part.stock_quantity} In Stock` : 'Out of Stock'}
+                  {part.stock_quantity > 0 ? `${part.stock_quantity} Units` : 'Out of Stock'}
                 </span>
               </div>
-              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
+              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5 transition-transform hover:scale-105">
                 <MapPin className="h-5 w-5 text-primary opacity-60" />
                 <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Location</span>
                 <span className="font-bold text-sm truncate w-full text-center">{part.business?.city || 'Botswana'}</span>
@@ -116,9 +129,9 @@ export default function SparePartDetailPage() {
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-xl font-bold border-b pb-2">Product Description</h3>
+              <h3 className="text-xl font-bold border-b pb-2">Technical Description</h3>
               <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">
-                {part.description || "Genuine automotive component. Contact the verified seller for compatibility checks and warranty information."}
+                {part.description || "Authentic automotive component. Please contact the verified retailer for compatibility checks and warranty information."}
               </p>
             </div>
           </div>
@@ -127,7 +140,7 @@ export default function SparePartDetailPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest bg-primary/5 w-fit px-3 py-1 rounded-full border border-primary/10">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Verified Parts Dealer</span>
+                <span>Verified Retailer Listing</span>
               </div>
               <div className="space-y-1">
                 <h2 className="text-5xl font-black tracking-tighter text-slate-900">
@@ -164,7 +177,7 @@ export default function SparePartDetailPage() {
                   </Button>
                   <Button variant="outline" size="lg" className="w-full h-14 font-bold rounded-2xl border-2" asChild>
                     <Link href={`/find-wash/${part.business_id}`}>
-                      View Business Services
+                      View Shop Services
                     </Link>
                   </Button>
                 </div>
@@ -172,7 +185,7 @@ export default function SparePartDetailPage() {
                 <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3">
                   <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
                   <p className="text-[10px] text-blue-800 leading-relaxed font-medium">
-                    Genuine parts verification. All platform retailers are checked for business registration and identity.
+                    Genuine parts verification. All platform retailers are checked for business registration and identification.
                   </p>
                 </div>
               </CardContent>
@@ -180,20 +193,20 @@ export default function SparePartDetailPage() {
 
             <div className="flex flex-col gap-4 p-6 bg-white border-2 rounded-3xl shadow-sm">
               <p className="text-[10px] font-black uppercase text-muted-foreground text-center flex items-center justify-center gap-2">
-                <Banknote className="h-3 w-3" /> Payment Security
+                <Banknote className="h-3 w-3" /> Secure Transaction Tips
               </p>
               <div className="space-y-3">
-                <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
-                  <div className="h-2 w-2 rounded-full bg-green-500" />
-                  No advance payments for delivery.
-                </div>
                 <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
                   <div className="h-2 w-2 rounded-full bg-green-500" />
                   Verify part condition in person.
                 </div>
                 <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
                   <div className="h-2 w-2 rounded-full bg-green-500" />
-                  Use secure platform messaging.
+                  Check compatibility with your car.
+                </div>
+                <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
+                  <div className="h-2 w-2 rounded-full bg-green-500" />
+                  No advance payments for delivery.
                 </div>
               </div>
             </div>
