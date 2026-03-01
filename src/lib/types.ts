@@ -43,6 +43,7 @@ export type SubscriptionPlan = 'Starter' | 'Pro' | 'Enterprise' | 'None';
 export type SubscriptionStatus = 'inactive' | 'awaiting_payment' | 'payment_submitted' | 'active' | 'expired' | 'suspended';
 export type BusinessType = 'individual' | 'registered';
 export type VerificationStatus = 'pending' | 'verified' | 'rejected';
+export type BusinessCategory = 'Wash' | 'Spare' | 'Cars';
 
 export type Business = {
   id: string;
@@ -52,6 +53,7 @@ export type Business = {
   city: string;
   type: 'station' | 'mobile'; // Service delivery model
   business_type: BusinessType; // Entity legal type
+  category: BusinessCategory;
   whatsapp_number?: string;
   rating: number;
   review_count: number;

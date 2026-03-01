@@ -1,16 +1,25 @@
+
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2 } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+
+const CATEGORIES = [
+  { id: 'all', label: 'All Listings', icon: Filter },
+  { id: 'Wash', label: 'Car Wash', icon: Droplets },
+  { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart },
+  { id: 'Cars', label: 'Cars for Sale', icon: CarIcon },
+];
 
 function BusinessCard({ business }: { business: any }) {
   const rating = Number(business.avg_rating || business.rating || 0);
@@ -31,6 +40,11 @@ function BusinessCard({ business }: { business: any }) {
             <Store className="h-16 w-16 opacity-10" />
           </div>
         )}
+        <div className="absolute top-2 left-2">
+          <Badge className="bg-white/90 text-black backdrop-blur-sm border-none shadow-sm uppercase text-[9px] font-black">
+            {business.category || 'Wash'}
+          </Badge>
+        </div>
       </div>
       
       <CardHeader className="pb-2">
@@ -47,20 +61,27 @@ function BusinessCard({ business }: { business: any }) {
       </CardHeader>
 
       <CardContent className="flex-grow pb-4">
-        <div className="flex items-center gap-2 pt-2 border-t border-dashed">
-          <div className="flex text-yellow-400" aria-label={`Rating: ${rating} stars`}>
-            {[1, 2, 3, 4, 5].map((s) => (
-                <Star 
-                  key={s} 
-                  className={cn(
-                    "h-3.5 w-3.5", 
-                    s <= Math.round(rating) ? "fill-current" : "text-gray-200"
-                  )} 
-                />
-            ))}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 pt-2 border-t border-dashed">
+            <div className="flex text-yellow-400" aria-label={`Rating: ${rating} stars`}>
+              {[1, 2, 3, 4, 5].map((s) => (
+                  <Star 
+                    key={s} 
+                    className={cn(
+                      "h-3.5 w-3.5", 
+                      s <= Math.round(rating) ? "fill-current" : "text-gray-200"
+                    )} 
+                  />
+              ))}
+            </div>
+            <span className="text-sm font-bold">{rating.toFixed(1)}</span>
+            <span className="text-[10px] text-muted-foreground">({reviews} reviews)</span>
           </div>
-          <span className="text-sm font-bold">{rating.toFixed(1)}</span>
-          <span className="text-[10px] text-muted-foreground">({reviews} reviews)</span>
+          
+          <div className="bg-muted/30 p-2 rounded-lg border border-transparent">
+            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Access Level</p>
+            <p className="text-xs font-bold text-primary">Contact info revealed after booking</p>
+          </div>
         </div>
       </CardContent>
 
@@ -73,9 +94,11 @@ function BusinessCard({ business }: { business: any }) {
   );
 }
 
-export default function PublicFindWashPage() {
+function MarketplaceContent() {
+  const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<any[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('q') || '');
+  const [category, setCategory] = useState(searchParams.get('category') || 'all');
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -105,17 +128,14 @@ export default function PublicFindWashPage() {
     load();
   }, []);
 
-  if (!mounted) return (
-    <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-background">
-        <Loader2 className="animate-spin h-10 w-10 text-primary" />
-        <p className="text-muted-foreground animate-pulse font-medium">Syncing marketplace...</p>
-    </div>
-  );
+  if (!mounted) return null;
 
-  const filtered = businesses.filter(b => 
-    b.name?.toLowerCase().includes(search.toLowerCase()) || 
-    (b.city && b.city.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = businesses.filter(b => {
+    const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
+                         (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
+    const matchesCategory = category === 'all' || b.category === category;
+    return matchesSearch && matchesCategory;
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -137,25 +157,46 @@ export default function PublicFindWashPage() {
       </header>
 
       <main className="container mx-auto px-4 py-12 space-y-12">
-        <div className="space-y-4 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
-            <ShieldCheck className="h-3 w-3" />
-            <span>Verified Platform Partners Only</span>
+        <div className="space-y-8 max-w-4xl">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
+              <ShieldCheck className="h-3 w-3" />
+              <span>Verified Automotive Partners Only</span>
+            </div>
+            <h1 className="text-4xl font-black tracking-tight text-slate-900">Automotive Marketplace</h1>
+            <p className="text-muted-foreground text-lg leading-relaxed">Browse verified partners for car wash services, spare parts, and vehicle listings across Botswana.</p>
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight">Find a Verified Wash</h1>
-          <p className="text-muted-foreground text-lg">Browse partners verified for quality and reliability across Botswana.</p>
-          <div className="relative max-w-2xl pt-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search by name or city..." 
-                className="pl-10 h-12 bg-card border-2 rounded-xl shadow-sm"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+
+          {/* Search and Filters */}
+          <div className="space-y-6">
+            <div className="relative max-w-2xl">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input 
+                  placeholder="Search by business name, parts, or city..." 
+                  className="pl-10 h-14 bg-white border-2 rounded-2xl shadow-sm text-lg"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map(cat => (
+                <Button 
+                  key={cat.id} 
+                  variant={category === cat.id ? 'default' : 'outline'} 
+                  size="sm" 
+                  className="rounded-full px-6 font-bold h-10 transition-all shadow-sm"
+                  onClick={() => setCategory(cat.id)}
+                >
+                  <cat.icon className={cn("h-4 w-4 mr-2", category === cat.id ? "text-white" : "text-primary")} />
+                  {cat.label}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
           {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                   <Card key={i} className="overflow-hidden bg-card rounded-2xl">
@@ -173,12 +214,25 @@ export default function PublicFindWashPage() {
           ) : (
               <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
                   <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                  <p className="text-muted-foreground font-bold text-lg">No verified partners found.</p>
-                  <Button variant="link" onClick={() => setSearch('')} className="font-bold">View All Partners</Button>
+                  <p className="text-muted-foreground font-bold text-lg">No verified partners found in this category.</p>
+                  <Button variant="link" onClick={() => { setSearch(''); setCategory('all'); }} className="font-bold">View All Listings</Button>
               </div>
           )}
         </div>
       </main>
     </div>
+  );
+}
+
+export default function PublicFindWashPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-background">
+          <Loader2 className="animate-spin h-10 w-10 text-primary" />
+          <p className="text-muted-foreground animate-pulse font-medium">Loading Marketplace...</p>
+      </div>
+    }>
+      <MarketplaceContent />
+    </Suspense>
   );
 }
