@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Loader2, ShieldCheck, Mail, Save, RefreshCw } from 'lucide-react';
+import { Search, Loader2, ShieldCheck, Mail, Save, RefreshCw, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from '@/lib/utils';
@@ -63,7 +63,7 @@ export default function AdminPartnersPage() {
     }, []);
 
     const handleUpdateField = async (businessId: string, field: string, value: string) => {
-        setUpdatingId(businessId);
+        setUpdatingId(`${businessId}-${field}`);
         try {
             const { error } = await supabase
                 .from('businesses')
@@ -72,13 +72,14 @@ export default function AdminPartnersPage() {
 
             if (error) throw error;
 
+            // Optimistic Local Update
             setPartners(prev => prev.map(p => 
                 p.id === businessId ? { ...p, [field]: value } : p
             ));
 
             toast({
                 title: "Updated Successfully",
-                description: `Business ${field.replace('_', ' ')} has been set to ${value.toUpperCase()}.`,
+                description: `Partner ${field.replace('_', ' ')} set to ${value.toUpperCase()}.`,
             });
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -98,20 +99,20 @@ export default function AdminPartnersPage() {
         <div className="space-y-8 animate-in fade-in duration-500 pb-12">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-extrabold tracking-tight text-primary">Partner Management</h1>
-                    <p className="text-muted-foreground">Admin master control for all car wash operators.</p>
+                    <h1 className="text-3xl font-extrabold tracking-tight text-primary">Partner Directory</h1>
+                    <p className="text-muted-foreground">Real-time control over business verification, billing, and platform access.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="relative w-full max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input 
-                            placeholder="Search by business or owner email..." 
+                            placeholder="Search by business or email..." 
                             className="pl-10 h-10 bg-white" 
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                         />
                     </div>
-                    <Button variant="outline" size="icon" onClick={fetchPartners} className="shrink-0 h-10 w-10">
+                    <Button variant="outline" size="icon" onClick={fetchPartners} className="shrink-0 h-10 w-10 border-primary/20">
                         <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
                     </Button>
                 </div>
@@ -120,12 +121,12 @@ export default function AdminPartnersPage() {
             <Card className="shadow-2xl border-muted/50 overflow-hidden rounded-2xl">
                 <CardHeader className="bg-muted/10 border-b flex flex-row items-center justify-between">
                     <div>
-                        <CardTitle className="text-lg">Partner Directory</CardTitle>
-                        <CardDescription>Live editing for {filtered.length} businesses.</CardDescription>
+                        <CardTitle className="text-lg">Partner Management</CardTitle>
+                        <CardDescription>Live editing for {filtered.length} registered wash operators.</CardDescription>
                     </div>
                     {updatingId && (
-                        <div className="flex items-center gap-2 text-[10px] font-black text-primary animate-pulse">
-                            <RefreshCw className="h-3 w-3 animate-spin" /> SYNCING...
+                        <div className="flex items-center gap-2 text-[10px] font-black text-primary animate-pulse bg-primary/10 px-3 py-1 rounded-full">
+                            <RefreshCw className="h-3 w-3 animate-spin" /> WRITING TO DB...
                         </div>
                     )}
                 </CardHeader>
@@ -159,12 +160,13 @@ export default function AdminPartnersPage() {
                                                     <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
                                                         <Mail className="h-2.5 w-2.5" /> {partner.owner?.email}
                                                     </span>
-                                                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter opacity-60">ID: {partner.id.slice(-8)}</span>
+                                                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter opacity-60 mt-0.5">UID: {partner.id.slice(-8)}</span>
                                                 </div>
                                             </TableCell>
                                             
                                             <TableCell>
                                                 <Select 
+                                                    disabled={updatingId?.includes(partner.id)}
                                                     value={partner.subscription_plan || 'None'} 
                                                     onValueChange={(v) => handleUpdateField(partner.id, 'subscription_plan', v)}
                                                 >
@@ -182,12 +184,13 @@ export default function AdminPartnersPage() {
 
                                             <TableCell>
                                                 <Select 
+                                                    disabled={updatingId?.includes(partner.id)}
                                                     value={partner.subscription_status || 'inactive'} 
                                                     onValueChange={(v) => handleUpdateField(partner.id, 'subscription_status', v)}
                                                 >
                                                     <SelectTrigger className={cn(
                                                         "h-8 text-[10px] font-bold w-[140px] bg-white",
-                                                        partner.subscription_status === 'active' ? "text-green-600" : "text-orange-600"
+                                                        partner.subscription_status === 'active' ? "text-green-600 border-green-200" : "text-orange-600"
                                                     )}>
                                                         <SelectValue />
                                                     </SelectTrigger>
@@ -204,10 +207,14 @@ export default function AdminPartnersPage() {
 
                                             <TableCell>
                                                 <Select 
+                                                    disabled={updatingId?.includes(partner.id)}
                                                     value={partner.status || 'pending'} 
                                                     onValueChange={(v) => handleUpdateField(partner.id, 'status', v)}
                                                 >
-                                                    <SelectTrigger className="h-8 text-[10px] font-bold w-[110px] bg-white">
+                                                    <SelectTrigger className={cn(
+                                                        "h-8 text-[10px] font-bold w-[110px] bg-white",
+                                                        partner.status === 'verified' ? "text-green-600" : "text-slate-600"
+                                                    )}>
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -220,12 +227,14 @@ export default function AdminPartnersPage() {
 
                                             <TableCell>
                                                 <Select 
+                                                    disabled={updatingId?.includes(partner.id)}
                                                     value={partner.verification_status || 'pending'} 
                                                     onValueChange={(v) => handleUpdateField(partner.id, 'verification_status', v)}
                                                 >
                                                     <SelectTrigger className={cn(
                                                         "h-8 text-[10px] font-bold w-[110px] bg-white",
-                                                        partner.verification_status === 'verified' ? "text-blue-600" : "text-red-600"
+                                                        partner.verification_status === 'verified' ? "text-blue-600 border-blue-200" : 
+                                                        partner.verification_status === 'rejected' ? "text-red-600" : "text-slate-600"
                                                     )}>
                                                         <SelectValue />
                                                     </SelectTrigger>
@@ -241,7 +250,7 @@ export default function AdminPartnersPage() {
                                 ) : (
                                     <TableRow>
                                         <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
-                                            No partners found matching your criteria.
+                                            No partners found matching your search.
                                         </TableCell>
                                     </TableRow>
                                 )}
