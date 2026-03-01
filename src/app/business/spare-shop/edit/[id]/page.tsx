@@ -109,6 +109,7 @@ export default function EditSparePartPage() {
         finalImages = [publicUrl];
       }
 
+      // Update strictly filtering by business_id to comply with RLS
       const { error } = await supabase
         .from('spare_parts')
         .update({
@@ -128,6 +129,7 @@ export default function EditSparePartPage() {
       toast({ title: 'Inventory Updated' });
       router.push('/business/spare-shop');
     } catch (e: any) {
+      console.error("Update error:", e);
       toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
     } finally {
       setSubmitting(false);
@@ -162,8 +164,11 @@ export default function EditSparePartPage() {
                     <SelectContent>
                       <SelectItem value="Engine">Engine Components</SelectItem>
                       <SelectItem value="Brakes">Braking System</SelectItem>
-                      <SelectItem value="Electrical">Electrical</SelectItem>
-                      <SelectItem value="Interior">Interior</SelectItem>
+                      <SelectItem value="Suspension">Suspension & Steering</SelectItem>
+                      <SelectItem value="Electrical">Electrical & Lighting</SelectItem>
+                      <SelectItem value="Interior">Interior Accessories</SelectItem>
+                      <SelectItem value="Exterior">Exterior & Body</SelectItem>
+                      <SelectItem value="Filters">Filters & Fluids</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

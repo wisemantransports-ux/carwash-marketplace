@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Package, MoreHorizontal, Trash2, Edit, AlertCircle, ShieldAlert, History, ShoppingCart } from 'lucide-react';
+import { Loader2, Plus, Package, MoreHorizontal, Trash2, Edit, AlertCircle, ShieldAlert, History, ShoppingCart, RefreshCw } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -21,9 +21,12 @@ export default function BusinessSpareShopPage() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -36,18 +39,22 @@ export default function BusinessSpareShopPage() {
 
       if (biz) {
         setBusiness(biz as Business);
-        const { data: partData } = await supabase
+        // Explicitly filter by business_id to satisfy RLS
+        const { data: partData, error } = await supabase
           .from('spare_parts')
           .select('*')
           .eq('business_id', biz.id)
           .order('created_at', { ascending: false });
         
+        if (error) throw error;
         setParts((partData as SparePart[]) || []);
       }
     } catch (e: any) {
+      console.error("Load error:", e);
       toast({ variant: 'destructive', title: 'Load Error', description: e.message });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -57,9 +64,17 @@ export default function BusinessSpareShopPage() {
   }, [fetchData]);
 
   const handleDelete = async (id: string) => {
+    if (!business) return;
     if (!confirm('Delete this part from inventory?')) return;
+    
     try {
-      const { error } = await supabase.from('spare_parts').delete().eq('id', id);
+      // Inclusion of business_id is critical for RLS bypass/validation
+      const { error } = await supabase
+        .from('spare_parts')
+        .delete()
+        .eq('id', id)
+        .eq('business_id', business.id);
+
       if (error) throw error;
       setParts(prev => prev.filter(p => p.id !== id));
       toast({ title: 'Part Removed' });
@@ -69,8 +84,14 @@ export default function BusinessSpareShopPage() {
   };
 
   const updateStatus = async (id: string, status: SparePart['status']) => {
+    if (!business) return;
     try {
-      const { error } = await supabase.from('spare_parts').update({ status }).eq('id', id);
+      const { error } = await supabase
+        .from('spare_parts')
+        .update({ status })
+        .eq('id', id)
+        .eq('business_id', business.id);
+
       if (error) throw error;
       setParts(prev => prev.map(p => p.id === id ? { ...p, status } : p));
       toast({ title: `Status: ${status.toUpperCase()}` });
@@ -79,7 +100,7 @@ export default function BusinessSpareShopPage() {
     }
   };
 
-  if (!mounted || loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  if (!mounted || (loading && !refreshing)) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
   const isUnverified = business?.verification_status !== 'verified';
 
@@ -93,11 +114,16 @@ export default function BusinessSpareShopPage() {
           </h1>
           <p className="text-muted-foreground font-medium">Manage your automotive parts and retail listings.</p>
         </div>
-        <Button asChild disabled={isUnverified} className="rounded-full shadow-lg h-12 px-6">
-          <Link href="/business/spare-shop/add">
-            <Plus className="mr-2 h-5 w-5" /> Add New Part
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={() => fetchData(true)} disabled={refreshing} className="rounded-full">
+            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+          </Button>
+          <Button asChild disabled={isUnverified} className="rounded-full shadow-lg h-12 px-6">
+            <Link href="/business/spare-shop/add">
+              <Plus className="mr-2 h-5 w-5" /> Add New Part
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {isUnverified && (

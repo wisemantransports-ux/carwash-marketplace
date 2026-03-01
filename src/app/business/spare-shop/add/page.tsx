@@ -47,6 +47,8 @@ export default function AddSparePartPage() {
 
       if (biz) {
         setBusiness(biz as Business);
+      } else {
+        router.push('/business/profile');
       }
       setLoading(false);
     }
@@ -69,13 +71,23 @@ export default function AddSparePartPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!business || !imageFile) {
+    if (!business) return;
+    
+    if (!imageFile) {
       toast({ variant: 'destructive', title: 'Incomplete', description: 'Product image is mandatory.' });
+      return;
+    }
+
+    if (!name.trim() || !price) {
+      toast({ variant: 'destructive', title: 'Fields Required', description: 'Please enter a name and price.' });
       return;
     }
 
     setSubmitting(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       // 1. Upload Image
       const fileExt = imageFile.name.split('.').pop();
       const filePath = `parts/${business.id}/${Date.now()}.${fileExt}`;
@@ -84,7 +96,7 @@ export default function AddSparePartPage() {
       
       const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
 
-      // 2. Insert Part
+      // 2. Insert Part with explicit business_id and owner context
       const { error } = await supabase.from('spare_parts').insert({
         business_id: business.id,
         name: name.trim(),
@@ -102,6 +114,7 @@ export default function AddSparePartPage() {
       toast({ title: 'Product Added', description: `${name} is now available in your shop.` });
       router.push('/business/spare-shop');
     } catch (e: any) {
+      console.error("Save error:", e);
       toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally {
       setSubmitting(false);
@@ -205,7 +218,7 @@ export default function AddSparePartPage() {
                   <Image src={imagePreview} alt="Preview" fill className="object-cover" />
                 ) : (
                   <div className="text-center space-y-2">
-                    <Camera className="h-10 w-10 mx-auto text-muted-foreground opacity-40" />
+                    <Camera className="h-10 w-10 mx-auto text-muted-foreground opacity-40 group-hover:scale-110 transition-transform" />
                     <p className="text-[10px] font-black uppercase text-muted-foreground">Upload Photo</p>
                   </div>
                 )}
