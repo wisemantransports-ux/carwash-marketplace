@@ -39,11 +39,16 @@ export default function AddSparePartPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return router.push('/login');
 
-      const { data: biz } = await supabase
+      const { data: biz, error } = await supabase
         .from('businesses')
         .select('*')
         .eq('owner_id', user.id)
         .maybeSingle();
+
+      if (error) {
+        console.error("Auth context error:", error);
+        toast({ variant: 'destructive', title: 'Connection Error', description: 'Unable to verify business profile.' });
+      }
 
       if (biz) {
         setBusiness(biz as Business);
@@ -71,7 +76,10 @@ export default function AddSparePartPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!business) return;
+    if (!business) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Business profile not loaded.' });
+      return;
+    }
     
     if (!imageFile) {
       toast({ variant: 'destructive', title: 'Incomplete', description: 'Product image is mandatory.' });
@@ -83,39 +91,58 @@ export default function AddSparePartPage() {
       return;
     }
 
+    const priceNum = parseFloat(price);
+    const stockNum = parseInt(stock);
+
+    if (isNaN(priceNum) || priceNum < 0) {
+      toast({ variant: 'destructive', title: 'Invalid Price', description: 'Please enter a valid numeric price.' });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      if (!user) throw new Error("Authentication expired. Please log in again.");
 
       // 1. Upload Image
       const fileExt = imageFile.name.split('.').pop();
       const filePath = `parts/${business.id}/${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
-      if (uploadError) throw uploadError;
+      
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw new Error(`Storage Error: ${uploadError.message}`);
+      }
       
       const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
 
       // 2. Insert Part with explicit business_id and owner context
-      const { error } = await supabase.from('spare_parts').insert({
+      const { error: insertError } = await supabase.from('spare_parts').insert({
         business_id: business.id,
         name: name.trim(),
         category,
-        price: parseFloat(price),
+        price: priceNum,
         condition,
-        stock_quantity: parseInt(stock),
+        stock_quantity: isNaN(stockNum) ? 0 : stockNum,
         description: description.trim(),
         images: [publicUrl],
         status: 'active'
       });
 
-      if (error) throw error;
+      if (insertError) {
+        console.error("Database error:", insertError);
+        throw new Error(`Database Error: ${insertError.message}`);
+      }
 
       toast({ title: 'Product Added', description: `${name} is now available in your shop.` });
       router.push('/business/spare-shop');
     } catch (e: any) {
-      console.error("Save error:", e);
-      toast({ variant: 'destructive', title: 'Error', description: e.message });
+      console.error("Save process failed:", e);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Save Failed', 
+        description: e.message || 'An unexpected error occurred while saving.' 
+      });
     } finally {
       setSubmitting(false);
     }
@@ -130,7 +157,7 @@ export default function AddSparePartPage() {
           <Link href="/business/spare-shop"><ArrowLeft className="h-5 w-5" /></Link>
         </Button>
         <div className="space-y-1">
-          <h1 className="text-3xl font-extrabold tracking-tight">Add Spare Part</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-primary">Add Spare Part</h1>
           <p className="text-muted-foreground">List a new automotive component in the marketplace.</p>
         </div>
       </div>
@@ -228,7 +255,7 @@ export default function AddSparePartPage() {
           </Card>
 
           <Button type="submit" className="w-full h-14 text-lg shadow-xl" disabled={submitting}>
-            {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
+            {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Plus className="mr-2 h-5 w-5" />}
             List Product
           </Button>
         </div>

@@ -60,7 +60,7 @@ export default function EditSparePartPage() {
         .maybeSingle();
 
       if (error || !part) {
-        toast({ variant: 'destructive', title: 'Not Found' });
+        toast({ variant: 'destructive', title: 'Not Found', description: 'Product not found or access denied.' });
         return router.push('/business/spare-shop');
       }
 
@@ -97,6 +97,14 @@ export default function EditSparePartPage() {
     e.preventDefault();
     if (!business) return;
 
+    const priceNum = parseFloat(price);
+    const stockNum = parseInt(stock);
+
+    if (isNaN(priceNum) || priceNum < 0) {
+      toast({ variant: 'destructive', title: 'Invalid Price', description: 'Please enter a valid numeric price.' });
+      return;
+    }
+
     setSubmitting(true);
     try {
       let finalImages = currentImage ? [currentImage] : [];
@@ -104,33 +112,38 @@ export default function EditSparePartPage() {
       if (imageFile) {
         const filePath = `parts/${business.id}/${Date.now()}.${imageFile.name.split('.').pop()}`;
         const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
-        if (uploadError) throw uploadError;
+        if (uploadError) throw new Error(`Upload Error: ${uploadError.message}`);
+        
         const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
         finalImages = [publicUrl];
       }
 
       // Update strictly filtering by business_id to comply with RLS
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('spare_parts')
         .update({
           name: name.trim(),
           category,
-          price: parseFloat(price),
+          price: priceNum,
           condition,
-          stock_quantity: parseInt(stock),
+          stock_quantity: isNaN(stockNum) ? 0 : stockNum,
           description: description.trim(),
           images: finalImages
         })
         .eq('id', id)
         .eq('business_id', business.id);
 
-      if (error) throw error;
+      if (updateError) throw new Error(`Database Error: ${updateError.message}`);
 
-      toast({ title: 'Inventory Updated' });
+      toast({ title: 'Inventory Updated', description: `${name} has been updated successfully.` });
       router.push('/business/spare-shop');
     } catch (e: any) {
-      console.error("Update error:", e);
-      toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
+      console.error("Update process failed:", e);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Update Failed', 
+        description: e.message || 'An unexpected error occurred during the update.' 
+      });
     } finally {
       setSubmitting(false);
     }
@@ -144,7 +157,7 @@ export default function EditSparePartPage() {
         <Button variant="ghost" size="icon" asChild className="rounded-full">
           <Link href="/business/spare-shop"><ArrowLeft className="h-5 w-5" /></Link>
         </Button>
-        <h1 className="text-3xl font-extrabold tracking-tight">Edit Product</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-primary">Edit Product</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="grid lg:grid-cols-3 gap-8">
@@ -213,6 +226,9 @@ export default function EditSparePartPage() {
                 {(imagePreview || currentImage) ? (
                   <Image src={imagePreview || currentImage!} alt="Preview" fill className="object-cover" />
                 ) : <Camera className="h-10 w-10 opacity-20" />}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
+                  Change Photo
+                </div>
               </div>
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
             </CardContent>
