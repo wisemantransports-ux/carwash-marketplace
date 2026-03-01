@@ -143,7 +143,7 @@ export default function CustomerHomePage() {
     
     // Default to 'Wash' if category is missing in DB
     const bizCategory = b.category || 'Wash';
-    const matchesCategory = category === 'all' || bizCategory === category;
+    const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
     
     return matchesSearch && matchesCategory;
   });
@@ -175,12 +175,12 @@ export default function CustomerHomePage() {
               {CATEGORIES.map(cat => (
                 <Button 
                   key={cat.id} 
-                  variant={category === cat.id ? 'default' : 'outline'} 
+                  variant={category.toLowerCase() === cat.id.toLowerCase() ? 'default' : 'outline'} 
                   size="sm" 
                   className="rounded-full px-4 font-bold h-9 transition-all shadow-sm"
                   onClick={() => setCategory(cat.id)}
                 >
-                  <cat.icon className={cn("h-3.5 w-3.5 mr-2", category === cat.id ? "text-white" : "text-primary")} />
+                  <cat.icon className={cn("h-3.5 w-3.5 mr-2", category.toLowerCase() === cat.id.toLowerCase() ? "text-white" : "text-primary")} />
                   {cat.label}
                 </Button>
               ))}

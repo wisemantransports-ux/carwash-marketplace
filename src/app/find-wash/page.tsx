@@ -97,7 +97,7 @@ function MarketplaceContent() {
   const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
-  const [category, setCategory] = useState(searchParams.get('category') || 'all');
+  const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -105,8 +105,16 @@ function MarketplaceContent() {
   useEffect(() => {
     const q = searchParams.get('q');
     const cat = searchParams.get('category');
+    
     if (q !== null) setSearch(q);
-    if (cat !== null) setCategory(cat);
+    
+    if (cat !== null) {
+      // Find matching category ID case-insensitively
+      const match = CATEGORIES.find(c => c.id.toLowerCase() === cat.toLowerCase());
+      setCategory(match ? match.id : 'all');
+    } else {
+      setCategory('all');
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -143,7 +151,7 @@ function MarketplaceContent() {
     
     // Default to 'Wash' if category is missing in DB
     const bizCategory = b.category || 'Wash';
-    const matchesCategory = category === 'all' || bizCategory === category;
+    const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
     
     return matchesSearch && matchesCategory;
   });
@@ -201,12 +209,12 @@ function MarketplaceContent() {
             {CATEGORIES.map(cat => (
               <Button 
                 key={cat.id} 
-                variant={category === cat.id ? 'default' : 'outline'} 
+                variant={category.toLowerCase() === cat.id.toLowerCase() ? 'default' : 'outline'} 
                 size="sm" 
                 className="rounded-full px-6 font-bold h-10 transition-all shadow-sm"
                 onClick={() => setCategory(cat.id)}
               >
-                <cat.icon className={cn("h-4 w-4 mr-2", category === cat.id ? "text-white" : "text-primary")} />
+                <cat.icon className={cn("h-4 w-4 mr-2", category.toLowerCase() === cat.id.toLowerCase() ? "text-white" : "text-primary")} />
                 {cat.label}
               </Button>
             ))}
