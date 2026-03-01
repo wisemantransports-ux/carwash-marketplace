@@ -4,7 +4,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, Star, ShieldCheck, UserCheck, TrendingUp, Store, Loader2, Search, ShoppingCart, Car as CarIcon, Droplets, Check, Zap, ArrowRight, Clock } from "lucide-react";
+import { MapPin, Star, ShieldCheck, UserCheck, TrendingUp, Store, Loader2, Search, ShoppingCart, Car as CarIcon, Droplets, Check, Zap, ArrowRight, Clock, Package } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -131,10 +131,64 @@ function CarCardLanding({ car }: { car: any }) {
   );
 }
 
+function SparePartCardLanding({ part }: { part: any }) {
+  const displayImage = (part.images && part.images.length > 0) ? part.images[0] : 'https://picsum.photos/seed/part/400/300';
+
+  return (
+    <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl h-full group">
+      <div className="relative h-48 w-full overflow-hidden bg-muted">
+        <Image
+          src={displayImage}
+          alt={part.name}
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-110"
+        />
+        <div className="absolute top-2 left-2 flex flex-col gap-1">
+          <Badge className="bg-white/90 text-black shadow-sm uppercase text-[9px] font-black">
+            {part.category}
+          </Badge>
+          <Badge className={cn(
+            "border-none shadow-sm uppercase text-[9px] font-black text-white",
+            part.condition === 'new' ? "bg-green-600" : "bg-orange-600"
+          )}>
+            {part.condition}
+          </Badge>
+        </div>
+        <div className="absolute bottom-2 right-2">
+          <Badge className="bg-primary text-white font-black px-2 py-1 text-xs shadow-lg">
+            P{Number(part.price).toLocaleString()}
+          </Badge>
+        </div>
+      </div>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xl font-bold line-clamp-1">{part.name}</CardTitle>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase pt-1">
+          <Store className="h-3 w-3 text-primary" />
+          <span className="truncate">{part.business?.name || 'Verified Seller'}</span>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-grow pb-4">
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground uppercase">
+            <Package className="h-3 w-3" />
+            <span>{part.stock_quantity} In Stock</span>
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter className="pt-0">
+        <Button asChild variant="outline" className="w-full font-bold rounded-xl h-11 border-2">
+          <Link href={`/marketplace/spare-parts/${part.id}`}>Check Stock</Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [cars, setCars] = useState<any[]>([]);
+  const [spareParts, setSpareParts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,6 +221,18 @@ export default function LandingPage() {
           .limit(6);
         
         setCars(carData || []);
+
+        // 3. Fetch Verified Spare Parts
+        const { data: partData } = await supabase
+          .from('spare_parts')
+          .select('*, business:business_id(name, city, verification_status)')
+          .eq('status', 'active')
+          .eq('business.verification_status', 'verified')
+          .order('created_at', { ascending: false })
+          .limit(6);
+        
+        setSpareParts(partData || []);
+
       } catch (e) {
         console.error("Landing page fetch error:", e);
       } finally {
@@ -179,12 +245,13 @@ export default function LandingPage() {
   const unifiedTrending = useMemo(() => {
     const bizItems = businesses.map(b => ({ ...b, itemType: 'business' }));
     const carItems = cars.map(c => ({ ...c, itemType: 'car' }));
+    const partItems = spareParts.map(p => ({ ...p, itemType: 'part' }));
     
-    // Mix them and sort by a plausible "trending" metric (date for now)
-    return [...bizItems, ...carItems].sort((a, b) => 
+    // Mix them and sort by date for trending effect
+    return [...bizItems, ...carItems, ...partItems].sort((a, b) => 
       new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
-  }, [businesses, cars]);
+  }, [businesses, cars, spareParts]);
 
   if (!mounted) return (
     <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-background">
@@ -321,11 +388,12 @@ export default function LandingPage() {
                       </Card>
                   ))
               ) : unifiedTrending.length > 0 ? (
-                  unifiedTrending.slice(0, 9).map(item => (
-                      item.itemType === 'business' 
-                        ? <BusinessCard key={item.id} business={item} />
-                        : <CarCardLanding key={item.id} car={item} />
-                  ))
+                  unifiedTrending.slice(0, 12).map(item => {
+                      if (item.itemType === 'business') return <BusinessCard key={`biz-${item.id}`} business={item} />;
+                      if (item.itemType === 'car') return <CarCardLanding key={`car-${item.id}`} car={item} />;
+                      if (item.itemType === 'part') return <SparePartCardLanding key={`part-${item.id}`} part={item} />;
+                      return null;
+                  })
               ) : (
                   <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-card/50">
                       <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
