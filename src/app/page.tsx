@@ -134,7 +134,7 @@ function CarCardLanding({ car }: { car: any }) {
             <MapPin className="h-3 w-3" /> {car.business?.city || 'Botswana'}
           </div>
           <div className="flex items-center gap-1">
-            <Clock className="h-3 w-3" /> {car.mileage.toLocaleString()} KM
+            <Clock className="h-3 w-3" /> {car.mileage?.toLocaleString() || 0} KM
           </div>
         </div>
       </CardHeader>
@@ -192,7 +192,7 @@ function SparePartCardLanding({ part }: { part: any }) {
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground uppercase">
             <Package className="h-3 w-3" />
-            <span>{part.stock_quantity} In Stock</span>
+            <span>{part.stock_quantity || 0} In Stock</span>
           </div>
         </div>
       </CardContent>
@@ -227,33 +227,38 @@ export default function LandingPage() {
         const { data: bizData } = await supabase
             .from('businesses')
             .select('*')
-            .eq('verification_status', 'verified')
+            .or('verification_status.eq.verified,status.eq.verified')
             .order('rating', { ascending: false });
         
         const verifiedIds = (bizData || []).map(b => b.id);
         setBusinesses(bizData || []);
 
-        // 2. Fetch Verified Car Listings (Resilient manual join)
-        const { data: carData } = await supabase
-          .from('car_listing')
-          .select('*, business:business_id(name, city, verification_status)')
-          .in('status', ['active', 'available'])
-          .in('business_id', verifiedIds)
-          .order('created_at', { ascending: false })
-          .limit(6);
-        
-        setCars(carData || []);
+        if (verifiedIds.length > 0) {
+          // 2. Fetch Verified Car Listings (Resilient manual join)
+          const { data: carData } = await supabase
+            .from('car_listing')
+            .select('*, business:business_id(name, city, verification_status)')
+            .in('status', ['active', 'available'])
+            .in('business_id', verifiedIds)
+            .order('created_at', { ascending: false })
+            .limit(6);
+          
+          setCars(carData || []);
 
-        // 3. Fetch Verified Spare Parts
-        const { data: partData } = await supabase
-          .from('spare_parts')
-          .select('*, business:business_id(name, city, verification_status)')
-          .eq('status', 'active')
-          .in('business_id', verifiedIds)
-          .order('created_at', { ascending: false })
-          .limit(6);
-        
-        setSpareParts(partData || []);
+          // 3. Fetch Verified Spare Parts
+          const { data: partData } = await supabase
+            .from('spare_parts')
+            .select('*, business:business_id(name, city, verification_status)')
+            .eq('status', 'active')
+            .in('business_id', verifiedIds)
+            .order('created_at', { ascending: false })
+            .limit(6);
+          
+          setSpareParts(partData || []);
+        } else {
+          setCars([]);
+          setSpareParts([]);
+        }
 
       } catch (e) {
         console.error("Landing page fetch error:", e);
@@ -410,7 +415,7 @@ export default function LandingPage() {
                       </Card>
                   ))
               ) : unifiedTrending.length > 0 ? (
-                  unifiedTrending.slice(0, 12).map(item => {
+                  unifiedTrending.slice(0, 12).map((item: any) => {
                       if (item.itemType === 'business') return <BusinessCard key={`biz-${item.id}`} business={item} />;
                       if (item.itemType === 'car') return <CarCardLanding key={`car-${item.id}`} car={item} />;
                       if (item.itemType === 'part') return <SparePartCardLanding key={`part-${item.id}`} part={item} />;

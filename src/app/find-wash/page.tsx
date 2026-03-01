@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -7,7 +6,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, Clock, History, Package, Tags } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, Clock, Package, Tags } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -147,7 +146,7 @@ function CarCardSimple({ car }: { car: CarListing }) {
             <MapPin className="h-3 w-3" /> {car.business?.city || 'Botswana'}
           </div>
           <div className="flex items-center gap-1">
-            <Clock className="h-3 w-3" /> {car.mileage.toLocaleString()} KM
+            <Clock className="h-3 w-3" /> {car.mileage?.toLocaleString() || 0} KM
           </div>
         </div>
       </CardHeader>
@@ -239,47 +238,52 @@ function MarketplaceContent() {
     try {
       /**
        * FETCH Verified Businesses (Source of truth for verification)
+       * Check both status columns for maximum discovery reliability.
        */
       const { data: bizData } = await supabase
           .from('businesses')
           .select('*')
-          .eq('verification_status', 'verified')
+          .or('verification_status.eq.verified,status.eq.verified')
           .order('name', { ascending: true });
       
       const verifiedBusinesses = bizData || [];
       const verifiedIds = verifiedBusinesses.map(b => b.id);
       setBusinesses(verifiedBusinesses);
 
-      /**
-       * FETCH Verified Cars
-       * Using simple join to avoid !inner join failures if relationships are loose.
-       */
-      const { data: carData } = await supabase
-        .from('car_listing')
-        .select(`
-          id, title, make, model, year, price, mileage, images, description, status, created_at, business_id,
-          business:business_id ( name, city, verification_status )
-        `)
-        .in('status', ['active', 'available'])
-        .in('business_id', verifiedIds)
-        .order('created_at', { ascending: false });
+      if (verifiedIds.length > 0) {
+        /**
+         * FETCH Verified Cars
+         */
+        const { data: carData } = await supabase
+          .from('car_listing')
+          .select(`
+            id, title, make, model, year, price, mileage, images, description, status, created_at, business_id,
+            business:business_id ( name, city, verification_status )
+          `)
+          .in('status', ['active', 'available'])
+          .in('business_id', verifiedIds)
+          .order('created_at', { ascending: false });
 
-      setCars((carData as any[]) || []);
+        setCars((carData as any[]) || []);
 
-      /**
-       * FETCH Verified Spare Parts
-       */
-      const { data: partData } = await supabase
-        .from('spare_parts')
-        .select(`
-          id, name, category, price, condition, images, stock_quantity, description, status, created_at, business_id,
-          business:business_id ( name, city, verification_status )
-        `)
-        .eq('status', 'active')
-        .in('business_id', verifiedIds)
-        .order('created_at', { ascending: false });
-      
-      setSpareParts((partData as any[]) || []);
+        /**
+         * FETCH Verified Spare Parts
+         */
+        const { data: partData } = await supabase
+          .from('spare_parts')
+          .select(`
+            id, name, category, price, condition, images, stock_quantity, description, status, created_at, business_id,
+            business:business_id ( name, city, verification_status )
+          `)
+          .eq('status', 'active')
+          .in('business_id', verifiedIds)
+          .order('created_at', { ascending: false });
+        
+        setSpareParts((partData as any[]) || []);
+      } else {
+        setCars([]);
+        setSpareParts([]);
+      }
 
     } catch (e) {
       console.error('Directory Fetch Failure:', e);
@@ -311,24 +315,24 @@ function MarketplaceContent() {
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
     const carList = cars.filter(c => {
-      const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
-                           c.make.toLowerCase().includes(search.toLowerCase()) ||
-                           c.model.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = (c.title?.toLowerCase().includes(search.toLowerCase())) || 
+                           (c.make?.toLowerCase().includes(search.toLowerCase())) ||
+                           (c.model?.toLowerCase().includes(search.toLowerCase()));
       const matchesCategory = category === 'all' || category.toLowerCase() === 'cars';
       return matchesSearch && matchesCategory;
     }).map(c => ({ ...c, itemType: 'car' as const }));
 
     const partList = spareParts.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
-                           p.category.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = (p.name?.toLowerCase().includes(search.toLowerCase())) || 
+                           (p.category?.toLowerCase().includes(search.toLowerCase()));
       const matchesCategory = category === 'all' || category.toLowerCase() === 'spare';
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
     // Interleave and sort by date
     return [...bizList, ...carList, ...partList].sort((a, b) => {
-      const dateA = new Date(a.created_at || a.updated_at || 0).getTime();
-      const dateB = new Date(b.created_at || b.updated_at || 0).getTime();
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
     });
   }, [businesses, cars, spareParts, search, category]);
