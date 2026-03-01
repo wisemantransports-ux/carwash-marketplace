@@ -15,9 +15,24 @@ import { cn } from '@/lib/utils';
 import { CarListing, SparePart } from '@/lib/types';
 
 /**
- * @fileOverview Unified Automotive Partner Directory
- * Handles the "All Partners" mixed-media view and specialized sector filtering.
+ * Robust image parsing for Postgres array columns
  */
+function getDisplayImage(images: any, fallback: string): string {
+  if (!images) return fallback;
+  if (Array.isArray(images) && images.length > 0) return images[0];
+  if (typeof images === 'string') {
+    try {
+      // Handle stringified JSON arrays
+      const parsed = JSON.parse(images);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+    } catch {
+      // Handle Postgres array literals like "{url1,url2}"
+      const cleaned = images.replace(/[{}]/g, '').split(',');
+      if (cleaned.length > 0 && cleaned[0]) return cleaned[0];
+    }
+  }
+  return fallback;
+}
 
 const CATEGORIES = [
   { id: 'all', label: 'All Partners', icon: Filter },
@@ -100,7 +115,7 @@ function BusinessCard({ business }: { business: any }) {
 }
 
 function CarCardSimple({ car }: { car: CarListing }) {
-  const displayImage = (car.images && car.images.length > 0) ? car.images[0] : 'https://picsum.photos/seed/car/600/400';
+  const displayImage = getDisplayImage(car.images, 'https://picsum.photos/seed/car/600/400');
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
@@ -143,7 +158,7 @@ function CarCardSimple({ car }: { car: CarListing }) {
 }
 
 function SparePartCardSimple({ part }: { part: SparePart }) {
-  const displayImage = (part.images && part.images.length > 0) ? part.images[0] : 'https://picsum.photos/seed/part/400/300';
+  const displayImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/400/300');
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
@@ -155,7 +170,7 @@ function SparePartCardSimple({ part }: { part: SparePart }) {
           className="object-cover transition-transform duration-500 group-hover:scale-110"
         />
         <div className="absolute top-2 left-2 flex flex-col gap-1">
-          <Badge className="bg-white/90 text-black shadow-sm uppercase text-[9px] font-black">
+          <Badge className="bg-white/90 text-black backdrop-blur-sm shadow-sm uppercase text-[9px] font-black">
             {part.category}
           </Badge>
           <Badge className={cn(

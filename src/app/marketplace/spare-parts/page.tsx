@@ -16,17 +16,25 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 /**
- * @fileOverview Spare Parts Marketplace Hub (Public)
- * Provides a dedicated showroom for genuine automotive components.
- * 
- * SECURITY & RLS:
- * - Fetches only 'active' parts.
- * - Uses !inner join to 'businesses' to ensure ONLY verified partners are shown.
- * - Respects Supabase Public SELECT policy (no sensitive fields exposed).
+ * Robust image parsing for Postgres array columns
  */
+function getDisplayImage(images: any, fallback: string): string {
+  if (!images) return fallback;
+  if (Array.isArray(images) && images.length > 0) return images[0];
+  if (typeof images === 'string') {
+    try {
+      const parsed = JSON.parse(images);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+    } catch {
+      const cleaned = images.replace(/[{}]/g, '').split(',');
+      if (cleaned.length > 0 && cleaned[0]) return cleaned[0];
+    }
+  }
+  return fallback;
+}
 
 export function SparePartCard({ part }: { part: SparePart }) {
-  const displayImage = (part.images && part.images.length > 0) ? part.images[0] : 'https://picsum.photos/seed/part/400/300';
+  const displayImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/400/300');
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">

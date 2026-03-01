@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +12,24 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+
+/**
+ * Robust image parsing for Postgres array columns
+ */
+function getDisplayImage(images: any, fallback: string): string {
+  if (!images) return fallback;
+  if (Array.isArray(images) && images.length > 0) return images[0];
+  if (typeof images === 'string') {
+    try {
+      const parsed = JSON.parse(images);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+    } catch {
+      const cleaned = images.replace(/[{}]/g, '').split(',');
+      if (cleaned.length > 0 && cleaned[0]) return cleaned[0];
+    }
+  }
+  return fallback;
+}
 
 const CATEGORIES = [
   { id: 'Wash', label: 'Car Wash', icon: Droplets, desc: 'Book trusted wash services near you.', color: 'text-blue-600', bg: 'bg-blue-50', href: '/find-wash?category=Wash' },
@@ -47,7 +64,7 @@ function BusinessCard({ business }: { business: any }) {
       </div>
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2">
-          <CardTitle className="text-xl line-clamp-1 font-bold">{business.name}</CardTitle>
+          <CardTitle className="text-xl font-bold line-clamp-1">{business.name}</CardTitle>
           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 shrink-0 text-[10px] font-bold">
             <ShieldCheck className="h-3 w-3 mr-1" /> Verified
           </Badge>
@@ -84,7 +101,7 @@ function BusinessCard({ business }: { business: any }) {
 }
 
 function CarCardLanding({ car }: { car: any }) {
-  const displayImage = (car.images && car.images.length > 0) ? car.images[0] : 'https://picsum.photos/seed/car/600/400';
+  const displayImage = getDisplayImage(car.images, 'https://picsum.photos/seed/car/600/400');
 
   return (
     <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl h-full group">
@@ -132,7 +149,7 @@ function CarCardLanding({ car }: { car: any }) {
 }
 
 function SparePartCardLanding({ part }: { part: any }) {
-  const displayImage = (part.images && part.images.length > 0) ? part.images[0] : 'https://picsum.photos/seed/part/400/300';
+  const displayImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/400/300');
 
   return (
     <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl h-full group">
