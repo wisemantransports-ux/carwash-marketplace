@@ -163,7 +163,7 @@ export type CarListing = {
   id: string;
   business_id: string;
   owner_id?: string;
-  title?: string;
+  title: string; // Fixed: title is mandatory in DB
   make: string;
   model: string;
   year: number;

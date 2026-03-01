@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Plus, Camera, Banknote, Calendar, ShieldCheck, ArrowLeft, Info } from 'lucide-react';
+import { Loader2, Plus, Camera, Banknote, Calendar, ShieldCheck, ArrowLeft, Info, Type } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -22,6 +22,7 @@ export default function AddCarListingPage() {
   const [submitting, setSubmitting] = useState(false);
   
   // Form State
+  const [title, setTitle] = useState('');
   const [make, setMake] = useState('');
   const [model, setModel] = useState('');
   const [year, setYear] = useState(new Date().getFullYear().toString());
@@ -77,6 +78,11 @@ export default function AddCarListingPage() {
       return;
     }
 
+    if (!title.trim()) {
+      toast({ variant: 'destructive', title: 'Title Required', description: 'A listing title is mandatory.' });
+      return;
+    }
+
     setSubmitting(true);
     try {
       // 1. Upload Image
@@ -87,16 +93,17 @@ export default function AddCarListingPage() {
       
       const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
 
-      // 2. Insert Listing - Using 'images' array column
+      // 2. Insert Listing
       const { error } = await supabase.from('car_listing').insert({
         business_id: business.id,
+        title: title.trim(),
         make: make.trim(),
         model: model.trim(),
         year: parseInt(year),
         price: parseFloat(price),
         mileage: parseInt(mileage),
         description: description.trim(),
-        images: [publicUrl], // Array type
+        images: [publicUrl],
         status: 'active'
       });
 
@@ -129,10 +136,25 @@ export default function AddCarListingPage() {
         <div className="lg:col-span-2 space-y-6">
           <Card className="border-2 shadow-lg">
             <CardHeader className="bg-muted/10 border-b">
-              <CardTitle>Core Specifications</CardTitle>
+              <CardTitle>Vehicle Specifications</CardTitle>
               <CardDescription>All fields are required for professional presentation.</CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="title">Listing Title *</Label>
+                <div className="relative">
+                  <Type className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    id="title" 
+                    value={title} 
+                    onChange={e => setTitle(e.target.value)} 
+                    placeholder="e.g. Pristine 2022 Toyota Hilux 4x4" 
+                    className="pl-10"
+                    required 
+                  />
+                </div>
+              </div>
+
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="make">Make *</Label>
