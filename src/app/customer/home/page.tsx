@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
@@ -6,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Tags, Filter, Droplets, ShoppingCart, Car as CarIcon } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Tags, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,7 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
-  { id: 'all', label: 'All', icon: Filter },
+  { id: 'all', label: 'All Partners', icon: Filter },
   { id: 'Wash', label: 'Car Wash', icon: Droplets },
   { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart },
   { id: 'Cars', label: 'Car Sales', icon: CarIcon },
@@ -63,7 +64,7 @@ function BusinessCard({ business }: { business: any }) {
       <CardContent className="flex-grow space-y-4 pb-4 overflow-hidden flex flex-col">
         <div className="space-y-2 flex-1 flex flex-col min-h-0">
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter flex items-center gap-1.5">
-                <Tags className="h-3 w-3" /> Service Menu
+                <Tags className="h-3 w-3" /> Partner Expertise
             </p>
             <ScrollArea className="flex-1 pr-2">
                 <div className="space-y-1.5">
@@ -73,7 +74,7 @@ function BusinessCard({ business }: { business: any }) {
                             <span className="font-bold text-primary">BWP {Number(svc.price).toFixed(2)}</span>
                         </div>
                     )) : (
-                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Contact business for pricing.</p>
+                        <p className="text-[10px] text-muted-foreground italic py-4 text-center">Contact partner for details.</p>
                     )}
                 </div>
             </ScrollArea>
@@ -101,7 +102,7 @@ function BusinessCard({ business }: { business: any }) {
       <CardFooter className="pt-0 shrink-0">
         <Button asChild className="w-full shadow-md font-bold">
           <Link href={`/customer/book/${business.id}`}>
-            Book Service
+            View Profile & Book
           </Link>
         </Button>
       </CardFooter>
@@ -171,15 +172,15 @@ function CustomerHomeContent() {
         <div className="flex-1 space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
             <ShieldCheck className="h-3 w-3" />
-            <span>Verified Platform Partners</span>
+            <span>Verified Marketplace Partners</span>
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Find Your Perfect Wash</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Partner Directory</h1>
           
           <div className="space-y-4">
             <div className="relative max-w-2xl">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Search by name or city..." 
+                placeholder="Search partners by name or city..." 
                 className="pl-10 h-12 bg-card shadow-sm border-2"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -204,6 +205,23 @@ function CustomerHomeContent() {
         </div>
       </div>
 
+      {category === 'Cars' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="bg-white p-3 rounded-xl shadow-sm">
+              <CarIcon className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="space-y-1">
+              <p className="font-bold text-blue-900">Vehicle Discovery</p>
+              <p className="text-sm text-blue-800">Browse individual car listings from these verified dealers.</p>
+            </div>
+          </div>
+          <Button asChild variant="outline" className="bg-white border-blue-200 hover:bg-blue-50 rounded-full">
+            <Link href="/marketplace/cars">View Car Listings <ArrowRight className="ml-2 h-4 w-4" /></Link>
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {loading ? (
           Array.from({ length: 6 }).map((_, i) => (
@@ -222,7 +240,7 @@ function CustomerHomeContent() {
         ) : (
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-            <p className="text-xl font-bold">No verified partners found.</p>
+            <p className="text-xl font-bold">No verified partners found in this category.</p>
             <Button variant="outline" className="mt-4" onClick={() => { setSearch(''); setCategory('all'); }}>Clear Filters</Button>
           </div>
         )}

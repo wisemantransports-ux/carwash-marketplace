@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
@@ -78,8 +79,8 @@ function BusinessCard({ business }: { business: any }) {
           </div>
           
           <div className="bg-muted/30 p-2 rounded-lg border border-transparent">
-            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Services</p>
-            <p className="text-xs font-bold text-primary">View packages & pricing</p>
+            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Expertise</p>
+            <p className="text-xs font-bold text-primary">View services & availability</p>
           </div>
         </div>
       </CardContent>
@@ -134,7 +135,7 @@ function MarketplaceContent() {
         if (error) throw error;
         setBusinesses(data || []);
       } catch (e) {
-        console.error('Marketplace Fetch Failure:', e);
+        console.error('Directory Fetch Failure:', e);
       } finally {
         setLoading(false);
       }
@@ -144,7 +145,6 @@ function MarketplaceContent() {
 
   const handleCategoryChange = (catId: string) => {
     setCategory(catId);
-    // Update URL without full refresh to maintain deep links
     const params = new URLSearchParams(searchParams.toString());
     if (catId === 'all') params.delete('category');
     else params.set('category', catId);
@@ -173,7 +173,7 @@ function MarketplaceContent() {
           </Link>
           <div className="flex items-center gap-2">
              <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-[10px]">CWM</div>
-            <span className="text-sm font-bold text-primary tracking-tight">Marketplace</span>
+            <span className="text-sm font-bold text-primary tracking-tight">Partner Directory</span>
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild><Link href="/login">Sign In</Link></Button>
@@ -187,10 +187,12 @@ function MarketplaceContent() {
           <div className="space-y-4 max-w-4xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-2">
               <ShieldCheck className="h-3 w-3" />
-              <span>Verified Automotive Partners Only</span>
+              <span>Verified Automotive Experts</span>
             </div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-900">Partner Directory</h1>
-            <p className="text-muted-foreground text-lg leading-relaxed">Browse verified experts for car wash services, spare parts, and dealerships across Botswana.</p>
+            <h1 className="text-4xl font-black tracking-tight text-slate-900">Automotive Partner Directory</h1>
+            <p className="text-muted-foreground text-lg leading-relaxed">
+              Find verified car wash services, quality spare parts shops, and vehicle dealerships across Botswana.
+            </p>
           </div>
           
           <Button size="lg" className="rounded-2xl shadow-xl h-14 px-8 font-black bg-blue-600 hover:bg-blue-700" asChild>
@@ -204,7 +206,7 @@ function MarketplaceContent() {
           <div className="relative max-w-2xl">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input 
-                placeholder="Search by business name or city..." 
+                placeholder="Search partners by name or city..." 
                 className="pl-10 h-14 bg-white border-2 rounded-2xl shadow-sm text-lg"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -226,6 +228,23 @@ function MarketplaceContent() {
             ))}
           </div>
         </div>
+
+        {category === 'Cars' && (
+          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="bg-white p-3 rounded-xl shadow-sm">
+                <CarIcon className="h-6 w-6 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-bold text-slate-900">Looking for actual vehicles?</p>
+                <p className="text-sm text-muted-foreground">View real-time listings from these verified dealerships.</p>
+              </div>
+            </div>
+            <Button asChild variant="default" className="rounded-full">
+              <Link href="/marketplace/cars">Go to Car Discovery <ArrowRight className="ml-2 h-4 w-4" /></Link>
+            </Button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
           {loading ? (
@@ -260,7 +279,7 @@ export default function PublicFindWashPage() {
     <Suspense fallback={
       <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-background">
           <Loader2 className="animate-spin h-10 w-10 text-primary" />
-          <p className="text-muted-foreground animate-pulse font-medium">Loading Marketplace...</p>
+          <p className="text-muted-foreground animate-pulse font-medium">Loading Directory...</p>
       </div>
     }>
       <MarketplaceContent />

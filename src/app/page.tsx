@@ -1,9 +1,10 @@
+
 'use client';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, Star, ShieldCheck, UserCheck, TrendingUp, Store, Loader2, Search, ShoppingCart, Car as CarIcon, Droplets, Check, Zap } from "lucide-react";
+import { MapPin, Star, ShieldCheck, UserCheck, TrendingUp, Store, Loader2, Search, ShoppingCart, Car as CarIcon, Droplets, Check, Zap, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ import { Input } from "@/components/ui/input";
 const CATEGORIES = [
   { id: 'Wash', label: 'Car Wash', icon: Droplets, desc: 'Book trusted wash services near you.', color: 'text-blue-600', bg: 'bg-blue-50', href: '/find-wash?category=Wash' },
   { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart, desc: 'Find parts for any car, verified sellers.', color: 'text-orange-600', bg: 'bg-orange-50', href: '/find-wash?category=Spare' },
-  { id: 'Cars', label: 'Cars for Sale', icon: CarIcon, desc: 'Browse cars from verified individuals.', color: 'text-green-600', bg: 'bg-green-50', href: '/marketplace/cars' },
+  { id: 'Cars', label: 'Car Sales', icon: CarIcon, desc: 'Browse cars from verified individuals.', color: 'text-green-600', bg: 'bg-green-50', href: '/find-wash?category=Cars' },
 ];
 
 function BusinessCard({ business }: { business: any }) {
@@ -132,7 +133,7 @@ export default function LandingPage() {
           </div>
           <div className="hidden md:flex items-center gap-6">
             <Link href="#categories" className="text-sm font-medium hover:text-primary transition-colors">Categories</Link>
-            <Link href="/find-wash" className="text-sm font-medium hover:text-primary transition-colors font-bold">Find Listings</Link>
+            <Link href="/find-wash" className="text-sm font-medium hover:text-primary transition-colors font-bold">Partner Directory</Link>
             <Link href="#pricing" className="text-sm font-medium hover:text-primary transition-colors">Partner Pricing</Link>
           </div>
           <div className="flex items-center gap-3">
@@ -163,7 +164,7 @@ export default function LandingPage() {
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   <Input 
-                    placeholder="Search wash, parts, or cars..." 
+                    placeholder="Search partners, parts, or cars..." 
                     className="pl-10 h-12 border-none bg-transparent shadow-none focus-visible:ring-0 text-lg"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -193,7 +194,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto space-y-12">
             <div className="text-center space-y-4">
-                <h2 className="text-4xl font-extrabold tracking-tight">Explore Categories</h2>
+                <h2 className="text-4xl font-extrabold tracking-tight">Explore Partner Expertise</h2>
                 <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Connecting you with verified automotive experts across the country.</p>
             </div>
             <div className="grid md:grid-cols-3 gap-8">
@@ -231,11 +232,11 @@ export default function LandingPage() {
           <div className="max-w-6xl mx-auto space-y-12">
             <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                 <div className="space-y-2">
-                  <h2 className="text-4xl font-extrabold tracking-tight">Trending Discovery</h2>
-                  <p className="text-muted-foreground text-lg">Top-rated partners providing exceptional quality.</p>
+                  <h2 className="text-4xl font-extrabold tracking-tight">Trending Partners</h2>
+                  <p className="text-muted-foreground text-lg">Top-rated automotive experts providing exceptional quality.</p>
                 </div>
                 <Button variant="outline" size="lg" asChild className="rounded-full px-10 h-12 font-bold shadow-sm">
-                    <Link href="/find-wash">View Full Marketplace</Link>
+                    <Link href="/find-wash">View All Partners</Link>
                 </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -310,7 +311,7 @@ export default function LandingPage() {
       </section>
 
       <footer className="py-16 border-t bg-card text-center">
-        <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">© 2024 HydroFlow Smart Automotive Platform. Secure & Verified.</p>
+        <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">© 2024 CWM Automotive Platform. Secure & Verified.</p>
       </footer>
     </div>
   );
