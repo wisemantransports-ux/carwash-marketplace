@@ -12,7 +12,6 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { CarListing, SparePart } from '@/lib/types';
 
 /**
  * Robust image parsing for Postgres array columns
@@ -189,7 +188,7 @@ function SparePartCardSimple({ part }: { part: any }) {
         </div>
       </div>
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-bold line-clamp-1">{part.name}</CardTitle>
+        <CardTitle className="text-xl font-bold line-clamp-1">{part.name}</CardTitle>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase pt-1">
           <Store className="h-3 w-3 text-primary" />
           <span className="truncate">{part.business?.name || 'Verified Seller'}</span>
@@ -236,7 +235,7 @@ function MarketplaceContent() {
     }
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses (Resilient pattern)
+      // 1. Fetch Verified Businesses (Source of Truth)
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*')
@@ -247,41 +246,53 @@ function MarketplaceContent() {
       
       const verifiedBusinesses = bizData || [];
       const verifiedIds = verifiedBusinesses.map(b => b.id);
+      const bizMap = verifiedBusinesses.reduce((acc: any, b: any) => {
+        acc[b.id] = b;
+        return acc;
+      }, {});
+
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
-        // 2. Fetch Cars from Verified Partners (Resilient manual filtering)
-        const { data: carData } = await supabase
+        // 2. Fetch Cars using explicit wiring (Proven to work)
+        const { data: carData, error: carError } = await supabase
           .from('car_listing')
-          .select(`
-            id, title, make, model, year, price, mileage, images, description, status, created_at, business_id,
-            business:business_id ( name, city, verification_status )
-          `)
+          .select('*')
           .in('status', ['active', 'available'])
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
-        setCars(carData || []);
+        if (carError) throw carError;
 
-        // 3. Fetch Spare Parts from Verified Partners
-        const { data: partData } = await supabase
+        const wiredCars = (carData || []).map(c => ({
+          ...c,
+          business: bizMap[c.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+        }));
+        setCars(wiredCars);
+
+        // 3. Fetch Spare Parts using SAME wiring pattern as car sales
+        const { data: partData, error: partError } = await supabase
           .from('spare_parts')
-          .select(`
-            id, name, category, price, condition, images, stock_quantity, description, status, created_at, business_id,
-            business:business_id ( name, city, verification_status )
-          `)
-          .eq('status', 'active')
+          .select('*')
+          .in('status', ['active', 'available'])
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
         
-        setSpareParts(partData || []);
+        if (partError) throw partError;
+
+        const wiredParts = (partData || []).map(p => ({
+          ...p,
+          business: bizMap[p.business_id] || { name: 'Verified Retailer', city: 'Botswana' }
+        }));
+        setSpareParts(wiredParts);
+
       } else {
         setCars([]);
         setSpareParts([]);
       }
 
     } catch (e: any) {
-      console.error('Directory Fetch Failure:', {
+      console.error('Marketplace Discovery failure:', {
         message: e.message,
         details: e.details,
         code: e.code

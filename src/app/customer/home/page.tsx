@@ -257,50 +257,68 @@ function CustomerHomeContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses (Source of truth)
-      const { data: bizData } = await supabase
+      // 1. Fetch Verified Businesses (Mapping Context)
+      const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*, services(*)')
           .or('verification_status.eq.verified,status.eq.verified')
           .order('name', { ascending: true });
       
+      if (bizError) throw bizError;
+
       const verifiedBusinesses = bizData || [];
       const verifiedIds = verifiedBusinesses.map(b => b.id);
+      const bizMap = verifiedBusinesses.reduce((acc: any, b: any) => {
+        acc[b.id] = b;
+        return acc;
+      }, {});
+
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
-        // 2. Fetch Cars from Verified Partners (Resilient manual join)
-        const { data: carData } = await supabase
+        // 2. Fetch Cars using explicit manual wiring (Proven reliability)
+        const { data: carData, error: carError } = await supabase
           .from('car_listing')
-          .select(`
-            id, title, make, model, year, price, mileage, images, description, status, created_at, business_id,
-            business:business_id ( name, city, verification_status )
-          `)
+          .select('*')
           .in('status', ['active', 'available'])
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
-        setCars((carData as any[]) || []);
+        if (carError) throw carError;
 
-        // 3. Fetch Spare Parts from Verified Partners
-        const { data: partData } = await supabase
+        const wiredCars = (carData || []).map(c => ({
+          ...c,
+          business: bizMap[c.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+        }));
+        setCars(wiredCars as any[]);
+
+        // 3. Fetch Spare Parts using explicit manual wiring (SAME pattern as cars)
+        const { data: partData, error: partError } = await supabase
           .from('spare_parts')
-          .select(`
-            id, name, category, price, condition, images, stock_quantity, description, status, created_at, business_id,
-            business:business_id ( name, city, verification_status )
-          `)
-          .eq('status', 'active')
+          .select('*')
+          .in('status', ['active', 'available'])
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
         
-        setSpareParts((partData as any[]) || []);
+        if (partError) throw partError;
+
+        const wiredParts = (partData || []).map(p => ({
+          ...p,
+          business: bizMap[p.business_id] || { name: 'Verified Retailer', city: 'Botswana' }
+        }));
+        setSpareParts(wiredParts as any[]);
+
       } else {
         setCars([]);
         setSpareParts([]);
       }
 
     } catch (e: any) {
-      console.error('Marketplace Error:', e);
+      console.error('Customer Discovery Error:', {
+        message: e.message,
+        details: e.details,
+        code: e.code
+      });
     } finally {
       setLoading(false);
     }
@@ -335,7 +353,6 @@ function CustomerHomeContent() {
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
-    // Combined list sorted by activity
     return [...bizList, ...carList, ...partList].sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();

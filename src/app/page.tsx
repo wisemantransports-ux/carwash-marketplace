@@ -223,45 +223,69 @@ export default function LandingPage() {
       }
       setLoading(true);
       try {
-        // 1. Fetch Verified Businesses (Source of truth)
-        const { data: bizData } = await supabase
+        // 1. Fetch Verified Businesses (Mapping Context)
+        const { data: bizData, error: bizError } = await supabase
             .from('businesses')
             .select('*')
             .or('verification_status.eq.verified,status.eq.verified')
             .order('rating', { ascending: false });
         
-        const verifiedIds = (bizData || []).map(b => b.id);
-        setBusinesses(bizData || []);
+        if (bizError) throw bizError;
+
+        const verifiedBusinesses = bizData || [];
+        const verifiedIds = verifiedBusinesses.map(b => b.id);
+        const bizMap = verifiedBusinesses.reduce((acc: any, b: any) => {
+          acc[b.id] = b;
+          return acc;
+        }, {});
+
+        setBusinesses(verifiedBusinesses);
 
         if (verifiedIds.length > 0) {
-          // 2. Fetch Verified Car Listings (Resilient manual join)
-          const { data: carData } = await supabase
+          // 2. Fetch Cars using explicit manual wiring (Proven reliability)
+          const { data: carData, error: carError } = await supabase
             .from('car_listing')
-            .select('*, business:business_id(name, city, verification_status)')
+            .select('*')
             .in('status', ['active', 'available'])
             .in('business_id', verifiedIds)
             .order('created_at', { ascending: false })
             .limit(6);
           
-          setCars(carData || []);
+          if (carError) throw carError;
 
-          // 3. Fetch Verified Spare Parts
-          const { data: partData } = await supabase
+          const wiredCars = (carData || []).map(c => ({
+            ...c,
+            business: bizMap[c.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+          }));
+          setCars(wiredCars);
+
+          // 3. Fetch Spare Parts using explicit manual wiring (SAME pattern as cars)
+          const { data: partData, error: partError } = await supabase
             .from('spare_parts')
-            .select('*, business:business_id(name, city, verification_status)')
-            .eq('status', 'active')
+            .select('*')
+            .in('status', ['active', 'available'])
             .in('business_id', verifiedIds)
             .order('created_at', { ascending: false })
             .limit(6);
           
-          setSpareParts(partData || []);
+          if (partError) throw partError;
+
+          const wiredParts = (partData || []).map(p => ({
+            ...p,
+            business: bizMap[p.business_id] || { name: 'Verified Retailer', city: 'Botswana' }
+          }));
+          setSpareParts(wiredParts);
         } else {
           setCars([]);
           setSpareParts([]);
         }
 
-      } catch (e) {
-        console.error("Landing page fetch error:", e);
+      } catch (e: any) {
+        console.error("Landing page discovery failure:", {
+          message: e.message,
+          details: e.details,
+          code: e.code
+        });
       } finally {
         setLoading(false);
       }
