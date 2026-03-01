@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Mail, Store, AlertCircle, Filter, CheckCircle2, XCircle, FileText, Camera, User, RefreshCw, Eye } from "lucide-react";
+import { Mail, Store, AlertCircle, Filter, CheckCircle2, XCircle, FileText, Camera, User, RefreshCw, MapPin, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -26,7 +26,7 @@ export default function BusinessVerificationPage() {
     const fetchBusinesses = useCallback(async () => {
         setLoading(true);
         try {
-            // Join with users to get owner name and email
+            // Fetch all businesses with owner details
             let query = supabase
                 .from('businesses')
                 .select(`
@@ -37,7 +37,7 @@ export default function BusinessVerificationPage() {
             if (statusFilter !== 'all') query = query.eq('verification_status', statusFilter);
             if (typeFilter !== 'all') query = query.eq('business_type', typeFilter);
 
-            const { data, error } = await query.order('name');
+            const { data, error } = await query.order('created_at', { ascending: false });
             
             if (error) throw error;
             setBusinesses(data || []);
@@ -56,7 +56,10 @@ export default function BusinessVerificationPage() {
 
     const handleVerificationUpdate = async (businessId: string, status: 'verified' | 'rejected', type: string) => {
         try {
-            const updatePayload: any = { verification_status: status };
+            const updatePayload: any = { 
+                verification_status: status,
+                status: status === 'verified' ? 'active' : 'pending' 
+            };
             
             // If approving a registered business, ensure the special tag is set
             if (status === 'verified' && type === 'registered') {
@@ -131,14 +134,15 @@ export default function BusinessVerificationPage() {
             <Card className="shadow-2xl border-muted/50 overflow-hidden rounded-2xl">
                 <CardHeader className="bg-muted/10 border-b">
                     <CardTitle className="text-lg">Verification Queue</CardTitle>
-                    <CardDescription>Reviewing {businesses.length} registration submissions.</CardDescription>
+                    <CardDescription>Reviewing {businesses.length} registration submissions with full profiles.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/30 border-b-2">
-                                    <TableHead className="font-bold py-4 pl-6 text-xs uppercase tracking-wider">Business / Owner</TableHead>
+                                    <TableHead className="font-bold py-4 pl-6 text-xs uppercase tracking-wider">Business & Location</TableHead>
+                                    <TableHead className="font-bold text-xs uppercase tracking-wider">Owner Profile</TableHead>
                                     <TableHead className="font-bold text-xs uppercase tracking-wider text-center">Account Type</TableHead>
                                     <TableHead className="font-bold text-xs uppercase tracking-wider">ID / Reg No.</TableHead>
                                     <TableHead className="font-bold text-center text-xs uppercase tracking-wider">Documents</TableHead>
@@ -150,6 +154,7 @@ export default function BusinessVerificationPage() {
                                     Array.from({ length: 5 }).map((_, i) => (
                                         <TableRow key={i}>
                                             <TableCell className="pl-6"><Skeleton className="h-12 w-48 rounded-lg" /></TableCell>
+                                            <TableCell><Skeleton className="h-12 w-48 rounded-lg" /></TableCell>
                                             <TableCell><Skeleton className="h-6 w-20 mx-auto rounded-full" /></TableCell>
                                             <TableCell><Skeleton className="h-6 w-24 rounded" /></TableCell>
                                             <TableCell className="text-center"><Skeleton className="h-8 w-24 mx-auto rounded-full" /></TableCell>
@@ -160,15 +165,26 @@ export default function BusinessVerificationPage() {
                                     businesses.map(business => (
                                         <TableRow key={business.id} className="hover:bg-muted/5 transition-colors border-b last:border-0">
                                             <TableCell className="pl-6 py-4">
-                                                <div className="flex flex-col">
+                                                <div className="flex flex-col gap-1">
                                                     <div className="font-bold text-primary flex items-center gap-2 text-sm">
                                                         <Store className="h-3.5 w-3.5" /> {business.name}
                                                     </div>
-                                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1 font-medium">
-                                                        <User className="h-3 w-3 opacity-60" /> {business.owner?.name || 'Unknown Owner'}
+                                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
+                                                        <MapPin className="h-3 w-3 opacity-60" /> 
+                                                        {business.address || 'No Address'}, {business.city || 'N/A'}
                                                     </div>
-                                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono opacity-80">
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="text-[11px] font-bold flex items-center gap-1.5">
+                                                        <User className="h-3 w-3 opacity-60" /> {business.owner?.name || 'Unknown'}
+                                                    </div>
+                                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 font-medium">
                                                         <Mail className="h-3 w-3 opacity-60" /> {business.owner?.email || 'N/A'}
+                                                    </div>
+                                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 font-bold">
+                                                        <Phone className="h-3 w-3 opacity-60 text-primary" /> {business.whatsapp_number || 'No Phone'}
                                                     </div>
                                                 </div>
                                             </TableCell>
@@ -264,7 +280,7 @@ export default function BusinessVerificationPage() {
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="h-72 text-center text-muted-foreground italic">
+                                        <TableCell colSpan={6} className="h-72 text-center text-muted-foreground italic">
                                             <div className="flex flex-col items-center gap-4 opacity-40">
                                                 <div className="p-6 bg-muted rounded-full">
                                                     <CheckCircle2 className="h-12 w-12" />
