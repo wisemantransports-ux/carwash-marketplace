@@ -7,14 +7,14 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Tags, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, Clock, History } from 'lucide-react';
+import { Star, MapPin, Search, ShieldCheck, Store, Tags, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, Clock, History, Package } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { CarListing } from '@/lib/types';
+import { CarListing, SparePart } from '@/lib/types';
 
 const CATEGORIES = [
   { id: 'all', label: 'All Partners', icon: Filter },
@@ -159,10 +159,61 @@ function CarCardSimple({ car }: { car: CarListing }) {
   );
 }
 
+function SparePartCardSimple({ part }: { part: SparePart }) {
+  const displayImage = (part.images && part.images.length > 0) ? part.images[0] : 'https://picsum.photos/seed/part/400/300';
+
+  return (
+    <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
+      <div className="relative h-48 w-full overflow-hidden bg-muted">
+        <Image
+          src={displayImage}
+          alt={part.name}
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-110"
+        />
+        <div className="absolute top-2 left-2 flex flex-col gap-1">
+          <Badge className="bg-white/90 text-black backdrop-blur-sm shadow-sm uppercase text-[9px] font-black">
+            {part.category}
+          </Badge>
+          <Badge className={cn(
+            "border-none shadow-sm uppercase text-[9px] font-black text-white",
+            part.condition === 'new' ? "bg-green-600" : "bg-orange-600"
+          )}>
+            {part.condition}
+          </Badge>
+        </div>
+        <div className="absolute bottom-2 right-2">
+          <Badge className="bg-primary text-white font-black px-2 py-1 text-xs shadow-lg">
+            P{Number(part.price).toLocaleString()}
+          </Badge>
+        </div>
+      </div>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xl font-bold line-clamp-1">{part.name}</CardTitle>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase pt-1">
+          <Store className="h-3.5 w-3.5 text-primary" />
+          <span className="truncate">{part.business?.name || 'Verified Seller'}</span>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-grow">
+        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed italic">
+          {part.description || "Authentic automotive component available from a verified local retailer."}
+        </p>
+      </CardContent>
+      <CardFooter className="pt-0 mt-auto">
+        <Button asChild className="w-full font-bold h-11" variant="outline">
+          <Link href={`/marketplace/spare-parts/${part.id}`}>View Details</Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
 function CustomerHomeContent() {
   const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [cars, setCars] = useState<CarListing[]>([]);
+  const [spareParts, setSpareParts] = useState<SparePart[]>([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -186,28 +237,39 @@ function CustomerHomeContent() {
     setLoading(true);
     try {
       // 1. Fetch Businesses
-      const { data: bizData, error: bizError } = await supabase
+      const { data: bizData } = await supabase
           .from('businesses')
           .select('*, services(*)')
           .eq('verification_status', 'verified')
           .order('rating', { ascending: false });
       
-      if (bizError) throw bizError;
       setBusinesses(bizData || []);
 
       // 2. Fetch Cars
-      const { data: carData, error: carError } = await supabase
+      const { data: carData } = await supabase
         .from('car_listing')
         .select(`
-          id, title, make, model, year, price, mileage, location, images, description, status, created_at,
+          *,
           business:business_id!inner ( name, city, verification_status )
         `)
         .in('status', ['active', 'available'])
         .eq('business.verification_status', 'verified')
         .order('created_at', { ascending: false });
 
-      if (carError) throw carError;
       setCars((carData as any) || []);
+
+      // 3. Fetch Spare Parts
+      const { data: partData } = await supabase
+        .from('spare_parts')
+        .select(`
+          *,
+          business:business_id!inner ( name, city, verification_status )
+        `)
+        .eq('status', 'active')
+        .eq('business.verification_status', 'verified')
+        .order('created_at', { ascending: false });
+      
+      setSpareParts((partData as any) || []);
 
     } catch (e: any) {
       console.error('Marketplace Error:', e);
@@ -222,7 +284,7 @@ function CustomerHomeContent() {
   }, [loadData]);
 
   const unifiedList = useMemo(() => {
-    const filteredBiz = businesses.filter(b => {
+    const bizList = businesses.filter(b => {
       const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
       const bizCategory = b.category || 'Wash';
@@ -230,7 +292,7 @@ function CustomerHomeContent() {
       return matchesSearch && matchesCategory;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
-    const filteredCars = cars.filter(c => {
+    const carList = cars.filter(c => {
       const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
                            c.make.toLowerCase().includes(search.toLowerCase()) ||
                            c.model.toLowerCase().includes(search.toLowerCase()) ||
@@ -239,10 +301,17 @@ function CustomerHomeContent() {
       return matchesSearch && matchesCategory;
     }).map(c => ({ ...c, itemType: 'car' as const }));
 
-    return [...filteredBiz, ...filteredCars].sort((a, b) => 
+    const partList = spareParts.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
+                           p.category.toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = category === 'all' || category === 'Spare';
+      return matchesSearch && matchesCategory;
+    }).map(p => ({ ...p, itemType: 'part' as const }));
+
+    return [...bizList, ...carList, ...partList].sort((a, b) => 
       new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
-  }, [businesses, cars, search, category]);
+  }, [businesses, cars, spareParts, search, category]);
 
   if (!mounted) return null;
 
@@ -298,13 +367,12 @@ function CustomerHomeContent() {
             </Card>
           ))
         ) : unifiedList.length > 0 ? (
-          unifiedList.map((item: any) => (
-            item.itemType === 'business' ? (
-              <BusinessCard key={item.id} business={item} />
-            ) : (
-              <CarCardSimple key={item.id} car={item} />
-            )
-          ))
+          unifiedList.map((item: any) => {
+            if (item.itemType === 'business') return <BusinessCard key={`biz-${item.id}`} business={item} />;
+            if (item.itemType === 'car') return <CarCardSimple key={`car-${item.id}`} car={item} />;
+            if (item.itemType === 'part') return <SparePartCardSimple key={`part-${item.id}`} part={item} />;
+            return null;
+          })
         ) : (
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
