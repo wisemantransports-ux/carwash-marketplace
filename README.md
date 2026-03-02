@@ -1,20 +1,20 @@
-# Carwash Marketplace - The Ultimate Car Wash Marketplace
+# AutoLink Africa Marketplace - The Ultimate Automotive Marketplace
 
-This is a Next.js application built with React, ShadCN UI, Tailwind CSS, and Genkit. It is designed as a production-ready frontend prototype for a car wash marketplace in Botswana.
+This is a Next.js application built with React, ShadCN UI, Tailwind CSS, and Genkit. It is designed as a production-ready frontend prototype for an automotive marketplace in Botswana.
 
 ## 🚀 How to push to GitHub
 
 Since you have already initialized git and committed your files locally, follow these steps to push to a remote repository:
 
 1.  **Create a new repository** on [GitHub](https://github.com/new).
-    *   Give it a name (e.g., `carwash-marketplace`).
+    *   Give it a name (e.g., `autolink-marketplace`).
     *   **Do not** initialize it with a README, license, or gitignore (since you already have them).
-2.  **Copy the Remote URL** from the "Quick setup" page on GitHub (it looks like `https://github.com/YOUR_USERNAME/carwash-marketplace.git`).
+2.  **Copy the Remote URL** from the "Quick setup" page on GitHub (it looks like `https://github.com/YOUR_USERNAME/autolink-marketplace.git`).
 3.  **Run these commands** in your terminal here:
 
 ```bash
 # 1. Add the remote origin (replace the URL with yours)
-git remote add origin https://github.com/YOUR_USERNAME/carwash-marketplace.git
+git remote add origin https://github.com/YOUR_USERNAME/autolink-marketplace.git
 
 # 2. Rename the branch to main (if not already)
 git branch -M main

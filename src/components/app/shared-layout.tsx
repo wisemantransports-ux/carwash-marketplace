@@ -24,11 +24,11 @@ type SharedLayoutProps = {
     role: UserRole;
 };
 
-function CarwashMarketplaceLogo() {
+function AutoLinkLogo() {
     return (
         <Link href="/" className="flex items-center gap-2 px-2 py-4">
-            <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">CWM</div>
-            <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">Carwash Marketplace</span>
+            <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">ALM</div>
+            <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">AutoLink Africa Marketplace</span>
         </Link>
     );
 }
@@ -128,7 +128,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     return (
         <SidebarProvider>
             <Sidebar collapsible="icon">
-                <SidebarHeader><CarwashMarketplaceLogo /></SidebarHeader>
+                <SidebarHeader><AutoLinkLogo /></SidebarHeader>
                 <SidebarContent className="p-2">
                     <SidebarMenu>
                         {navItems.map(item => (

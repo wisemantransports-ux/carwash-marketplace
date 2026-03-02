@@ -186,7 +186,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
             if (allowsMobile && hasWhatsapp) {
                 const selectedCar = cars.find(c => c.id === selectedCarId);
                 const timeStr = new Date(bookingTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-                const message = `Hello! I've just booked a *${selectedService.name}* for my *${selectedCar?.make} ${selectedCar?.model}* via HydroFlow Marketplace.\n\n*Scheduled Time:* ${timeStr}\n*Ref:* ${newBooking.id.slice(-8).toUpperCase()}`;
+                const message = `Hello! I've just booked a *${selectedService.name}* for my *${selectedCar?.make} ${selectedCar?.model}* via AutoLink Africa Marketplace.\n\n*Scheduled Time:* ${timeStr}\n*Ref:* ${newBooking.id.slice(-8).toUpperCase()}`;
                 
                 const whatsappUrl = `https://wa.me/${bizRecord.whatsapp_number?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
                 

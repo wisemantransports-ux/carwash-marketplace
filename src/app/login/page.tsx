@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -115,7 +114,7 @@ export default function LoginPage() {
               <ShieldCheck className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-primary">{tenant?.name || 'Carwash Marketplace'}</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-primary">{tenant?.name || 'AutoLink Africa Marketplace'}</h1>
           <p className="text-muted-foreground">Sign in to your white-label dashboard.</p>
         </div>
 
