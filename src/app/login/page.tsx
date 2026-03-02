@@ -29,36 +29,62 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const redirecting = useRef(false);
 
+  /**
+   * handleRoleRedirect
+   * Fetches the user profile based on the SESSION ID.
+   * This replaces hardcoded auth.uid() dependencies by passing the explicit ID from the session.
+   */
   const handleRoleRedirect = useCallback(async (userId: string) => {
     if (!userId || redirecting.current) return;
     redirecting.current = true;
 
     try {
+      // Fetch profile using explicit session ID to ensure RLS visibility
       const { data: profile, error } = await supabase
         .from('users_with_access')
         .select('id, role, tenant_id')
         .eq('id', userId)
         .maybeSingle();
 
-      if (error || !profile) {
-        throw new Error("Profile not found or unauthorized.");
+      if (error) {
+        console.error("Profile Fetch Error:", error);
+        throw new Error("Unable to retrieve account profile. Check RLS policies.");
       }
 
-      // Strict Tenant Check
+      if (!profile) {
+        throw new Error("Account profile not found.");
+      }
+
+      // Strict Tenant Check for White-Label isolation
       if (tenant && profile.tenant_id !== tenant.id) {
-        toast({ variant: 'destructive', title: 'Unauthorized', description: 'Your account belongs to another platform instance.' });
+        toast({ 
+          variant: 'destructive', 
+          title: 'Unauthorized', 
+          description: `Your account belongs to another instance (${profile.tenant_id}).` 
+        });
         await supabase.auth.signOut();
         window.location.reload();
         return;
       }
 
+      console.log(`Authenticated: ${profile.role} (User: ${userId})`);
+
+      // Role-Based Routing
       switch (profile.role) {
-        case 'admin': router.replace('/admin/dashboard'); break;
-        case 'business-owner': router.replace('/business/dashboard'); break;
-        case 'customer': router.replace('/customer/home'); break;
-        default: throw new Error("Invalid role.");
+        case 'admin': 
+          router.replace('/admin/dashboard'); 
+          break;
+        case 'business-owner': 
+          router.replace('/business/dashboard'); 
+          break;
+        case 'customer': 
+          router.replace('/customer/home'); 
+          break;
+        default: 
+          throw new Error("Account role is invalid or unrecognized.");
       }
     } catch (e: any) {
+      console.error("Access/Redirect Error:", e.message);
       toast({ variant: "destructive", title: "Access Error", description: e.message });
       setLoading(false);
       redirecting.current = false;
@@ -69,6 +95,7 @@ export default function LoginPage() {
     async function checkExistingSession() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) {
+        // auth.uid() check passed via established session
         await handleRoleRedirect(session.user.id);
       } else {
         setCheckingSession(false);
@@ -89,7 +116,10 @@ export default function LoginPage() {
         email: values.email,
         password: values.password,
       });
+
       if (authError) throw authError;
+
+      // Ensure session is fully registered in client before redirecting
       if (authData.user?.id) {
         await handleRoleRedirect(authData.user.id);
       }
@@ -99,7 +129,12 @@ export default function LoginPage() {
     }
   };
 
-  if (checkingSession) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
+  if (checkingSession) return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+      <Loader2 className="animate-spin text-primary h-10 w-10" />
+      <p className="text-sm text-muted-foreground animate-pulse font-medium">Validating session...</p>
+    </div>
+  );
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-muted/30 px-4">
@@ -114,16 +149,18 @@ export default function LoginPage() {
               <ShieldCheck className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-primary">{tenant?.name || 'AutoLink Africa Marketplace'}</h1>
-          <p className="text-muted-foreground">Sign in to your white-label dashboard.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-primary">
+            {tenant?.name || 'AutoLink Africa'}
+          </h1>
+          <p className="text-muted-foreground">Sign in to your professional dashboard.</p>
         </div>
 
-        <Card className="border-2 shadow-xl">
-          <CardHeader>
+        <Card className="border-2 shadow-xl rounded-3xl overflow-hidden">
+          <CardHeader className="bg-muted/10 border-b">
             <CardTitle>Welcome Back</CardTitle>
-            <CardDescription>Only accounts for {tenant?.name || 'this instance'} are permitted.</CardDescription>
+            <CardDescription>Enter your credentials to access the marketplace.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField
@@ -132,7 +169,7 @@ export default function LoginPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
-                      <FormControl><Input placeholder="name@example.com" {...field} /></FormControl>
+                      <FormControl><Input placeholder="admin@autolink.africa" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -154,9 +191,9 @@ export default function LoginPage() {
               </form>
             </Form>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4 border-t bg-muted/10 p-6">
+          <CardFooter className="flex flex-col gap-4 border-t bg-muted/5 p-6">
             <div className="text-center text-sm text-muted-foreground">
-              New here? <Link href="/signup" className="text-primary font-bold hover:underline">Create Account</Link>
+              Don't have an account? <Link href="/signup" className="text-primary font-bold hover:underline">Create Account</Link>
             </div>
           </CardFooter>
         </Card>
