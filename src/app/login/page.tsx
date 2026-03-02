@@ -31,16 +31,21 @@ export default function LoginPage() {
 
   /**
    * handleRoleRedirect
-   * Fetches the user profile based on the SESSION ID provided by the client.
-   * Uses explicit userId to ensure profile is found even if auth.uid() handshake is delayed.
+   * Fetches the user profile based on an EXPLICIT userId to satisfy RLS.
+   * Session is established first to ensure auth.uid() context is ready.
    */
   const handleRoleRedirect = useCallback(async (userId: string) => {
     if (!userId || redirecting.current) return;
     redirecting.current = true;
 
     try {
-      // Profile fetch using explicit ID from session
-      // Explicitly fetching from 'users_with_access' view
+      // 1. Double-check session existence to ensure JWT is in headers
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Authentication session lost.");
+
+      console.log("[AUTH] Session established for UID:", userId);
+
+      // 2. Fetch profile using explicit session-based UID
       const { data: profile, error } = await supabase
         .from('users_with_access')
         .select('id, role, tenant_id')
@@ -48,10 +53,9 @@ export default function LoginPage() {
         .maybeSingle();
 
       if (error) {
-        console.error("[AUTH] Profile Fetch Error:", {
+        console.error("[AUTH] Profile Fetch Error Detail:", {
           message: error.message,
           details: error.details,
-          hint: error.hint,
           code: error.code
         });
         throw new Error(`Profile access denied: ${error.message}`);
@@ -59,11 +63,11 @@ export default function LoginPage() {
 
       if (!profile) {
         console.warn("[AUTH] No profile found for UID:", userId);
-        throw new Error("Account record not found. Please contact support.");
+        throw new Error("Account record not found in database.");
       }
 
-      // Role-Based Routing
-      console.log(`[AUTH] Session Established: ${profile.role} (${userId})`);
+      // 3. Role-Based Routing
+      console.log(`[AUTH] Routing established: ${profile.role}`);
       
       switch (profile.role) {
         case 'admin': 
@@ -76,14 +80,14 @@ export default function LoginPage() {
           router.replace('/customer/home'); 
           break;
         default: 
-          throw new Error(`Access role '${profile.role}' is not recognized.`);
+          throw new Error(`Unrecognized role: ${profile.role}`);
       }
     } catch (e: any) {
-      console.error("[AUTH] Access Error:", e.message);
+      console.error("[AUTH] Redirect Failure:", e.message);
       toast({ 
         variant: "destructive", 
         title: "Access Error", 
-        description: e.message || "Unable to retrieve account profile. Check your connection." 
+        description: e.message || "Unable to retrieve account profile." 
       });
       setLoading(false);
       redirecting.current = false;
@@ -117,7 +121,6 @@ export default function LoginPage() {
 
       if (authError) throw authError;
 
-      // Extract UID from established session
       if (authData.user?.id) {
         await handleRoleRedirect(authData.user.id);
       }
@@ -130,7 +133,7 @@ export default function LoginPage() {
   if (checkingSession) return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-4">
       <Loader2 className="animate-spin text-primary h-10 w-10" />
-      <p className="text-sm text-muted-foreground animate-pulse font-medium">Validating session...</p>
+      <p className="text-sm text-muted-foreground animate-pulse font-medium">Authenticating...</p>
     </div>
   );
 
@@ -150,13 +153,13 @@ export default function LoginPage() {
           <h1 className="text-3xl font-extrabold tracking-tight text-primary">
             {tenant?.name || 'AutoLink Africa'}
           </h1>
-          <p className="text-muted-foreground">Sign in to your professional dashboard.</p>
+          <p className="text-muted-foreground">Sign in to your platform instance.</p>
         </div>
 
         <Card className="border-2 shadow-xl rounded-3xl overflow-hidden">
           <CardHeader className="bg-muted/10 border-b">
             <CardTitle>Welcome Back</CardTitle>
-            <CardDescription>Enter your credentials to access the marketplace.</CardDescription>
+            <CardDescription>Use your registered email and password.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
             <Form {...form}>

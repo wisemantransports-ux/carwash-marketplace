@@ -23,7 +23,7 @@ export const supabase = createClient(
   supabaseAnonKey || 'placeholder-anon-key',
   {
     auth: {
-      persistSession: true, // Crucial for auth.uid() persistence
+      persistSession: true, // Crucial for session persistence across reloads
       autoRefreshToken: true,
       detectSessionInUrl: true
     }

@@ -90,7 +90,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
 
     /**
      * fetchProfile
-     * Replaces auth.uid() reliance with explicit UID from established session.
+     * Uses explicit session-based UID to satisfy RLS and prevent auth.uid() delays.
      */
     const fetchProfile = useCallback(async (userId: string) => {
         if (!userId) {
@@ -99,7 +99,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
         }
 
         try {
-            // Using explicit userId to ensure RLS visibility during hydration
+            // Using session-based userId explicitly in the query filter
             const { data, error } = await supabase
                 .from('users_with_access')
                 .select('*')
@@ -107,7 +107,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                 .maybeSingle();
 
             if (error) {
-                console.error("[LAYOUT] Profile error detail:", {
+                console.error("[LAYOUT] Profile Fetch Error Detail:", {
                     message: error.message,
                     details: error.details,
                     code: error.code
@@ -118,11 +118,11 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
             if (data) {
                 setUserProfile(data as ProfileUser);
             } else {
-                console.warn("[LAYOUT] Session valid but profile missing for UID:", userId);
+                console.warn("[LAYOUT] Profile record missing for UID:", userId);
                 router.replace('/login');
             }
         } catch (e) {
-            console.error("[LAYOUT] Fatal load exception:", e);
+            console.error("[LAYOUT] Fatal session error:", e);
         } finally {
             setLoading(false);
         }
@@ -131,14 +131,16 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     useEffect(() => {
         let isMounted = true;
         const checkSession = async () => {
+            // 1. Establish session first
             const { data: { session } } = await supabase.auth.getSession();
             
             if (!session?.user?.id) {
-                console.warn("[LAYOUT] No active session found. Redirecting to login.");
+                console.warn("[LAYOUT] No active session found. Routing to login.");
                 if (isMounted) router.replace('/login');
                 return;
             }
             
+            // 2. Hydrate profile using session ID
             if (isMounted) await fetchProfile(session.user.id);
         };
         checkSession();
@@ -153,7 +155,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     if (loading) return (
         <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
             <Loader2 className="animate-spin h-10 w-10 text-primary" />
-            <p className="text-sm text-muted-foreground animate-pulse font-medium">Securing session context...</p>
+            <p className="text-sm text-muted-foreground animate-pulse font-medium">Validating dashboard session...</p>
         </div>
     );
 
