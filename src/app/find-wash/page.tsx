@@ -7,11 +7,13 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, History } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 function getDisplayImage(images: any, fallback: string): string {
@@ -32,7 +34,7 @@ function getDisplayImage(images: any, fallback: string): string {
 }
 
 const CATEGORIES = [
-  { id: 'all', label: 'All Partners', icon: Filter },
+  { id: 'all', label: 'All Listings', icon: Filter },
   { id: 'Wash', label: 'Car Wash', icon: Droplets },
   { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart },
   { id: 'Cars', label: 'Car Sales', icon: CarIcon },
@@ -45,6 +47,7 @@ function MarketplaceContent() {
   const [spareParts, setSpareParts] = useState<any[]>([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState(searchParams.get('category') || 'all');
+  const [sortOrder, setSortOrder] = useState('newest');
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -52,12 +55,15 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      const { data: bizData } = await supabase
+      // 1. Fetch Verified Businesses (Source of Truth)
+      const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*')
           .or('verification_status.eq.verified,status.eq.verified')
           .order('name', { ascending: true });
       
+      if (bizError) throw bizError;
+
       const verifiedBusinesses = bizData || [];
       const verifiedIds = verifiedBusinesses.map(b => b.id);
       const bizMap = verifiedBusinesses.reduce((acc: any, b: any) => {
@@ -68,6 +74,7 @@ function MarketplaceContent() {
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
+        // 2. Fetch Cars linked to verified accounts
         const { data: carData } = await supabase
           .from('car_listing')
           .select('*')
@@ -76,6 +83,7 @@ function MarketplaceContent() {
 
         setCars((carData || []).map(c => ({ ...c, business: bizMap[c.business_id] })));
 
+        // 3. Fetch Parts linked to verified accounts
         const { data: partData } = await supabase
           .from('spare_parts')
           .select('*')
@@ -85,7 +93,7 @@ function MarketplaceContent() {
         setSpareParts((partData || []).map(p => ({ ...p, business: bizMap[p.business_id] })));
       }
     } catch (e: any) {
-      console.error('Discovery failure:', e);
+      console.error('Marketplace discovery failure:', e);
     } finally {
       setLoading(false);
     }
@@ -97,6 +105,7 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
+    // BUSINESS FILTERING
     const bizList = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
@@ -105,13 +114,16 @@ function MarketplaceContent() {
       return matchesSearch && matchesCategory;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
+    // CAR FILTERING
     const carList = cars.filter(c => {
       const matchesSearch = (c.title?.toLowerCase().includes(search.toLowerCase())) || 
-                           (c.make?.toLowerCase().includes(search.toLowerCase()));
+                           (c.make?.toLowerCase().includes(search.toLowerCase())) ||
+                           (c.model?.toLowerCase().includes(search.toLowerCase()));
       const matchesCategory = category === 'all' || category.toLowerCase() === 'cars';
       return matchesSearch && matchesCategory;
     }).map(c => ({ ...c, itemType: 'car' as const }));
 
+    // PART FILTERING
     const partList = spareParts.filter(p => {
       const matchesSearch = (p.name?.toLowerCase().includes(search.toLowerCase())) || 
                            (p.category?.toLowerCase().includes(search.toLowerCase()));
@@ -119,10 +131,18 @@ function MarketplaceContent() {
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
-    return [...bizList, ...carList, ...partList].sort((a, b) => 
-      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-    );
-  }, [businesses, cars, spareParts, search, category]);
+    const combined = [...bizList, ...carList, ...partList];
+
+    // SORTING LOGIC
+    return combined.sort((a, b) => {
+      if (sortOrder === 'price-low') return (Number(a.price) || 0) - (Number(b.price) || 0);
+      if (sortOrder === 'price-high') return (Number(b.price) || 0) - (Number(a.price) || 0);
+      
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateB - dateA; // Newest First
+    });
+  }, [businesses, cars, spareParts, search, category, sortOrder]);
 
   if (!mounted) return null;
 
@@ -149,38 +169,60 @@ function MarketplaceContent() {
         <div className="space-y-4 max-w-4xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
             <ShieldCheck className="h-3 w-3" />
-            <span>Verified Platform Partners</span>
+            <span>Verified Marketplace Partners</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tight">Partner Directory</h1>
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">Partner Directory</h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
             Find verified car wash services, quality spare parts, and premium vehicle listings across Botswana.
           </p>
         </div>
 
-        <div className="space-y-6">
-          <div className="relative max-w-2xl">
+        {/* SEARCH & FILTER ENGINE */}
+        <div className="flex flex-col lg:flex-row gap-6 items-end justify-between bg-white/50 backdrop-blur-sm p-6 rounded-3xl border-2 shadow-sm">
+          <div className="flex-1 w-full space-y-2">
+            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Universal Search</Label>
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input 
-                placeholder="Search partners, parts, or cars..." 
+                placeholder="Search for cars, spare parts, or services…" 
                 className="pl-10 h-14 bg-white border-2 rounded-2xl shadow-sm text-lg"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+            </div>
           </div>
           
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map(cat => (
-              <Button 
-                key={cat.id} 
-                variant={category.toLowerCase() === cat.id.toLowerCase() ? 'default' : 'outline'} 
-                size="sm" 
-                className="rounded-full px-6 font-bold h-10 transition-all shadow-sm"
-                onClick={() => setCategory(cat.id)}
-              >
-                <cat.icon className={cn("h-4 w-4 mr-2", category.toLowerCase() === cat.id.toLowerCase() ? "text-white" : "text-primary")} />
-                {cat.label}
-              </Button>
-            ))}
+          <div className="flex flex-wrap gap-4 w-full lg:w-auto">
+            <div className="space-y-2 flex-1 lg:w-48">
+              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Category</Label>
+              <div className="flex bg-muted/50 p-1 rounded-xl border">
+                {CATEGORIES.map(cat => (
+                  <Button 
+                    key={cat.id} 
+                    variant={category.toLowerCase() === cat.id.toLowerCase() ? 'default' : 'ghost'} 
+                    size="sm" 
+                    className="flex-1 rounded-lg font-bold h-9 transition-all text-xs"
+                    onClick={() => setCategory(cat.id)}
+                  >
+                    {cat.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="space-y-2 lg:w-40">
+              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Sort By</Label>
+              <Select value={sortOrder} onValueChange={setSortOrder}>
+                <SelectTrigger className="h-11 rounded-xl bg-white border-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="price-low">Price: Low to High</SelectItem>
+                  <SelectItem value="price-high">Price: High to Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -197,23 +239,40 @@ function MarketplaceContent() {
               ))
           ) : filteredItems.length > 0 ? (
             filteredItems.map((item: any) => (
-              <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full">
-                <div className="relative h-48 bg-muted">
-                  <Image src={getDisplayImage(item.images || [item.logo_url], 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover" />
+              <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
+                <div className="relative h-48 bg-muted overflow-hidden">
+                  <Image src={getDisplayImage(item.images || [item.logo_url], 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
                   <div className="absolute top-2 left-2">
-                    <Badge className="bg-white/90 text-black uppercase text-[9px] font-black">{item.itemType}</Badge>
+                    <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">{item.itemType}</Badge>
                   </div>
+                  <div className="absolute top-2 right-2">
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
+                      <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
+                    </Badge>
+                  </div>
+                  {item.price && (
+                    <div className="absolute bottom-2 right-2">
+                      <Badge className="bg-primary text-white font-black px-3 py-1 shadow-lg">
+                        P{Number(item.price).toLocaleString()}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-xl font-bold line-clamp-1">{item.name || item.title}</CardTitle>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                  <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name || item.title}</CardTitle>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground font-bold uppercase tracking-wider">
                     <MapPin className="h-3.5 w-3.5" /> <span>{item.city || 'Available'}</span>
                   </div>
                 </CardHeader>
+                <CardContent className="flex-grow">
+                  <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                    {item.description || "Authentic verified automotive listing from our trusted professional partners."}
+                  </p>
+                </CardContent>
                 <CardFooter className="mt-auto">
                   <Button asChild className="w-full font-bold h-11 shadow-sm">
                     <Link href={item.itemType === 'business' ? `/find-wash/${item.id}` : `/marketplace/${item.itemType === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
-                      View Profile
+                      View Details
                     </Link>
                   </Button>
                 </CardFooter>
@@ -221,8 +280,11 @@ function MarketplaceContent() {
             ))
           ) : (
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
-              <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-muted-foreground font-bold text-lg italic">No verified listings found matching your search.</p>
+              <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+              <p className="text-muted-foreground font-bold text-lg">No verified listings found matching your search.</p>
+              <Button variant="link" className="mt-2 font-bold" onClick={() => { setSearch(''); setCategory('all'); }}>
+                Clear all filters
+              </Button>
             </div>
           )}
         </div>

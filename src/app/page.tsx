@@ -2,9 +2,9 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, Star, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, Zap, ArrowRight, Loader2, Store, Check, X } from "lucide-react";
+import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, Zap, ArrowRight, Loader2, Store, Check, Filter } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -115,6 +115,10 @@ export default function LandingPage() {
     );
   }, [businesses, cars, spareParts]);
 
+  const scrollToMarketplace = () => {
+    document.getElementById('trending')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   if (!mounted) return null;
 
   return (
@@ -137,25 +141,35 @@ export default function LandingPage() {
         </div>
       </header>
 
+      {/* REAMPED HERO SECTION */}
       <section className="pt-32 pb-20 md:pt-48 md:pb-32 bg-gradient-to-b from-primary/5 via-transparent to-transparent">
         <div className="container mx-auto px-4 text-center space-y-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border shadow-sm text-sm font-bold text-primary mb-2">
             <Zap className="h-4 w-4" />
-            <span>Premium Automotive Marketplace</span>
+            <span>Connect with Trusted Auto Services Across Africa</span>
           </div>
           <h1 className="text-5xl md:text-7xl font-black tracking-tight leading-[1.1] text-slate-900 max-w-5xl mx-auto">
             Everything for your car in <span className="text-primary italic">One Place</span>.
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Discover verified car wash services, quality spare parts, and premium car sales across Botswana.
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+            Browse verified Cars, Spare Parts, Car Wash, and more — find what you need fast.
           </p>
           
-          <div className="relative max-w-2xl mx-auto pt-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <Button size="lg" className="h-14 px-10 text-lg font-black rounded-2xl shadow-xl hover:scale-105 transition-transform" onClick={scrollToMarketplace}>
+              Browse Marketplace
+            </Button>
+            <Button size="lg" variant="outline" className="h-14 px-10 text-lg font-bold rounded-2xl border-2 hover:bg-muted/50" asChild>
+              <Link href="/signup">List Your Business</Link>
+            </Button>
+          </div>
+
+          <div className="relative max-w-2xl mx-auto pt-8">
             <div className="flex flex-col sm:flex-row gap-3 p-2 bg-white rounded-2xl shadow-2xl border-2">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input 
-                  placeholder="Search for services, parts or cars..." 
+                  placeholder="Search for cars, spare parts, or services..." 
                   className="pl-10 h-12 border-none bg-transparent shadow-none focus-visible:ring-0 text-lg"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -194,15 +208,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="trending" className="py-24 bg-white">
+      <section id="trending" className="py-24 bg-white scroll-mt-20">
         <div className="container mx-auto px-4 max-w-6xl space-y-12">
           <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b pb-8">
               <div className="space-y-2">
-                <h2 className="text-4xl font-extrabold tracking-tight">Trending Now</h2>
+                <h2 className="text-4xl font-extrabold tracking-tight">Trending Verified Listings</h2>
                 <p className="text-muted-foreground text-lg">The latest verified listings from our professional partners.</p>
               </div>
               <Button variant="outline" size="lg" asChild className="rounded-full px-10 h-12 font-bold shadow-sm">
-                  <Link href="/find-wash">Full Directory</Link>
+                  <Link href="/find-wash">View Full Marketplace</Link>
               </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -222,7 +236,12 @@ export default function LandingPage() {
                     <div className="relative h-48 bg-muted">
                       <Image src={getDisplayImage(item.images || [item.logo_url], 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover" />
                       <div className="absolute top-2 left-2">
-                        <Badge className="bg-white/90 text-black uppercase text-[9px] font-black">{item.itemType}</Badge>
+                        <Badge className="bg-white/90 text-black shadow-sm uppercase text-[9px] font-black">{item.itemType}</Badge>
+                      </div>
+                      <div className="absolute top-2 right-2">
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase">
+                          <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
+                        </Badge>
                       </div>
                     </div>
                     <CardHeader className="pb-2">
@@ -243,7 +262,7 @@ export default function LandingPage() {
             ) : (
                 <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-card/50">
                     <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                    <p className="text-muted-foreground font-bold italic">No active listings found. Check back later!</p>
+                    <p className="text-muted-foreground font-bold italic">No verified listings found matching your criteria.</p>
                 </div>
             )}
           </div>
