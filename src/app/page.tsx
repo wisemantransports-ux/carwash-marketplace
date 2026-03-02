@@ -4,7 +4,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, Zap, ArrowRight, Loader2, Store, Check, Filter } from "lucide-react";
+import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, Zap, ArrowRight, Loader2, Store, Check, Filter, Star, Globe, Shield } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -32,15 +32,15 @@ function getDisplayImage(images: any, fallback: string): string {
 }
 
 const CATEGORIES = [
-  { id: 'Wash', label: 'Car Wash', icon: Droplets, desc: 'Book trusted wash services near you.', color: 'text-blue-600', bg: 'bg-blue-50', href: '/find-wash?category=Wash' },
-  { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart, desc: 'Find parts for any car, verified sellers.', color: 'text-orange-600', bg: 'bg-orange-50', href: '/find-wash?category=Spare' },
-  { id: 'Cars', label: 'Car Sales', icon: CarIcon, desc: 'Browse cars from verified individuals.', color: 'text-green-600', bg: 'bg-green-50', href: '/find-wash?category=Cars' },
+  { id: 'Wash', label: 'Car Wash', icon: Droplets, desc: 'Premium wash & detailing services.', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', href: '/find-wash?category=Wash' },
+  { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart, desc: 'Genuine parts from verified sellers.', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20', href: '/find-wash?category=Spare' },
+  { id: 'Cars', label: 'Car Sales', icon: CarIcon, desc: 'Verified vehicles & dealerships.', color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20', href: '/find-wash?category=Cars' },
 ];
 
 const PLANS = [
-  { name: 'Starter', price: 199, features: ['15 booking requests/mo', '3 verified employees', 'Profile in search', 'Basic analytics'] },
-  { name: 'Pro', price: 350, features: ['Unlimited bookings', '10 verified employees', 'Mobile wash support', 'Priority ranking'] },
-  { name: 'Enterprise', price: 599, features: ['Unlimited everything', 'Multi-location', 'Performance reports', 'Account Manager'] }
+  { name: 'Starter', price: 199, desc: 'For small specialists', features: ['15 booking requests/mo', '3 verified employees', 'Business profile in search', 'Basic analytics'] },
+  { name: 'Pro', price: 350, desc: 'For established shops', features: ['Unlimited bookings', '10 verified employees', 'Mobile wash support', 'Priority ranking', 'Review management'], popular: true },
+  { name: 'Enterprise', price: 599, desc: 'For auto groups', features: ['Unlimited everything', 'Multi-location controls', 'Advanced performance reports', 'Dedicated Account Manager'] }
 ];
 
 export default function LandingPage() {
@@ -122,84 +122,100 @@ export default function LandingPage() {
   if (!mounted) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <header className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-             <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">ALM</div>
-            <span className="font-bold text-primary tracking-tight">AutoLink Africa</span>
-          </div>
-          <div className="hidden md:flex items-center gap-6">
-            <Link href="#categories" className="text-sm font-medium hover:text-primary transition-colors">Categories</Link>
-            <Link href="#pricing" className="text-sm font-medium hover:text-primary transition-colors">Pricing</Link>
-            <Link href="/find-wash" className="text-sm font-bold text-primary">Marketplace</Link>
-          </div>
+    <div className="flex flex-col min-h-screen bg-[#020617] text-white selection:bg-primary/30">
+      {/* PREMIUM HEADER */}
+      <header className="fixed top-0 w-full z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/5">
+        <div className="container mx-auto px-4 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/login')}>Sign In</Button>
-            <Button size="sm" onClick={() => router.push('/signup')}>Get Started</Button>
+             <div className="bg-primary shadow-[0_0_20px_rgba(32,128,223,0.4)] text-white font-black p-1.5 rounded-lg text-sm tracking-tighter">ALM</div>
+            <span className="font-black text-xl tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">AutoLink Africa</span>
+          </div>
+          <div className="hidden md:flex items-center gap-8">
+            <Link href="#categories" className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">Categories</Link>
+            <Link href="#pricing" className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">Partner Plans</Link>
+            <Link href="/find-wash" className="text-sm font-black text-primary hover:brightness-125 transition-all">Marketplace</Link>
+          </div>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" className="font-bold text-slate-300 hover:text-white hover:bg-white/5" onClick={() => router.push('/login')}>Sign In</Button>
+            <Button size="sm" className="font-black px-6 rounded-full shadow-[0_0_20px_rgba(32,128,223,0.3)]" onClick={() => router.push('/signup')}>Get Started</Button>
           </div>
         </div>
       </header>
 
-      {/* REAMPED HERO SECTION */}
-      <section className="pt-32 pb-20 md:pt-48 md:pb-32 bg-gradient-to-b from-primary/5 via-transparent to-transparent">
-        <div className="container mx-auto px-4 text-center space-y-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border shadow-sm text-sm font-bold text-primary mb-2">
-            <Zap className="h-4 w-4" />
-            <span>Connect with Trusted Auto Services Across Africa</span>
+      {/* HERO SECTION - MESH GRADIENT DARK */}
+      <section className="relative pt-40 pb-24 md:pt-56 md:pb-40 overflow-hidden">
+        {/* Ambient Glows */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none overflow-hidden">
+            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/20 blur-[120px] rounded-full opacity-50" />
+            <div className="absolute bottom-[10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[100px] rounded-full opacity-30" />
+        </div>
+
+        <div className="container relative mx-auto px-4 text-center space-y-12">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl animate-in fade-in slide-in-from-top-4 duration-700">
+            <Zap className="h-4 w-4 text-primary fill-primary" />
+            <span className="text-xs font-black uppercase tracking-widest text-primary">The Future of African Auto Commerce</span>
           </div>
-          <h1 className="text-5xl md:text-7xl font-black tracking-tight leading-[1.1] text-slate-900 max-w-5xl mx-auto">
-            Everything for your car in <span className="text-primary italic">One Place</span>.
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-            Browse verified Cars, Spare Parts, Car Wash, and more — find what you need fast.
-          </p>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Button size="lg" className="h-14 px-10 text-lg font-black rounded-2xl shadow-xl hover:scale-105 transition-transform" onClick={scrollToMarketplace}>
-              Browse Marketplace
+          <div className="space-y-6 max-w-5xl mx-auto">
+            <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.95] text-white animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
+              Connect with Trusted <br />
+              <span className="bg-gradient-to-r from-primary via-blue-400 to-white bg-clip-text text-transparent">Auto Services</span> Across Africa
+            </h1>
+            <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto leading-relaxed font-medium animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
+              A premium, verified ecosystem for Cars, Spare Parts, and Elite Detailers. <br className="hidden md:block" /> Find exactly what your vehicle needs, instantly.
+            </p>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
+            <Button size="lg" className="h-16 px-12 text-lg font-black rounded-2xl shadow-2xl hover:scale-[1.03] active:scale-95 transition-all group" onClick={scrollToMarketplace}>
+              Explore Marketplace
+              <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Button>
-            <Button size="lg" variant="outline" className="h-14 px-10 text-lg font-bold rounded-2xl border-2 hover:bg-muted/50" asChild>
-              <Link href="/signup">List Your Business</Link>
+            <Button size="lg" variant="outline" className="h-16 px-12 text-lg font-black rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 backdrop-blur-sm transition-all" asChild>
+              <Link href="/signup">Partner with Us</Link>
             </Button>
           </div>
 
-          <div className="relative max-w-2xl mx-auto pt-8">
-            <div className="flex flex-col sm:flex-row gap-3 p-2 bg-white rounded-2xl shadow-2xl border-2">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <div className="relative max-w-2xl mx-auto pt-12 animate-in fade-in zoom-in-95 duration-1000 delay-500">
+            <div className="flex flex-col sm:flex-row gap-3 p-3 bg-slate-900/50 backdrop-blur-2xl rounded-[2rem] shadow-2xl border border-white/10 ring-1 ring-white/5">
+              <div className="flex-1 relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within:text-primary transition-colors" />
                 <Input 
-                  placeholder="Search for cars, spare parts, or services..." 
-                  className="pl-10 h-12 border-none bg-transparent shadow-none focus-visible:ring-0 text-lg"
+                  placeholder="Search parts, cars, or workshops..." 
+                  className="pl-12 h-14 border-none bg-transparent shadow-none focus-visible:ring-0 text-lg placeholder:text-slate-600 font-medium"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Button size="lg" className="h-12 px-8 font-bold rounded-xl shadow-lg" onClick={() => router.push(`/find-wash?q=${searchQuery}`)}>
-                Search Now
+              <Button size="lg" className="h-14 px-10 font-black rounded-2xl shadow-lg hover:brightness-110" onClick={() => router.push(`/find-wash?q=${searchQuery}`)}>
+                Discover
               </Button>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="categories" className="py-20 bg-muted/30 border-y">
+      {/* CATEGORIES - DARK PREMIUM CARDS */}
+      <section id="categories" className="py-24 bg-slate-950 border-y border-white/5">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {CATEGORIES.map((cat) => (
               <Link key={cat.id} href={cat.href} className="group">
-                <Card className="h-full border-2 hover:border-primary/50 transition-all duration-300 hover:shadow-xl group-hover:-translate-y-1">
-                  <CardHeader>
-                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110", cat.bg, cat.color)}>
-                      <cat.icon className="h-6 w-6" />
+                <Card className="h-full bg-slate-900/40 border-white/5 hover:border-primary/40 transition-all duration-500 hover:shadow-[0_20px_50px_rgba(32,128,223,0.1)] group-hover:-translate-y-2 overflow-hidden relative">
+                  <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                    <cat.icon className="h-32 w-32" />
+                  </div>
+                  <CardHeader className="relative z-10">
+                    <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-all duration-500 group-hover:scale-110 shadow-lg border", cat.bg, cat.color, cat.border)}>
+                      <cat.icon className="h-7 w-7" />
                     </div>
-                    <CardTitle className="text-2xl font-bold">{cat.label}</CardTitle>
+                    <CardTitle className="text-3xl font-black text-white">{cat.label}</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground leading-relaxed">{cat.desc}</p>
+                  <CardContent className="relative z-10">
+                    <p className="text-slate-400 font-medium leading-relaxed text-lg">{cat.desc}</p>
                   </CardContent>
-                  <CardFooter className="text-primary font-bold flex items-center gap-2 group-hover:gap-3 transition-all">
-                    Explore Now <ArrowRight className="h-4 w-4" />
+                  <CardFooter className="relative z-10 text-primary font-black flex items-center gap-2 group-hover:gap-4 transition-all uppercase tracking-widest text-xs">
+                    Access Catalog <ArrowRight className="h-4 w-4" />
                   </CardFooter>
                 </Card>
               </Link>
@@ -208,89 +224,123 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="trending" className="py-24 bg-white scroll-mt-20">
-        <div className="container mx-auto px-4 max-w-6xl space-y-12">
-          <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b pb-8">
-              <div className="space-y-2">
-                <h2 className="text-4xl font-extrabold tracking-tight">Trending Verified Listings</h2>
-                <p className="text-muted-foreground text-lg">The latest verified listings from our professional partners.</p>
+      {/* TRENDING - GRID ON DARK */}
+      <section id="trending" className="py-32 bg-[#020617] relative">
+        <div className="container mx-auto px-4 max-w-7xl space-y-16">
+          <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-white/5 pb-12">
+              <div className="space-y-3">
+                <h2 className="text-5xl font-black tracking-tighter text-white">Trending Discovery</h2>
+                <p className="text-slate-400 text-lg font-medium">The latest verified luxury listings from our elite partners.</p>
               </div>
-              <Button variant="outline" size="lg" asChild className="rounded-full px-10 h-12 font-bold shadow-sm">
-                  <Link href="/find-wash">View Full Marketplace</Link>
+              <Button variant="outline" size="lg" asChild className="rounded-full border-white/10 hover:bg-white/5 h-14 px-10 font-black tracking-tight shadow-2xl transition-all">
+                  <Link href="/find-wash">Full Marketplace</Link>
               </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
             {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
-                    <Card key={i} className="overflow-hidden bg-card rounded-2xl h-[450px]">
-                      <Skeleton className="h-48 w-full" />
-                      <div className="p-6 space-y-4">
-                        <Skeleton className="h-6 w-3/4" />
-                        <Skeleton className="h-10 w-full" />
+                    <Card key={i} className="overflow-hidden bg-slate-900/50 border-white/5 rounded-[2rem] h-[500px]">
+                      <Skeleton className="h-56 w-full" />
+                      <div className="p-8 space-y-6">
+                        <Skeleton className="h-8 w-3/4 bg-white/5" />
+                        <Skeleton className="h-20 w-full bg-white/5" />
+                        <Skeleton className="h-12 w-full bg-white/5" />
                       </div>
                     </Card>
                 ))
             ) : unifiedTrending.length > 0 ? (
                 unifiedTrending.slice(0, 9).map((item: any) => (
-                  <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full">
-                    <div className="relative h-48 bg-muted">
-                      <Image src={getDisplayImage(item.images || [item.logo_url], 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover" />
-                      <div className="absolute top-2 left-2">
-                        <Badge className="bg-white/90 text-black shadow-sm uppercase text-[9px] font-black">{item.itemType}</Badge>
+                  <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-500 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)] border-white/5 hover:border-primary/30 bg-slate-900/30 rounded-[2rem] h-full group">
+                    <div className="relative h-56 bg-slate-800 overflow-hidden">
+                      <Image src={getDisplayImage(item.images || [item.logo_url], 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-60" />
+                      <div className="absolute top-4 left-4">
+                        <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1 shadow-2xl">{item.itemType}</Badge>
                       </div>
-                      <div className="absolute top-2 right-2">
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase">
-                          <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
-                        </Badge>
+                      <div className="absolute top-4 right-4">
+                        <div className="bg-green-500/20 backdrop-blur-md border border-green-500/30 p-1.5 rounded-full shadow-2xl">
+                          <ShieldCheck className="h-4 w-4 text-green-400" />
+                        </div>
                       </div>
+                      {item.price && (
+                        <div className="absolute bottom-4 right-4">
+                          <div className="bg-primary shadow-2xl text-white font-black px-4 py-2 rounded-xl text-sm">
+                            P{Number(item.price).toLocaleString()}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-xl font-bold line-clamp-1">{item.name || item.title}</CardTitle>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
-                        <MapPin className="h-3.5 w-3.5" /> <span>{item.city || 'Available'}</span>
+                    <CardHeader className="p-8 pb-4">
+                      <CardTitle className="text-2xl font-black text-white line-clamp-1 group-hover:text-primary transition-colors duration-300">{item.name || item.title}</CardTitle>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 font-bold uppercase tracking-widest mt-2">
+                        <MapPin className="h-4 w-4 text-primary" /> <span>{item.city || 'Available Nationwide'}</span>
                       </div>
                     </CardHeader>
-                    <CardFooter className="mt-auto">
-                      <Button asChild className="w-full font-bold h-11 shadow-sm">
+                    <CardFooter className="p-8 pt-0 mt-auto">
+                      <Button asChild className="w-full font-black rounded-xl h-14 shadow-2xl transition-all hover:scale-[1.02]">
                         <Link href={item.itemType === 'business' ? `/find-wash/${item.id}` : `/marketplace/${item.itemType === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
-                          View Details
+                          View Particulars
                         </Link>
                       </Button>
                     </CardFooter>
                   </Card>
                 ))
             ) : (
-                <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-card/50">
-                    <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                    <p className="text-muted-foreground font-bold italic">No verified listings found matching your criteria.</p>
+                <div className="col-span-full py-32 text-center border-2 border-dashed border-white/5 rounded-[3rem] bg-white/[0.02]">
+                    <div className="bg-white/5 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Store className="h-10 w-10 text-slate-600" />
+                    </div>
+                    <p className="text-slate-500 font-bold text-xl italic">The catalog is currently being refreshed.</p>
                 </div>
             )}
           </div>
         </div>
       </section>
 
-      <section id="pricing" className="py-24 bg-muted/30 border-t">
-        <div className="container mx-auto px-4 max-w-6xl space-y-12">
-          <div className="text-center space-y-4">
-            <h2 className="text-4xl font-black tracking-tight">Partner Tiers</h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Scale your automotive business with the platform that drives customers directly to you.</p>
+      {/* PRICING - PLATINUM STYLE */}
+      <section id="pricing" className="py-32 bg-slate-950 border-t border-white/5">
+        <div className="container mx-auto px-4 max-w-6xl space-y-20">
+          <div className="text-center space-y-6 max-w-3xl mx-auto">
+            <h2 className="text-5xl md:text-6xl font-black tracking-tighter text-white">Partner Growth Plans</h2>
+            <p className="text-slate-400 text-lg font-medium">Join the professional network scaling automotive commerce in Botswana.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             {PLANS.map((plan) => (
-              <Card key={plan.name} className="flex flex-col border-2 shadow-lg transition-transform hover:scale-105">
-                <CardHeader className="text-center bg-muted/10 pb-8">
-                  <CardTitle className="text-2xl font-black uppercase tracking-tighter">{plan.name}</CardTitle>
-                  <div className="pt-4"><span className="text-5xl font-black">P{plan.price}</span><span className="text-muted-foreground font-bold">/mo</span></div>
+              <Card key={plan.name} className={cn(
+                "flex flex-col border-white/5 bg-slate-900/40 relative overflow-hidden transition-all duration-500 hover:scale-[1.05] hover:shadow-[0_30px_60px_rgba(32,128,223,0.15)] rounded-[2.5rem]",
+                plan.popular && "border-primary/40 ring-1 ring-primary/20 shadow-2xl"
+              )}>
+                {plan.popular && (
+                    <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-bl-3xl shadow-2xl">
+                        Elite Choice
+                    </div>
+                )}
+                <CardHeader className="text-center p-10 bg-white/[0.02] border-b border-white/5">
+                  <CardTitle className="text-2xl font-black uppercase tracking-widest text-slate-400 mb-2">{plan.name}</CardTitle>
+                  <p className="text-xs text-slate-500 font-bold mb-6">{plan.desc}</p>
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span className="text-6xl font-black text-white">P{plan.price}</span>
+                    <span className="text-slate-500 font-bold">/mo</span>
+                  </div>
                 </CardHeader>
-                <CardContent className="flex-grow pt-8">
-                  <ul className="space-y-4">
+                <CardContent className="flex-grow p-10 space-y-6">
+                  <ul className="space-y-5">
                     {plan.features.map(f => (
-                      <li key={f} className="flex items-center gap-3 text-sm font-medium"><Check className="h-4 w-4 text-green-600" /> {f}</li>
+                      <li key={f} className="flex items-center gap-4 text-sm font-semibold text-slate-300">
+                        <div className="bg-primary/20 p-1 rounded-full"><Check className="h-4 w-4 text-primary" /></div>
+                        {f}
+                      </li>
                     ))}
                   </ul>
                 </CardContent>
-                <CardFooter>
-                  <Button className="w-full h-12 font-bold" asChild><Link href="/signup">Join as Operator</Link></Button>
+                <CardFooter className="p-10 pt-0">
+                  <Button className={cn(
+                    "w-full h-16 font-black text-lg rounded-2xl shadow-2xl transition-all",
+                    !plan.popular && "bg-white/5 hover:bg-white/10 text-white"
+                  )} asChild>
+                    <Link href="/signup">Join Elite Network</Link>
+                  </Button>
                 </CardFooter>
               </Card>
             ))}
@@ -298,13 +348,22 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="py-16 border-t bg-card text-center">
-        <div className="container mx-auto px-4 space-y-4">
-          <div className="flex justify-center gap-2 items-center text-primary font-bold">
-            <div className="bg-primary text-white p-1 rounded text-xs">ALM</div>
-            AutoLink Africa Marketplace
+      {/* FOOTER - DARK */}
+      <footer className="py-24 border-t border-white/5 bg-slate-950 relative overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+        <div className="container mx-auto px-4 text-center space-y-10">
+          <div className="flex flex-col items-center gap-6">
+            <div className="flex justify-center gap-3 items-center text-white font-black text-2xl tracking-tighter">
+                <div className="bg-primary p-1.5 rounded-lg text-sm">ALM</div>
+                AutoLink Africa <span className="text-slate-500 font-medium">Marketplace</span>
+            </div>
+            <div className="flex gap-8 text-sm font-bold text-slate-500">
+                <Link href="#" className="hover:text-primary transition-colors">Privacy Protocol</Link>
+                <Link href="#" className="hover:text-primary transition-colors">Service Terms</Link>
+                <Link href="#" className="hover:text-primary transition-colors">Safety Guide</Link>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground font-medium uppercase tracking-widest">© 2024. All rights reserved.</p>
+          <p className="text-xs text-slate-600 font-black uppercase tracking-[0.3em]">© 2024. Engineering Automotive Excellence.</p>
         </div>
       </footer>
     </div>
