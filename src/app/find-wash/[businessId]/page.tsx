@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -125,7 +124,7 @@ export default function PublicBusinessServicesPage({ params }: { params: Promise
                     <span>Back to Search</span>
                 </Link>
                 <div className="flex items-center gap-2">
-                    <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-[10px]">CWM</div>
+                    <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-[10px]">ALM</div>
                     <span className="text-sm font-bold text-primary">Marketplace</span>
                 </div>
                 <div className="flex items-center gap-2">
