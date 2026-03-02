@@ -10,6 +10,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { Badge } from "@/components/ui/badge";
 
 type NavItem = {
     href: string;
@@ -72,7 +73,7 @@ function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, l
                     <span>View Public Home</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer font-bold">
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-bold">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Log out Session</span>
                 </DropdownMenuItem>
@@ -106,7 +107,11 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                 .maybeSingle();
 
             if (error) {
-                console.error("[LAYOUT] Profile error:", error.message);
+                console.error("[LAYOUT] Profile error detail:", {
+                    message: error.message,
+                    details: error.details,
+                    code: error.code
+                });
                 throw error;
             }
             
@@ -117,7 +122,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                 router.replace('/login');
             }
         } catch (e) {
-            console.error("[LAYOUT] Fatal load error:", e);
+            console.error("[LAYOUT] Fatal load exception:", e);
         } finally {
             setLoading(false);
         }

@@ -40,6 +40,7 @@ export default function LoginPage() {
 
     try {
       // Profile fetch using explicit ID from session
+      // Explicitly fetching from 'users_with_access' view
       const { data: profile, error } = await supabase
         .from('users_with_access')
         .select('id, role, tenant_id')
@@ -47,12 +48,18 @@ export default function LoginPage() {
         .maybeSingle();
 
       if (error) {
-        console.error("[AUTH] Profile Fetch Error:", error.message);
-        throw new Error("Unable to retrieve account profile. Check database RLS.");
+        console.error("[AUTH] Profile Fetch Error:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw new Error(`Profile access denied: ${error.message}`);
       }
 
       if (!profile) {
-        throw new Error("Account profile record not found in database.");
+        console.warn("[AUTH] No profile found for UID:", userId);
+        throw new Error("Account record not found. Please contact support.");
       }
 
       // Role-Based Routing
@@ -69,11 +76,15 @@ export default function LoginPage() {
           router.replace('/customer/home'); 
           break;
         default: 
-          throw new Error("Account role is invalid.");
+          throw new Error(`Access role '${profile.role}' is not recognized.`);
       }
     } catch (e: any) {
       console.error("[AUTH] Access Error:", e.message);
-      toast({ variant: "destructive", title: "Access Error", description: e.message });
+      toast({ 
+        variant: "destructive", 
+        title: "Access Error", 
+        description: e.message || "Unable to retrieve account profile. Check your connection." 
+      });
       setLoading(false);
       redirecting.current = false;
     }
