@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,10 +28,10 @@ type SharedLayoutProps = {
 
 function AutoLinkLogo() {
     return (
-        <Link href="/" className="flex items-center gap-2 px-2 py-4">
+        <div className="flex items-center gap-2 px-2 py-4">
             <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">ALM</div>
             <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">AutoLink Africa</span>
-        </Link>
+        </div>
     );
 }
 
@@ -68,9 +69,9 @@ function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, l
             <DropdownMenuContent align="end" className="w-56 shadow-2xl border-2 rounded-xl">
                 <DropdownMenuLabel className="text-xs uppercase font-bold text-muted-foreground px-3 py-2">My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => window.location.href = '/'} className="cursor-pointer">
+                <DropdownMenuItem onClick={() => window.location.href = '/'} className="cursor-pointer font-bold">
                     <Home className="mr-2 h-4 w-4" />
-                    <span>View Public Marketplace</span>
+                    <span>View Marketplace</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive focus:bg-destructive/10 font-bold">
@@ -89,11 +90,6 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     const [loading, setLoading] = useState(true);
 
     const fetchProfile = useCallback(async (userId: string) => {
-        if (!userId) {
-            setLoading(false);
-            return;
-        }
-
         try {
             const { data, error } = await supabase
                 .from('users_with_access')
@@ -101,8 +97,6 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                 .eq('id', userId)
                 .maybeSingle();
 
-            if (error) throw error;
-            
             if (data) {
                 setUserProfile(data as ProfileUser);
             } else {
@@ -116,17 +110,15 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     }, [router]);
 
     useEffect(() => {
-        let isMounted = true;
         const checkSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user?.id) {
-                if (isMounted) router.replace('/login');
+                router.replace('/login');
                 return;
             }
-            if (isMounted) await fetchProfile(session.user.id);
+            await fetchProfile(session.user.id);
         };
         checkSession();
-        return () => { isMounted = false; };
     }, [router, fetchProfile]);
 
     const navItems: NavItem[] = rawNavItems.map(item => ({
@@ -137,7 +129,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     if (loading) return (
         <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
             <Loader2 className="animate-spin h-10 w-10 text-primary" />
-            <p className="text-sm font-medium animate-pulse">Initializing dashboard...</p>
+            <p className="text-sm font-medium animate-pulse">Establishing secure session...</p>
         </div>
     );
 
@@ -177,12 +169,12 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                         </h1>
                     </div>
                     {userProfile?.role === 'admin' && (
-                        <Badge className="bg-primary text-white border-none font-black text-[10px] uppercase px-3 py-1">
-                            Platform Admin
+                        <Badge className="bg-primary text-white border-none font-black text-[10px] uppercase px-3 py-1 shadow-sm">
+                            Platform Control
                         </Badge>
                     )}
                 </header>
-                <main className="flex-1 overflow-auto bg-muted/10">
+                <main className="flex-1 overflow-auto bg-muted/5">
                    <div className="p-6 md:p-8 lg:p-10 max-w-7xl mx-auto">
                         {children}
                    </div>

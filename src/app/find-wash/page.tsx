@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -51,14 +52,11 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses
-      const { data: bizData, error: bizError } = await supabase
+      const { data: bizData } = await supabase
           .from('businesses')
           .select('*')
           .or('verification_status.eq.verified,status.eq.verified')
           .order('name', { ascending: true });
-      
-      if (bizError) throw bizError;
       
       const verifiedBusinesses = bizData || [];
       const verifiedIds = verifiedBusinesses.map(b => b.id);
@@ -70,31 +68,21 @@ function MarketplaceContent() {
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
-        // 2. Fetch Cars
         const { data: carData } = await supabase
           .from('car_listing')
           .select('*')
           .in('status', ['active', 'available'])
           .in('business_id', verifiedIds);
 
-        const wiredCars = (carData || []).map(c => ({
-          ...c,
-          business: bizMap[c.business_id] || { name: 'Verified Partner' }
-        }));
-        setCars(wiredCars);
+        setCars((carData || []).map(c => ({ ...c, business: bizMap[c.business_id] })));
 
-        // 3. Fetch Spare Parts
         const { data: partData } = await supabase
           .from('spare_parts')
           .select('*')
           .in('status', ['active', 'available'])
           .in('business_id', verifiedIds);
 
-        const wiredParts = (partData || []).map(p => ({
-          ...p,
-          business: bizMap[p.business_id] || { name: 'Verified Retailer' }
-        }));
-        setSpareParts(wiredParts);
+        setSpareParts((partData || []).map(p => ({ ...p, business: bizMap[p.business_id] })));
       }
     } catch (e: any) {
       console.error('Discovery failure:', e);

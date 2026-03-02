@@ -2,23 +2,11 @@
 // src/lib/types.ts
 export type UserRole = 'customer' | 'admin' | 'business-owner';
 
-export type Tenant = {
-  id: string;
-  name: string;
-  domain?: string;
-  logo_url?: string;
-  primary_color?: string; // HSL format e.g. "210 74% 50%"
-  secondary_color?: string;
-  support_email?: string;
-  whatsapp_number?: string;
-};
-
 export type User = {
   id: string;
   email: string;
   name: string;
   role: UserRole;
-  tenant_id: string;
   avatarUrl?: string;
   address?: string;
   city?: string;
@@ -35,7 +23,6 @@ export type User = {
 export type Business = {
   id: string;
   owner_id: string;
-  tenant_id: string;
   name: string;
   address: string;
   city: string;
@@ -61,7 +48,6 @@ export type Business = {
 export type CarListing = {
   id: string;
   business_id: string;
-  tenant_id: string;
   title: string; 
   make: string;
   model: string;
@@ -86,7 +72,6 @@ export type CarListing = {
 export type SparePart = {
   id: string;
   business_id: string;
-  tenant_id: string;
   name: string;
   category: string;
   price: number;
@@ -117,7 +102,6 @@ export type Booking = {
   id: string;
   customerId: string;
   businessId: string;
-  tenant_id: string;
   service_id: string;
   car_id: string;
   booking_time: string;
@@ -128,7 +112,6 @@ export type Booking = {
 export type PaymentSubmission = {
   id: string;
   business_id: string;
-  tenant_id: string;
   plan_selected: SubscriptionPlan;
   amount: number;
   mobile_network: string;
