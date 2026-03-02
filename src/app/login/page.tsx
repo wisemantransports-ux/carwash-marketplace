@@ -10,10 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import Link from 'next/link';
+import { useTenant } from '@/hooks/use-tenant';
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -24,6 +25,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const { tenant } = useTenant();
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const redirecting = useRef(false);
@@ -35,84 +37,45 @@ export default function LoginPage() {
     try {
       const { data: profile, error } = await supabase
         .from('users_with_access')
-        .select('id, role')
+        .select('id, role, tenant_id')
         .eq('id', userId)
         .maybeSingle();
 
-      if (error) {
-        console.error("Profile load error:", {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-        });
-        redirecting.current = false;
-        setCheckingSession(false);
-        setLoading(false);
-        toast({
-          variant: "destructive",
-          title: "Profile Load Error",
-          description: "Failed to load your profile. Please try again.",
-        });
-        return;
+      if (error || !profile) {
+        throw new Error("Profile not found or unauthorized.");
       }
 
-      if (!profile) {
-        redirecting.current = false;
-        setCheckingSession(false);
-        setLoading(false);
-        toast({
-          variant: "destructive",
-          title: "Profile Not Found",
-          description: "We couldn't find your user profile.",
-        });
+      // Strict Tenant Check
+      if (tenant && profile.tenant_id !== tenant.id) {
+        toast({ variant: 'destructive', title: 'Unauthorized', description: 'Your account belongs to another platform instance.' });
+        await supabase.auth.signOut();
+        window.location.reload();
         return;
       }
 
       switch (profile.role) {
-        case 'admin':
-          router.replace('/admin/dashboard');
-          break;
-        case 'business-owner':
-          router.replace('/business/dashboard');
-          break;
-        case 'customer':
-          router.replace('/customer/home');
-          break;
-        default:
-          toast({
-            variant: "destructive",
-            title: "Access Denied",
-            description: `Invalid role assigned: ${profile.role}`,
-          });
-          redirecting.current = false;
-          setCheckingSession(false);
-          setLoading(false);
+        case 'admin': router.replace('/admin/dashboard'); break;
+        case 'business-owner': router.replace('/business/dashboard'); break;
+        case 'customer': router.replace('/customer/home'); break;
+        default: throw new Error("Invalid role.");
       }
-    } catch (e) {
-      console.error("Fatal redirect error:", e);
-      redirecting.current = false;
-      setCheckingSession(false);
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Access Error", description: e.message });
       setLoading(false);
+      redirecting.current = false;
     }
-  }, [router]);
+  }, [router, tenant]);
 
   useEffect(() => {
-    let isMounted = true;
     async function checkExistingSession() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.id && isMounted) {
-          await handleRoleRedirect(session.user.id);
-        } else if (isMounted) {
-          setCheckingSession(false);
-        }
-      } catch (e) {
-        console.error("Session check error:", e);
-        if (isMounted) setCheckingSession(false);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        await handleRoleRedirect(session.user.id);
+      } else {
+        setCheckingSession(false);
       }
     }
     checkExistingSession();
-    return () => { isMounted = false; };
   }, [handleRoleRedirect]);
 
   const form = useForm<LoginFormValues>({
@@ -132,40 +95,34 @@ export default function LoginPage() {
         await handleRoleRedirect(authData.user.id);
       }
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Login Failed",
-        description: error.message || "Please check your credentials.",
-      });
+      toast({ variant: "destructive", title: "Login Failed", description: error.message });
       setLoading(false);
     }
   };
 
-  if (checkingSession) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Establishing secure connection...</p>
-      </div>
-    );
-  }
+  if (checkingSession) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-muted/30 px-4">
-      <div className="w-full max-w-md space-y-8">
+      <div className="w-full max-w-md space-y-8 animate-in fade-in duration-500">
+        <Link href="/" className="inline-flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary transition-colors">
+          <ArrowLeft className="h-4 w-4" /> Back to {tenant?.name || 'Home'}
+        </Link>
+        
         <div className="text-center space-y-2">
           <div className="flex justify-center mb-4">
             <div className="bg-primary p-3 rounded-2xl shadow-lg">
               <ShieldCheck className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-primary">Carwash Marketplace</h1>
-          <p className="text-muted-foreground">Sign in to manage your bookings and services.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-primary">{tenant?.name || 'Carwash Marketplace'}</h1>
+          <p className="text-muted-foreground">Sign in to your white-label dashboard.</p>
         </div>
+
         <Card className="border-2 shadow-xl">
           <CardHeader>
             <CardTitle>Welcome Back</CardTitle>
-            <CardDescription>Enter your credentials to continue.</CardDescription>
+            <CardDescription>Only accounts for {tenant?.name || 'this instance'} are permitted.</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -192,16 +149,15 @@ export default function LoginPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full h-12 text-lg shadow-md" disabled={loading}>
-                  {loading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Authenticating...</> : "Sign In"}
+                <Button type="submit" className="w-full h-12 text-lg font-bold shadow-md" disabled={loading}>
+                  {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Sign In"}
                 </Button>
               </form>
             </Form>
           </CardContent>
           <CardFooter className="flex flex-col gap-4 border-t bg-muted/10 p-6">
             <div className="text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
-              <Link href="/signup" className="text-primary font-bold hover:underline">Register here</Link>
+              New here? <Link href="/signup" className="text-primary font-bold hover:underline">Create Account</Link>
             </div>
           </CardFooter>
         </Card>

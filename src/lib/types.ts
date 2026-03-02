@@ -2,169 +2,66 @@
 // src/lib/types.ts
 export type UserRole = 'customer' | 'admin' | 'business-owner';
 
+export type Tenant = {
+  id: string;
+  name: string;
+  domain?: string;
+  logo_url?: string;
+  primary_color?: string; // HSL format e.g. "210 74% 50%"
+  secondary_color?: string;
+  support_email?: string;
+  whatsapp_number?: string;
+};
+
 export type User = {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  tenant_id: string;
   avatarUrl?: string;
   address?: string;
   city?: string;
   description?: string;
-  // Fields from users_with_access view (for customers/admin)
+  paid?: boolean;
   trial_start?: string;
   trial_expiry?: string;
-  paid?: boolean;
   trial_remaining?: number;
   access_active?: boolean;
   plan?: SubscriptionPlan;
   whatsapp_number?: string;
 };
 
-export type Car = {
-  id: string;
-  owner_id: string;
-  make: string;
-  model: string;
-  make_model?: string;
-};
-
-export type Service = {
-  id: string;
-  business_id: string;
-  name: string;
-  description?: string;
-  price: number;
-  duration?: number;
-  currency_code?: string;
-  created_at?: string;
-};
-
-export type SubscriptionPlan = 'Starter' | 'Pro' | 'Enterprise' | 'None';
-export type SubscriptionStatus = 'inactive' | 'awaiting_payment' | 'payment_submitted' | 'active' | 'expired' | 'suspended';
-export type SubscriptionPaymentStatus = 'none' | 'paypal_confirmed' | 'manual_confirmed' | 'pending_verification';
-export type BusinessType = 'individual' | 'registered';
-export type VerificationStatus = 'pending' | 'verified' | 'rejected';
-export type BusinessCategory = 'Wash' | 'Spare' | 'Cars';
-
 export type Business = {
   id: string;
   owner_id: string;
+  tenant_id: string;
   name: string;
   address: string;
   city: string;
-  type: 'station' | 'mobile'; // Service delivery model
-  business_type: BusinessType; // Entity legal type
+  type: 'station' | 'mobile';
+  business_type: BusinessType;
   category: BusinessCategory;
   whatsapp_number?: string;
   rating: number;
   review_count: number;
-  status: 'pending' | 'verified' | 'suspended'; // Platform access status
-  verification_status: VerificationStatus; // Document verification status
+  status: 'pending' | 'verified' | 'suspended';
+  verification_status: VerificationStatus;
   subscription_plan: SubscriptionPlan;
   subscription_status: SubscriptionStatus;
   subscription_payment_status?: SubscriptionPaymentStatus;
   sub_end_date?: string;
   logo_url?: string;
-  special_tag?: string; // e.g. "CIPA Verified"
-  id_number?: string; // Omang or Reg Number
+  special_tag?: string;
+  id_number?: string;
   selfie_url?: string;
   certificate_url?: string;
-  trial_start_date?: string;
-  trial_end_date?: string;
 };
-
-export type Employee = {
-  id: string;
-  business_id: string;
-  name: string;
-  phone: string;
-  image_url: string;
-  id_reference: string;
-};
-
-export type BookingStatus = 'requested' | 'accepted' | 'completed' | 'rejected' | 'cancelled';
-export type MobileBookingStatus = 'en-route' | 'arrived' | 'service-started' | 'service-finished';
-export type EscrowStatus = 'funded' | 'released' | 'refunded';
-
-export type Booking = {
-  id: string;
-  customerId: string;
-  businessId: string;
-  serviceId: string;
-  carId: string;
-  bookingTime: Date;
-  status: BookingStatus;
-  mobileBookingStatus?: MobileBookingStatus;
-  assignedEmployeeId?: string;
-  price: number;
-};
-
-export type PaymentMethod = 'cash' | 'mobile_money' | 'card';
-export type InvoiceStatus = 'issued' | 'paid' | 'disputed';
-
-export type Invoice = {
-  id: string;
-  bookingId: string;
-  customerId: string;
-  businessId: string;
-  amount: number;
-  status: InvoiceStatus;
-  paymentMethod?: PaymentMethod;
-  paymentReference?: string;
-  issuedAt: Date;
-  paidAt?: Date;
-};
-
-export type PaymentSubmission = {
-  id: string;
-  businessId: string;
-  planSelected: SubscriptionPlan;
-  amount: number;
-  mobileNetwork: 'Orange' | 'Smega' | 'PayPal';
-  reference_text: string;
-  proof_image_url: string;
-  status: 'pending' | 'approved' | 'rejected';
-  submitted_at?: string;
-  reviewed_at?: string;
-};
-
-export type Rating = {
-  id: string;
-  bookingId: string;
-  customerId: string;
-  businessId: string;
-  rating: number;
-  feedback: string;
-  createdAt: Date;
-};
-
-export type BusinessEarningStatus = 'earned' | 'pending payout' | 'paid out';
-
-export type BusinessEarning = {
-  id: string;
-  business_id: string;
-  source: 'booking' | 'other';
-  reference_id: string;
-  amount: number;
-  status: BusinessEarningStatus;
-  created_at: string;
-  // Relationship data from joins
-  bookings?: {
-    id: string;
-    booking_time: string;
-    status: string;
-    customer?: { name: string };
-    service?: { name: string; price: number };
-  };
-};
-
-export type CarListingStatus = 'available' | 'sold' | 'archived' | 'active';
 
 export type CarListing = {
   id: string;
   business_id: string;
-  owner_id?: string;
+  tenant_id: string;
   title: string; 
   make: string;
   model: string;
@@ -176,7 +73,6 @@ export type CarListing = {
   status: CarListingStatus;
   description: string;
   created_at: string;
-  // Joined data
   business?: {
     name: string;
     city: string;
@@ -187,31 +83,10 @@ export type CarListing = {
   };
 };
 
-export type TestDriveRequestStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
-
-export type TestDriveRequest = {
-  id: string;
-  car_listing_id: string;
-  customer_id: string;
-  requested_time: string;
-  status: TestDriveRequestStatus;
-  staff_id?: string; // Assigned employee
-  created_at: string;
-  // Form submission fields (optional overrides)
-  customer_name?: string;
-  customer_phone?: string;
-  // Joins
-  car_listing?: CarListing;
-  customer?: { name: string; phone?: string; email: string };
-  staff?: Employee;
-};
-
-export type SparePartCondition = 'new' | 'used' | 'refurbished';
-export type SparePartStatus = 'active' | 'archived' | 'sold_out';
-
 export type SparePart = {
   id: string;
   business_id: string;
+  tenant_id: string;
   name: string;
   category: string;
   price: number;
@@ -221,10 +96,44 @@ export type SparePart = {
   description: string;
   status: SparePartStatus;
   created_at: string;
-  // Joined data
   business?: {
     name: string;
     city: string;
     verification_status: string;
   };
+};
+
+export type SubscriptionPlan = 'Starter' | 'Pro' | 'Enterprise' | 'None';
+export type SubscriptionStatus = 'inactive' | 'awaiting_payment' | 'payment_submitted' | 'active' | 'expired' | 'suspended';
+export type SubscriptionPaymentStatus = 'none' | 'paypal_confirmed' | 'manual_confirmed' | 'pending_verification';
+export type BusinessType = 'individual' | 'registered';
+export type VerificationStatus = 'pending' | 'verified' | 'rejected';
+export type BusinessCategory = 'Wash' | 'Spare' | 'Cars';
+export type CarListingStatus = 'available' | 'sold' | 'archived' | 'active';
+export type SparePartCondition = 'new' | 'used' | 'refurbished';
+export type SparePartStatus = 'active' | 'archived' | 'sold_out';
+
+export type Booking = {
+  id: string;
+  customerId: string;
+  businessId: string;
+  tenant_id: string;
+  service_id: string;
+  car_id: string;
+  booking_time: string;
+  status: string;
+  price: number;
+};
+
+export type PaymentSubmission = {
+  id: string;
+  business_id: string;
+  tenant_id: string;
+  plan_selected: SubscriptionPlan;
+  amount: number;
+  mobile_network: string;
+  reference_text: string;
+  proof_image_url: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submitted_at?: string;
 };
