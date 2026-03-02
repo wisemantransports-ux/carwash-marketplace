@@ -28,8 +28,8 @@ type SharedLayoutProps = {
 function AutoLinkLogo() {
     return (
         <div className="flex items-center gap-2 px-2 py-4">
-            <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">ALM</div>
-            <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">AutoLink Africa</span>
+            <div className="bg-primary text-primary-foreground font-black p-1.5 rounded-lg text-xs shadow-lg">ALM</div>
+            <span className="font-black text-lg tracking-tight group-data-[collapsible=icon]:hidden">AutoLink Africa</span>
         </div>
     );
 }
@@ -52,7 +52,7 @@ function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, l
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2 h-auto w-full justify-start p-2 hover:bg-sidebar-accent">
-                    <Avatar className="h-8 w-8 border">
+                    <Avatar className="h-8 w-8 border shadow-sm">
                         <AvatarImage src={userProfile.avatarUrl} alt={userProfile.name} />
                         <AvatarFallback className="bg-primary/5 text-primary font-bold">{userProfile.name?.charAt(0) || 'U'}</AvatarFallback>
                     </Avatar>
@@ -126,9 +126,9 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     }));
 
     if (loading) return (
-        <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+        <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-slate-50">
             <Loader2 className="animate-spin h-10 w-10 text-primary" />
-            <p className="text-sm font-medium animate-pulse">Establishing secure session...</p>
+            <p className="text-sm font-black text-slate-400 uppercase tracking-widest animate-pulse">ALM Secure Session</p>
         </div>
     );
 
@@ -144,7 +144,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                                     asChild 
                                     isActive={item.active} 
                                     tooltip={item.label}
-                                    className={item.active ? "bg-primary/10 text-primary font-bold" : ""}
+                                    className={item.active ? "bg-primary/10 text-primary font-bold shadow-sm" : ""}
                                 >
                                     <Link href={item.href}>
                                         <item.icon className={item.active ? "text-primary" : "text-muted-foreground"} />
@@ -163,17 +163,17 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                 <header className="flex h-16 shrink-0 items-center justify-between px-6 border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
                     <div className="flex items-center gap-4">
                         <SidebarTrigger className="-ml-1" />
-                        <h1 className="text-lg font-bold text-slate-900 hidden sm:block">
+                        <h1 className="text-lg font-black tracking-tight text-slate-900 hidden sm:block">
                             {navItems.find(item => item.active)?.label || 'Dashboard'}
                         </h1>
                     </div>
                     {userProfile?.role === 'admin' && (
-                        <Badge className="bg-primary text-white border-none font-black text-[10px] uppercase px-3 py-1 shadow-sm">
-                            Platform Control
+                        <Badge className="bg-primary text-white border-none font-black text-[10px] uppercase px-3 py-1 shadow-md">
+                            Platform Control Center
                         </Badge>
                     )}
                 </header>
-                <main className="flex-1 overflow-auto bg-muted/5">
+                <main className="flex-1 overflow-auto bg-slate-50/50">
                    <div className="p-6 md:p-8 lg:p-10 max-w-7xl mx-auto">
                         {children}
                    </div>

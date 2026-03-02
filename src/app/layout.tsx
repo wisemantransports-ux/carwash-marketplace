@@ -6,8 +6,8 @@ import Script from 'next/script';
 import { AuthProvider } from '@/hooks/use-auth';
 
 export const metadata: Metadata = {
-  title: 'AutoLink Africa - Marketplace',
-  description: 'The ultimate automotive marketplace.',
+  title: 'AutoLink Africa Marketplace - The Ultimate Auto Ecosystem',
+  description: 'Connect with verified car wash services, genuine spare parts, and premium vehicle sales across Botswana and Africa.',
   manifest: '/manifest.json',
   icons: {
     icon: '/icon.svg',
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#2080DF',
+  themeColor: '#020617', // Matching the premium dark theme
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -34,7 +34,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
           rel="stylesheet"
         />
       </head>
