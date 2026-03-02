@@ -1,15 +1,13 @@
-
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 import Script from 'next/script';
 import { AuthProvider } from '@/hooks/use-auth';
-import { TenantProvider } from '@/hooks/use-tenant';
 
 export const metadata: Metadata = {
   title: 'AutoLink Africa - Marketplace',
-  description: 'The ultimate automotive white-label marketplace.',
+  description: 'The ultimate automotive marketplace.',
   manifest: '/manifest.json',
   icons: {
     icon: '/icon.svg',
@@ -42,10 +40,8 @@ export default function RootLayout({
       </head>
       <body className={cn('font-body antialiased')}>
         <AuthProvider>
-          <TenantProvider>
-            {children}
-            <Toaster />
-          </TenantProvider>
+          {children}
+          <Toaster />
         </AuthProvider>
         <Script id="register-sw" strategy="afterInteractive">
           {`

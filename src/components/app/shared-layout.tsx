@@ -66,16 +66,16 @@ function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, l
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 shadow-2xl border-2 rounded-xl">
-                <DropdownMenuLabel className="text-xs uppercase font-bold text-muted-foreground px-3 py-2">Account Management</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs uppercase font-bold text-muted-foreground px-3 py-2">My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => window.location.href = '/'} className="cursor-pointer">
                     <Home className="mr-2 h-4 w-4" />
-                    <span>View Public Home</span>
+                    <span>View Public Marketplace</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-bold">
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive focus:bg-destructive/10 font-bold">
                     <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out Session</span>
+                    <span>Log Out</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
@@ -88,10 +88,6 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     const [userProfile, setUserProfile] = useState<ProfileUser | null>(null);
     const [loading, setLoading] = useState(true);
 
-    /**
-     * fetchProfile
-     * Uses explicit session-based UID to satisfy RLS and prevent auth.uid() delays.
-     */
     const fetchProfile = useCallback(async (userId: string) => {
         if (!userId) {
             setLoading(false);
@@ -99,30 +95,21 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
         }
 
         try {
-            // Using session-based userId explicitly in the query filter
             const { data, error } = await supabase
                 .from('users_with_access')
                 .select('*')
                 .eq('id', userId)
                 .maybeSingle();
 
-            if (error) {
-                console.error("[LAYOUT] Profile Fetch Error Detail:", {
-                    message: error.message,
-                    details: error.details,
-                    code: error.code
-                });
-                throw error;
-            }
+            if (error) throw error;
             
             if (data) {
                 setUserProfile(data as ProfileUser);
             } else {
-                console.warn("[LAYOUT] Profile record missing for UID:", userId);
                 router.replace('/login');
             }
         } catch (e) {
-            console.error("[LAYOUT] Fatal session error:", e);
+            console.error("[LAYOUT] Fetch failure:", e);
         } finally {
             setLoading(false);
         }
@@ -131,16 +118,11 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     useEffect(() => {
         let isMounted = true;
         const checkSession = async () => {
-            // 1. Establish session first
             const { data: { session } } = await supabase.auth.getSession();
-            
             if (!session?.user?.id) {
-                console.warn("[LAYOUT] No active session found. Routing to login.");
                 if (isMounted) router.replace('/login');
                 return;
             }
-            
-            // 2. Hydrate profile using session ID
             if (isMounted) await fetchProfile(session.user.id);
         };
         checkSession();
@@ -155,7 +137,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     if (loading) return (
         <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
             <Loader2 className="animate-spin h-10 w-10 text-primary" />
-            <p className="text-sm text-muted-foreground animate-pulse font-medium">Validating dashboard session...</p>
+            <p className="text-sm font-medium animate-pulse">Initializing dashboard...</p>
         </div>
     );
 
@@ -195,8 +177,8 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                         </h1>
                     </div>
                     {userProfile?.role === 'admin' && (
-                        <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase px-3 py-1">
-                            Platform Administrator
+                        <Badge className="bg-primary text-white border-none font-black text-[10px] uppercase px-3 py-1">
+                            Platform Admin
                         </Badge>
                     )}
                 </header>

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -7,13 +6,12 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, Clock, Package, Tags } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { useTenant } from '@/hooks/use-tenant';
 
 function getDisplayImage(images: any, fallback: string): string {
   if (!images) return fallback;
@@ -40,34 +38,23 @@ const CATEGORIES = [
 ];
 
 function MarketplaceContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { tenant } = useTenant();
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [cars, setCars] = useState<any[]>([]);
   const [spareParts, setSpareParts] = useState<any[]>([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
-  const [category, setCategory] = useState('all');
+  const [category, setCategory] = useState(searchParams.get('category') || 'all');
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    const cat = searchParams.get('category');
-    if (cat !== null) {
-      const match = CATEGORIES.find(c => c.id.toLowerCase() === cat.toLowerCase());
-      setCategory(match ? match.id : 'all');
-    }
-  }, [searchParams]);
-
   const loadData = useCallback(async () => {
-    if (!isSupabaseConfigured || !tenant) return;
+    if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses for this Tenant
+      // 1. Fetch Verified Businesses
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*')
-          .eq('tenant_id', tenant.id)
           .or('verification_status.eq.verified,status.eq.verified')
           .order('name', { ascending: true });
       
@@ -83,11 +70,10 @@ function MarketplaceContent() {
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
-        // 2. Fetch Cars for this Tenant
+        // 2. Fetch Cars
         const { data: carData } = await supabase
           .from('car_listing')
           .select('*')
-          .eq('tenant_id', tenant.id)
           .in('status', ['active', 'available'])
           .in('business_id', verifiedIds);
 
@@ -97,11 +83,10 @@ function MarketplaceContent() {
         }));
         setCars(wiredCars);
 
-        // 3. Fetch Spare Parts for this Tenant
+        // 3. Fetch Spare Parts
         const { data: partData } = await supabase
           .from('spare_parts')
           .select('*')
-          .eq('tenant_id', tenant.id)
           .in('status', ['active', 'available'])
           .in('business_id', verifiedIds);
 
@@ -112,16 +97,16 @@ function MarketplaceContent() {
         setSpareParts(wiredParts);
       }
     } catch (e: any) {
-      console.error('Tenant Discovery failure:', e);
+      console.error('Discovery failure:', e);
     } finally {
       setLoading(false);
     }
-  }, [tenant]);
+  }, []);
 
   useEffect(() => {
     setMounted(true);
-    if (tenant) loadData();
-  }, [tenant, loadData]);
+    loadData();
+  }, [loadData]);
 
   const filteredItems = useMemo(() => {
     const bizList = businesses.filter(b => {
@@ -162,10 +147,8 @@ function MarketplaceContent() {
             <span className="hidden sm:inline">Back to Home</span>
           </Link>
           <div className="flex items-center gap-2">
-             <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-[10px]">
-               {tenant?.name?.substring(0, 3).toUpperCase() || 'TEN'}
-             </div>
-            <span className="text-sm font-bold text-primary tracking-tight">{tenant?.name || 'Partner Directory'}</span>
+             <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">ALM</div>
+            <span className="text-sm font-bold text-primary tracking-tight">AutoLink Directory</span>
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild><Link href="/login">Sign In</Link></Button>
@@ -178,11 +161,11 @@ function MarketplaceContent() {
         <div className="space-y-4 max-w-4xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
             <ShieldCheck className="h-3 w-3" />
-            <span>Verified {tenant?.name} Partners Only</span>
+            <span>Verified Platform Partners</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tight">Automotive Partner Directory</h1>
+          <h1 className="text-4xl font-black tracking-tight">Partner Directory</h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Find verified car wash services, quality spare parts, and vehicle dealerships powered by the {tenant?.name} platform.
+            Find verified car wash services, quality spare parts, and premium vehicle listings across Botswana.
           </p>
         </div>
 
@@ -235,12 +218,12 @@ function MarketplaceContent() {
                 </div>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xl font-bold line-clamp-1">{item.name || item.title}</CardTitle>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <MapPin className="h-3 w-3" /> <span>{item.city || 'Available'}</span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                    <MapPin className="h-3.5 w-3.5" /> <span>{item.city || 'Available'}</span>
                   </div>
                 </CardHeader>
                 <CardFooter className="mt-auto">
-                  <Button asChild className="w-full font-bold h-11">
+                  <Button asChild className="w-full font-bold h-11 shadow-sm">
                     <Link href={item.itemType === 'business' ? `/find-wash/${item.id}` : `/marketplace/${item.itemType === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                       View Profile
                     </Link>
@@ -251,7 +234,7 @@ function MarketplaceContent() {
           ) : (
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
               <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-muted-foreground font-bold text-lg italic">No verified listings found in this {tenant?.name} marketplace.</p>
+              <p className="text-muted-foreground font-bold text-lg italic">No verified listings found matching your search.</p>
             </div>
           )}
         </div>

@@ -13,7 +13,6 @@ import { Loader2, ShieldCheck, ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import Link from 'next/link';
-import { useTenant } from '@/hooks/use-tenant';
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -24,71 +23,36 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { tenant } = useTenant();
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const redirecting = useRef(false);
 
-  /**
-   * handleRoleRedirect
-   * Fetches the user profile based on an EXPLICIT userId to satisfy RLS.
-   * Session is established first to ensure auth.uid() context is ready.
-   */
   const handleRoleRedirect = useCallback(async (userId: string) => {
     if (!userId || redirecting.current) return;
     redirecting.current = true;
 
     try {
-      // 1. Double-check session existence to ensure JWT is in headers
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Authentication session lost.");
+      if (!session) throw new Error("Session lost during authentication.");
 
-      console.log("[AUTH] Session established for UID:", userId);
-
-      // 2. Fetch profile using explicit session-based UID
       const { data: profile, error } = await supabase
         .from('users_with_access')
-        .select('id, role, tenant_id')
+        .select('id, role')
         .eq('id', userId)
         .maybeSingle();
 
-      if (error) {
-        console.error("[AUTH] Profile Fetch Error Detail:", {
-          message: error.message,
-          details: error.details,
-          code: error.code
-        });
-        throw new Error(`Profile access denied: ${error.message}`);
-      }
+      if (error) throw error;
+      if (!profile) throw new Error("Account record not found.");
 
-      if (!profile) {
-        console.warn("[AUTH] No profile found for UID:", userId);
-        throw new Error("Account record not found in database.");
-      }
-
-      // 3. Role-Based Routing
-      console.log(`[AUTH] Routing established: ${profile.role}`);
-      
       switch (profile.role) {
-        case 'admin': 
-          router.replace('/admin/dashboard'); 
-          break;
-        case 'business-owner': 
-          router.replace('/business/dashboard'); 
-          break;
-        case 'customer': 
-          router.replace('/customer/home'); 
-          break;
-        default: 
-          throw new Error(`Unrecognized role: ${profile.role}`);
+        case 'admin': router.replace('/admin/dashboard'); break;
+        case 'business-owner': router.replace('/business/dashboard'); break;
+        case 'customer': router.replace('/customer/home'); break;
+        default: throw new Error(`Role unrecognized: ${profile.role}`);
       }
     } catch (e: any) {
-      console.error("[AUTH] Redirect Failure:", e.message);
-      toast({ 
-        variant: "destructive", 
-        title: "Access Error", 
-        description: e.message || "Unable to retrieve account profile." 
-      });
+      console.error("[AUTH] Error:", e.message);
+      toast({ variant: "destructive", title: "Access Error", description: e.message });
       setLoading(false);
       redirecting.current = false;
     }
@@ -120,10 +84,7 @@ export default function LoginPage() {
       });
 
       if (authError) throw authError;
-
-      if (authData.user?.id) {
-        await handleRoleRedirect(authData.user.id);
-      }
+      if (authData.user?.id) await handleRoleRedirect(authData.user.id);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Login Failed", description: error.message });
       setLoading(false);
@@ -133,7 +94,7 @@ export default function LoginPage() {
   if (checkingSession) return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-4">
       <Loader2 className="animate-spin text-primary h-10 w-10" />
-      <p className="text-sm text-muted-foreground animate-pulse font-medium">Authenticating...</p>
+      <p className="text-sm font-medium animate-pulse">Authenticating...</p>
     </div>
   );
 
@@ -150,16 +111,14 @@ export default function LoginPage() {
               <ShieldCheck className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-primary">
-            {tenant?.name || 'AutoLink Africa'}
-          </h1>
-          <p className="text-muted-foreground">Sign in to your platform instance.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-primary">AutoLink Africa</h1>
+          <p className="text-muted-foreground">The ultimate automotive marketplace.</p>
         </div>
 
         <Card className="border-2 shadow-xl rounded-3xl overflow-hidden">
           <CardHeader className="bg-muted/10 border-b">
             <CardTitle>Welcome Back</CardTitle>
-            <CardDescription>Use your registered email and password.</CardDescription>
+            <CardDescription>Sign in to manage your account.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
             <Form {...form}>
@@ -170,7 +129,7 @@ export default function LoginPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
-                      <FormControl><Input placeholder="admin@autolink.africa" {...field} /></FormControl>
+                      <FormControl><Input placeholder="name@example.com" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -192,10 +151,8 @@ export default function LoginPage() {
               </form>
             </Form>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4 border-t bg-muted/5 p-6">
-            <div className="text-center text-sm text-muted-foreground">
-              Don't have an account? <Link href="/signup" className="text-primary font-bold hover:underline">Create Account</Link>
-            </div>
+          <CardFooter className="justify-center border-t bg-muted/5 p-6">
+            <p className="text-sm text-muted-foreground">Don't have an account? <Link href="/signup" className="text-primary font-bold hover:underline">Sign up now</Link></p>
           </CardFooter>
         </Card>
       </div>
