@@ -94,27 +94,36 @@ export default function SubscriptionPage() {
     const handleManualPayment = () => {
         if (!selectedPlan || !business) return;
 
-        const adminPhone = "26777491261"; // Admin WhatsApp
+        // Admin WhatsApp number in international format without the '+' for the wa.me URL
+        const adminPhone = "26777491261"; 
         const message = `*PAYMENT REQUEST - AUTOLINK AFRICA*\n\n` +
                         `*Business:* ${business.name}\n` +
                         `*Business ID:* ${business.id}\n` +
                         `*Plan Selected:* ${selectedPlan.name}\n` +
                         `*Amount Due:* P${selectedPlan.price}\n\n` +
-                        `I would like to pay for my subscription via Mobile Money. Please provide instructions.`;
+                        `I would like to coordinate platform payment via Mobile Money (Orange Money/Smega). Please provide verification instructions.`;
         
         const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
         
         // Update status to pending verification
         const updateStatus = async () => {
-            await supabase.from('businesses').update({
-                subscription_status: 'payment_submitted',
-                subscription_payment_status: 'pending_verification'
-            }).eq('id', business.id);
-            
-            toast({ title: "WhatsApp Opened", description: "Coordinate your payment with our team." });
-            window.open(whatsappUrl, '_blank');
-            fetchBusiness();
-            setStep('browse');
+            try {
+                await supabase.from('businesses').update({
+                    subscription_status: 'payment_submitted',
+                    subscription_payment_status: 'pending_verification'
+                }).eq('id', business.id);
+                
+                toast({ 
+                    title: "WhatsApp Coordination Started", 
+                    description: "Our team will assist you with the manual payment process." 
+                });
+                
+                window.open(whatsappUrl, '_blank');
+                fetchBusiness();
+                setStep('browse');
+            } catch (e) {
+                console.error("Manual payment error:", e);
+            }
         };
 
         updateStatus();
@@ -285,7 +294,7 @@ export default function SubscriptionPage() {
                                                     return actions.order.create({
                                                         intent: "CAPTURE",
                                                         purchase_units: [{
-                                                            amount: { currency_code: "USD", value: (selectedPlan!.price / 13.5).toFixed(2) }, // Simplified Pula to USD conversion
+                                                            amount: { currency_code: "USD", value: (selectedPlan!.price / 13.5).toFixed(2) }, 
                                                             description: `${selectedPlan!.name} Plan - ${business!.name}`
                                                         }]
                                                     });
