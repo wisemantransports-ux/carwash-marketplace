@@ -34,8 +34,6 @@ function AutoLinkLogo() {
 }
 
 function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, loading: boolean }) {
-    const router = useRouter();
-
     const handleSignOut = async () => {
         try {
             await supabase.auth.signOut();
@@ -69,7 +67,7 @@ function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, l
             <DropdownMenuContent align="end" className="w-56 shadow-2xl border-2 rounded-xl">
                 <DropdownMenuLabel className="text-xs uppercase font-bold text-muted-foreground px-3 py-2">Account Management</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push('/')} className="cursor-pointer">
+                <DropdownMenuItem onClick={() => window.location.href = '/'} className="cursor-pointer">
                     <Home className="mr-2 h-4 w-4" />
                     <span>View Public Home</span>
                 </DropdownMenuItem>
@@ -91,7 +89,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
 
     /**
      * fetchProfile
-     * Replaces auth.uid() hardcoding with session-based ID lookup.
+     * Replaces auth.uid() reliance with explicit UID from established session.
      */
     const fetchProfile = useCallback(async (userId: string) => {
         if (!userId) {
@@ -100,25 +98,30 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
         }
 
         try {
-            // Using session-based ID to query profile view
+            // Using explicit userId to ensure RLS visibility during hydration
             const { data, error } = await supabase
                 .from('users_with_access')
                 .select('*')
                 .eq('id', userId)
                 .maybeSingle();
 
-            if (error) throw error;
+            if (error) {
+                console.error("[LAYOUT] Profile error:", error.message);
+                throw error;
+            }
+            
             if (data) {
                 setUserProfile(data as ProfileUser);
             } else {
-                console.warn("Session valid but profile record missing for UID:", userId);
+                console.warn("[LAYOUT] Session valid but profile missing for UID:", userId);
+                router.replace('/login');
             }
         } catch (e) {
-            console.error("Layout Profile Load Error:", e);
+            console.error("[LAYOUT] Fatal load error:", e);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [router]);
 
     useEffect(() => {
         let isMounted = true;
@@ -126,7 +129,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
             const { data: { session } } = await supabase.auth.getSession();
             
             if (!session?.user?.id) {
-                console.warn("Unauthenticated session detected in dashboard. Redirecting to login.");
+                console.warn("[LAYOUT] No active session found. Redirecting to login.");
                 if (isMounted) router.replace('/login');
                 return;
             }

@@ -31,15 +31,15 @@ export default function LoginPage() {
 
   /**
    * handleRoleRedirect
-   * Fetches the user profile based on the SESSION ID.
-   * This replaces hardcoded auth.uid() dependencies by passing the explicit ID from the session.
+   * Fetches the user profile based on the SESSION ID provided by the client.
+   * Uses explicit userId to ensure profile is found even if auth.uid() handshake is delayed.
    */
   const handleRoleRedirect = useCallback(async (userId: string) => {
     if (!userId || redirecting.current) return;
     redirecting.current = true;
 
     try {
-      // Fetch profile using explicit session ID to ensure RLS visibility
+      // Profile fetch using explicit ID from session
       const { data: profile, error } = await supabase
         .from('users_with_access')
         .select('id, role, tenant_id')
@@ -47,29 +47,17 @@ export default function LoginPage() {
         .maybeSingle();
 
       if (error) {
-        console.error("Profile Fetch Error:", error);
-        throw new Error("Unable to retrieve account profile. Check RLS policies.");
+        console.error("[AUTH] Profile Fetch Error:", error.message);
+        throw new Error("Unable to retrieve account profile. Check database RLS.");
       }
 
       if (!profile) {
-        throw new Error("Account profile not found.");
+        throw new Error("Account profile record not found in database.");
       }
-
-      // Strict Tenant Check for White-Label isolation
-      if (tenant && profile.tenant_id !== tenant.id) {
-        toast({ 
-          variant: 'destructive', 
-          title: 'Unauthorized', 
-          description: `Your account belongs to another instance (${profile.tenant_id}).` 
-        });
-        await supabase.auth.signOut();
-        window.location.reload();
-        return;
-      }
-
-      console.log(`Authenticated: ${profile.role} (User: ${userId})`);
 
       // Role-Based Routing
+      console.log(`[AUTH] Session Established: ${profile.role} (${userId})`);
+      
       switch (profile.role) {
         case 'admin': 
           router.replace('/admin/dashboard'); 
@@ -81,21 +69,20 @@ export default function LoginPage() {
           router.replace('/customer/home'); 
           break;
         default: 
-          throw new Error("Account role is invalid or unrecognized.");
+          throw new Error("Account role is invalid.");
       }
     } catch (e: any) {
-      console.error("Access/Redirect Error:", e.message);
+      console.error("[AUTH] Access Error:", e.message);
       toast({ variant: "destructive", title: "Access Error", description: e.message });
       setLoading(false);
       redirecting.current = false;
     }
-  }, [router, tenant]);
+  }, [router]);
 
   useEffect(() => {
     async function checkExistingSession() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) {
-        // auth.uid() check passed via established session
         await handleRoleRedirect(session.user.id);
       } else {
         setCheckingSession(false);
@@ -119,7 +106,7 @@ export default function LoginPage() {
 
       if (authError) throw authError;
 
-      // Ensure session is fully registered in client before redirecting
+      // Extract UID from established session
       if (authData.user?.id) {
         await handleRoleRedirect(authData.user.id);
       }
@@ -140,7 +127,7 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-muted/30 px-4">
       <div className="w-full max-w-md space-y-8 animate-in fade-in duration-500">
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary transition-colors">
-          <ArrowLeft className="h-4 w-4" /> Back to {tenant?.name || 'Home'}
+          <ArrowLeft className="h-4 w-4" /> Back to Home
         </Link>
         
         <div className="text-center space-y-2">
