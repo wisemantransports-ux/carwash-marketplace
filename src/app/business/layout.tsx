@@ -1,7 +1,7 @@
 
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Lock, UserCircle, Receipt, Package, Loader2, RefreshCw, CarFront } from "lucide-react";
+import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Lock, UserCircle, Receipt, Package, Loader2, RefreshCw, CarFront, MapPin } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Business } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -32,7 +32,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         return;
       }
 
-      // 1. STATUS CHECK via standard view (Avoids Business RLS recursion)
+      // 1. STATUS CHECK
       const { data: profile, error: profileError } = await supabase
         .from('users_with_access')
         .select('paid, trial_expiry')
@@ -40,7 +40,6 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         .maybeSingle();
 
       if (profileError) {
-        console.error("[LAYOUT] Profile check failure:", JSON.stringify(profileError, null, 2));
         setFetchError(profileError.message);
         setLoading(false);
         return;
@@ -60,7 +59,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         return;
       }
 
-      // 2. FETCH BUSINESS DATA (Safe after status check)
+      // 2. FETCH BUSINESS DATA
       const { data: biz, error: bizError } = await supabase
         .from('businesses')
         .select('*')
@@ -68,55 +67,15 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         .maybeSingle();
       
       if (bizError) {
-        console.error("[LAYOUT] Business fetch error:", JSON.stringify(bizError, null, 2));
         setFetchError(bizError.message);
         setBusiness(null);
       } else if (biz) {
-        const typedBiz = biz as Business;
-        
-        // AUTO-TRIAL logic for verified but inactive accounts
-        if (
-          typedBiz.verification_status === 'verified' && 
-          !typedBiz.sub_end_date && 
-          typedBiz.subscription_status === 'inactive' &&
-          !trialTriggered.current
-        ) {
-          trialTriggered.current = true;
-          const expiry = new Date();
-          expiry.setDate(expiry.getDate() + 14);
-
-          const { error: updateError } = await supabase
-            .from('businesses')
-            .update({
-              subscription_status: 'active',
-              subscription_plan: 'Starter',
-              sub_end_date: expiry.toISOString()
-            })
-            .eq('id', typedBiz.id);
-
-          if (!updateError) {
-            toast({
-              title: "14-Day Trial Activated!",
-              description: "Your business is verified and your professional trial has started.",
-            });
-            setBusiness({
-              ...typedBiz,
-              subscription_status: 'active',
-              subscription_plan: 'Starter',
-              sub_end_date: expiry.toISOString()
-            });
-          } else {
-            setBusiness(typedBiz);
-          }
-        } else {
-          setBusiness(typedBiz);
-        }
+        setBusiness(biz as Business);
       } else {
         setBusiness(null);
       }
     } catch (e: any) {
-      console.error("[LAYOUT ERROR] Fatal exception:", e);
-      setFetchError(e.message || "An unexpected error occurred while loading your profile.");
+      setFetchError(e.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
@@ -130,6 +89,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
 
   const navItems = [
     { href: "/business/dashboard", label: "Operations", icon: LayoutDashboard },
+    { href: "/business/locations", label: "Branch Locations", icon: MapPin },
     { href: "/business/services", label: "Services", icon: Car },
     { href: "/business/cars", label: "Car Sales", icon: CarFront },
     { href: "/business/spare-shop", label: "Spare Shop", icon: Package },
@@ -154,26 +114,13 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     <SharedLayout navItems={filteredNavItems} role="business-owner">
       <div className="space-y-6">
         {isRestricted && (
-          <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800 animate-in slide-in-from-top duration-500">
+          <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800">
             <AlertCircle className="h-4 w-4 text-red-600" />
             <AlertTitle className="font-bold">Restricted Access Mode</AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
               <span>Your account data is currently restricted. Upgrade or extend your trial to access your business dashboard.</span>
               <Button size="sm" variant="outline" className="border-red-200 hover:bg-red-100" asChild>
                 <Link href="/business/subscription">View Plans</Link>
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {fetchError && !isRestricted && (
-          <Alert variant="destructive" className="bg-orange-50 border-orange-200 text-orange-800">
-            <AlertCircle className="h-4 w-4 text-orange-600" />
-            <AlertTitle className="font-bold">Connection Issue</AlertTitle>
-            <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
-              <span>We encountered an error accessing your business data: {fetchError}</span>
-              <Button size="sm" variant="outline" onClick={() => fetchData()} className="border-orange-200">
-                <RefreshCw className="h-3 w-3 mr-2" /> Retry Fetch
               </Button>
             </AlertDescription>
           </Alert>
@@ -193,9 +140,6 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
             <div className="flex flex-wrap justify-center gap-4">
               <Button size="lg" asChild className="shadow-lg">
                 <Link href="/business/subscription">Renew Access Now</Link>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link href="/business/profile">Review My Profile</Link>
               </Button>
             </div>
           </div>

@@ -45,9 +45,20 @@ export type Business = {
   certificate_url?: string;
 };
 
+export type BusinessLocation = {
+  id: string;
+  business_id: string;
+  name: string;
+  address: string;
+  city: string;
+  phone?: string;
+  created_at: string;
+};
+
 export type CarListing = {
   id: string;
   business_id: string;
+  location_id?: string;
   title: string; 
   make: string;
   model: string;
@@ -72,6 +83,7 @@ export type CarListing = {
 export type SparePart = {
   id: string;
   business_id: string;
+  location_id?: string;
   name: string;
   category: string;
   price: number;
@@ -98,10 +110,23 @@ export type CarListingStatus = 'available' | 'sold' | 'archived' | 'active';
 export type SparePartCondition = 'new' | 'used' | 'refurbished';
 export type SparePartStatus = 'active' | 'archived' | 'sold_out';
 
+export type Service = {
+  id: string;
+  business_id: string;
+  location_id?: string;
+  name: string;
+  description?: string;
+  price: number;
+  duration?: number;
+  currency_code?: string;
+  created_at?: string;
+};
+
 export type Booking = {
   id: string;
   customerId: string;
   businessId: string;
+  location_id?: string;
   service_id: string;
   car_id: string;
   booking_time: string;
