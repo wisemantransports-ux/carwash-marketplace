@@ -468,9 +468,9 @@ export default function LandingPage() {
             
             <div className="grid md:grid-cols-3 gap-8">
               {[
-                { name: 'Starter', price: '150', desc: 'Best for individual specialists.', features: ['15 Bookings/mo', 'Verified Badge', 'Basic Analytics'] },
-                { name: 'Pro', price: '300', desc: 'Best for established shops.', features: ['Unlimited Bookings', 'Priority Listing', 'Team Management'] },
-                { name: 'Enterprise', price: '600', desc: 'Best for multi-location groups.', features: ['Multi-Branch Control', 'Custom Reports', 'Premium Support'] },
+                { name: 'Starter', price: '199', desc: 'Best for individual specialists.', features: ['15 Bookings/mo', 'Verified Badge', 'Basic Analytics'] },
+                { name: 'Pro', price: '350', desc: 'Best for established shops.', features: ['Unlimited Bookings', 'Priority Listing', 'Team Management'] },
+                { name: 'Enterprise', price: '599', desc: 'Best for multi-location groups.', features: ['Multi-Branch Control', 'Custom Reports', 'Premium Support'] },
               ].map((plan) => (
                 <Card key={plan.name} className="bg-slate-800/50 border-slate-700 text-white hover:border-primary/50 transition-colors">
                   <CardHeader>

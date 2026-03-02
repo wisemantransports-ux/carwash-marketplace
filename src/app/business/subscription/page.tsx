@@ -15,7 +15,7 @@ import { supabase } from "@/lib/supabase";
 const PLANS = [
     { 
         name: 'Starter' as SubscriptionPlan, 
-        price: 150, 
+        price: 199, 
         desc: 'For small or single-station car wash businesses',
         features: [
             '1 registered car wash location',
@@ -28,7 +28,7 @@ const PLANS = [
     },
     { 
         name: 'Pro' as SubscriptionPlan, 
-        price: 300, 
+        price: 350, 
         desc: 'For established stations offering mobile service',
         features: [
             'Up to 10 verified employees',
@@ -41,7 +41,7 @@ const PLANS = [
     },
     { 
         name: 'Enterprise' as SubscriptionPlan, 
-        price: 600, 
+        price: 599, 
         desc: 'For multi-location operators',
         features: [
             'Unlimited employees',
