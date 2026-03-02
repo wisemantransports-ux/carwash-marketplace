@@ -42,6 +42,7 @@ export type Service = {
 
 export type SubscriptionPlan = 'Starter' | 'Pro' | 'Enterprise' | 'None';
 export type SubscriptionStatus = 'inactive' | 'awaiting_payment' | 'payment_submitted' | 'active' | 'expired' | 'suspended';
+export type SubscriptionPaymentStatus = 'none' | 'paypal_confirmed' | 'manual_confirmed' | 'pending_verification';
 export type BusinessType = 'individual' | 'registered';
 export type VerificationStatus = 'pending' | 'verified' | 'rejected';
 export type BusinessCategory = 'Wash' | 'Spare' | 'Cars';
@@ -62,6 +63,7 @@ export type Business = {
   verification_status: VerificationStatus; // Document verification status
   subscription_plan: SubscriptionPlan;
   subscription_status: SubscriptionStatus;
+  subscription_payment_status?: SubscriptionPaymentStatus;
   sub_end_date?: string;
   logo_url?: string;
   special_tag?: string; // e.g. "CIPA Verified"
@@ -119,12 +121,12 @@ export type PaymentSubmission = {
   businessId: string;
   planSelected: SubscriptionPlan;
   amount: number;
-  mobileNetwork: 'Orange' | 'Smega';
-  referenceText: string;
-  proofImageUrl: string;
+  mobileNetwork: 'Orange' | 'Smega' | 'PayPal';
+  reference_text: string;
+  proof_image_url: string;
   status: 'pending' | 'approved' | 'rejected';
-  submittedAt: Date;
-  reviewedAt?: Date;
+  submitted_at?: string;
+  reviewed_at?: string;
 };
 
 export type Rating = {
