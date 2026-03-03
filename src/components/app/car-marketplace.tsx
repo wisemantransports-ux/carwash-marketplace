@@ -123,7 +123,7 @@ export default function CarMarketplace() {
       
       const { data, error } = await supabase
         .from('listings')
-        .select('*')
+        .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
         .eq('type', 'car')
         .order('created_at', { ascending: false });
 

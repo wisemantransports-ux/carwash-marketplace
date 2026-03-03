@@ -108,27 +108,21 @@ export default function SparePartsMarketplacePage() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      const { data: verifiedBiz } = await supabase
+      // 1. Fetch ALL Businesses (No restrictive filters)
+      const { data: allBiz } = await supabase
         .from('businesses')
-        .select('id, name, city')
-        .or('verification_status.eq.verified,status.eq.verified');
+        .select('id, name, city');
       
-      const verifiedIds = (verifiedBiz || []).map(b => b.id);
-      const bizMap = (verifiedBiz || []).reduce((acc: any, b: any) => {
+      const bizMap = (allBiz || []).reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
       }, {});
       
-      if (verifiedIds.length === 0) {
-        setParts([]);
-        return;
-      }
-
+      // 2. Fetch ALL Spare Part Listings
       const { data, error } = await supabase
         .from('listings')
-        .select('*')
+        .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
         .eq('type', 'spare_part')
-        .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

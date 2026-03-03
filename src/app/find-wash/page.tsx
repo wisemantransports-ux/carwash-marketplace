@@ -11,7 +11,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
@@ -52,7 +51,7 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch All Businesses
+      // 1. Fetch ALL Businesses (No verification gate here to ensure visibility)
       const { data: bizData } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status, category');
@@ -65,7 +64,7 @@ function MarketplaceContent() {
 
       setBusinesses(partnerBusinesses);
 
-      // 2. Fetch All Listings (RESTORED: No non-existent filters)
+      // 2. Fetch ALL Listings (Source of Truth)
       const { data: listingData } = await supabase
         .from('listings')
         .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
@@ -88,7 +87,6 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
-    // Correctly bridge UI categories to DB types
     const bizItems = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));

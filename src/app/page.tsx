@@ -72,7 +72,7 @@ export default function LandingPage() {
           return acc;
         }, {});
 
-        // 2. Fetch Latest Listings from unified table
+        // 2. Fetch Latest Listings from unified table (Source of Intent)
         const { data: listingData } = await supabase
           .from('listings')
           .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
@@ -117,7 +117,6 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* HERO SECTION */}
       <section className="relative pt-40 pb-24 md:pt-56 md:pb-40 overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none overflow-hidden">
             <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/20 blur-[120px] rounded-full opacity-50" />
@@ -238,7 +237,7 @@ export default function LandingPage() {
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-60" />
                       <div className="absolute top-4 left-4">
                         <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1 shadow-2xl">
-                          {item.listing_type.replace('_', ' ')}
+                          {(item.listing_type || item.type).replace('_', ' ')}
                         </Badge>
                       </div>
                       <div className="absolute top-4 right-4">
