@@ -59,14 +59,14 @@ export default function LandingPage() {
         if (verifiedIds.length > 0) {
           const { data: listingData, error: listingError } = await supabase
             .from('listings')
-            .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at')
+            .select('id, business_id, listing_type, name, description, price, created_at')
             .in('business_id', verifiedIds)
             .order('created_at', { ascending: false })
             .limit(12);
           
           if (listingError) throw listingError;
 
-          // Stage 3: Manual Wiring
+          // Stage 3: Manual Wiring & Verified Injections
           wiredListings = (listingData || []).map(l => ({ 
             ...l, 
             verified: true,
@@ -76,7 +76,7 @@ export default function LandingPage() {
 
         setListings(wiredListings);
       } catch (e: any) {
-        console.error("Landing discovery failure:", e.message || e);
+        console.error("Landing discovery failure:", e.message);
       } finally {
         setLoading(false);
       }
@@ -226,7 +226,7 @@ export default function LandingPage() {
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-60" />
                       <div className="absolute top-4 left-4">
                         <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1 shadow-2xl">
-                          {(item.listing_type || item.type).replace('_', ' ')}
+                          {(item.listing_type || 'Listing').replace('_', ' ')}
                         </Badge>
                       </div>
                       <div className="absolute top-4 right-4">
@@ -252,12 +252,9 @@ export default function LandingPage() {
                     </CardHeader>
                     <CardFooter className="p-8 pt-0 mt-auto flex flex-col gap-3">
                       <Button asChild className="w-full font-black rounded-xl h-14 shadow-2xl transition-all hover:scale-[1.02]">
-                        <Link href={item.type === 'wash_service' ? `/find-wash/${item.business_id}` : `/marketplace/${item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                        <Link href={item.listing_type === 'wash_service' ? `/find-wash/${item.business_id}` : `/marketplace/${item.listing_type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                           View Particulars
                         </Link>
-                      </Button>
-                      <Button variant="outline" size="sm" className="w-full h-10 font-bold border-white/10 hover:bg-green-600/10 hover:text-green-400">
-                        <MessageCircle className="h-4 w-4 mr-2" /> AI Help → WhatsApp
                       </Button>
                     </CardFooter>
                   </Card>
@@ -267,8 +264,8 @@ export default function LandingPage() {
                     <div className="bg-white/5 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
                         <Store className="h-10 w-10 text-slate-600" />
                     </div>
-                    <p className="text-slate-500 font-bold text-xl italic">Verified listings are currently being refreshed.</p>
-                    <p className="text-sm text-slate-600 mt-2">Discover elite automotive solutions in your area.</p>
+                    <p className="text-slate-500 font-bold text-xl italic">No verified listings available at the moment.</p>
+                    <p className="text-sm text-slate-600 mt-2">Check back later or search for other automotive solutions.</p>
                 </div>
             )}
           </div>

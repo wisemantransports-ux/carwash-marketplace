@@ -14,31 +14,8 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-/**
- * Robust image parsing for Postgres array columns
- */
-function getDisplayImage(images: any, fallback: string): string {
-  if (!images) return fallback;
-  if (Array.isArray(images) && images.length > 0) return images[0];
-  if (typeof images === 'string') {
-    try {
-      if (images.startsWith('[') || images.startsWith('{')) {
-        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
-        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-      }
-      const parts = images.replace(/[{}]/g, '').split(',');
-      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '').trim();
-    } catch {
-      return images;
-    }
-  }
-  return fallback;
-}
-
 export function CarCard({ car }: { car: any }) {
-  const isPremiumDealer = car.business?.subscription_plan === 'Pro' || car.business?.subscription_plan === 'Enterprise';
-  const displayImage = getDisplayImage(car.images, 'https://picsum.photos/seed/car/600/400');
+  const displayImage = `https://picsum.photos/seed/${car.id}/600/400`;
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
@@ -51,11 +28,11 @@ export function CarCard({ car }: { car: any }) {
         />
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           <Badge className="bg-white/90 text-black backdrop-blur-sm border-none shadow-sm uppercase text-[10px] font-black">
-            {car.year || 'Premium'}
+            Verified
           </Badge>
-          {isPremiumDealer && (
+          {car.verified && (
             <Badge className="bg-primary text-white border-none shadow-sm uppercase text-[9px] font-black flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3" /> Verified Dealer
+              <ShieldCheck className="h-3 w-3" /> Partner Seal
             </Badge>
           )}
         </div>
@@ -75,18 +52,12 @@ export function CarCard({ car }: { car: any }) {
             <MapPin className="h-3 w-3" />
             <span>{car.business?.city || 'Botswana'}</span>
           </div>
-          {car.mileage && (
-            <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              <span>{Number(car.mileage).toLocaleString()} KM</span>
-            </div>
-          )}
         </div>
       </CardHeader>
 
       <CardContent className="flex-grow pb-4">
         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 italic">
-          {car.description || "View this premium vehicle listing from one of our partners."}
+          {car.description || "View this premium vehicle listing from one of our verified partners."}
         </p>
       </CardContent>
 
@@ -112,25 +83,38 @@ export default function CarMarketplace() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      const { data: allBiz } = await supabase
+      // 1. Fetch Verified Businesses
+      const { data: verifiedBiz } = await supabase
         .from('businesses')
-        .select('id, name, city, subscription_plan');
+        .select('id, name, city')
+        .eq('verification_status', 'verified');
       
-      const bizMap = (allBiz || []).reduce((acc: any, b: any) => {
+      const verifiedIds = (verifiedBiz || []).map(b => b.id);
+      const bizMap = (verifiedBiz || []).reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
       }, {});
       
-      const { data, error } = await supabase
-        .from('listings')
-        .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
-        .eq('type', 'car')
-        .order('created_at', { ascending: false });
+      // 2. Fetch Listings for Verified IDs
+      if (verifiedIds.length > 0) {
+        const { data, error } = await supabase
+          .from('listings')
+          .select('id, business_id, name, description, price, created_at, listing_type')
+          .eq('listing_type', 'car')
+          .in('business_id', verifiedIds)
+          .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setListings((data || []).map(l => ({ ...l, business: bizMap[l.business_id] })));
+        if (error) throw error;
+        setListings((data || []).map(l => ({ 
+          ...l, 
+          verified: true,
+          business: bizMap[l.business_id] 
+        })));
+      } else {
+        setListings([]);
+      }
     } catch (e: any) {
-      console.error("Marketplace fetch failure:", e.message);
+      console.error("Car discovery failure:", e.message);
     } finally {
       setLoading(false);
     }
@@ -191,7 +175,6 @@ export default function CarMarketplace() {
               <Skeleton className="h-56 w-full" />
               <div className="p-6 space-y-4">
                 <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
                 <Skeleton className="h-10 w-full" />
               </div>
             </Card>
@@ -203,7 +186,7 @@ export default function CarMarketplace() {
         ) : (
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-            <p className="text-xl font-bold text-muted-foreground">No car listings found matching your search.</p>
+            <p className="text-xl font-bold text-muted-foreground">No verified car listings found.</p>
             <Button variant="link" onClick={() => setSearch('')} className="font-bold">
               View All Active Listings
             </Button>

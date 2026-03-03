@@ -14,30 +14,8 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-/**
- * Robust image parsing for Postgres array columns
- */
-function getDisplayImage(images: any, fallback: string): string {
-  if (!images) return fallback;
-  if (Array.isArray(images) && images.length > 0) return images[0];
-  if (typeof images === 'string') {
-    try {
-      if (images.startsWith('[') || images.startsWith('{')) {
-        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
-        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-      }
-      const parts = images.replace(/[{}]/g, '').split(',');
-      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
-    } catch {
-      return images;
-    }
-  }
-  return fallback;
-}
-
 export function SparePartCard({ part }: { part: any }) {
-  const displayImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/400/300');
+  const displayImage = `https://picsum.photos/seed/${part.id}/400/300`;
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
@@ -50,13 +28,7 @@ export function SparePartCard({ part }: { part: any }) {
         />
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           <Badge className="bg-white/90 text-black backdrop-blur-sm border-none shadow-sm uppercase text-[9px] font-black">
-            {part.category || 'Automotive'}
-          </Badge>
-          <Badge className={cn(
-            "border-none shadow-sm uppercase text-[9px] font-black text-white",
-            part.condition === 'used' ? "bg-orange-600" : "bg-green-600"
-          )}>
-            {part.condition || 'New'}
+            Verified Item
           </Badge>
         </div>
         <div className="absolute bottom-3 right-3">
@@ -74,15 +46,15 @@ export function SparePartCard({ part }: { part: any }) {
             <span className="truncate max-w-[100px]">{part.business?.name || 'Verified Seller'}</span>
           </div>
           <div className="flex items-center gap-1">
-            <Package className="h-3 w-3 text-primary" />
-            <span>{part.stock_quantity || 1} In Stock</span>
+            <ShieldCheck className="h-3 w-3 text-green-600" />
+            <span>Verified</span>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="flex-grow pb-4">
         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 italic">
-          {part.description || "Authentic component available for viewing and purchase from a verified local retailer."}
+          {part.description || "Genuine automotive component available from a verified local retailer."}
         </p>
       </CardContent>
 
@@ -108,27 +80,38 @@ export default function SparePartsMarketplacePage() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch ALL Businesses (No restrictive filters)
-      const { data: allBiz } = await supabase
+      // 1. Fetch Verified Businesses
+      const { data: verifiedBiz } = await supabase
         .from('businesses')
-        .select('id, name, city');
+        .select('id, name, city')
+        .eq('verification_status', 'verified');
       
-      const bizMap = (allBiz || []).reduce((acc: any, b: any) => {
+      const verifiedIds = (verifiedBiz || []).map(b => b.id);
+      const bizMap = (verifiedBiz || []).reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
       }, {});
       
-      // 2. Fetch ALL Spare Part Listings
-      const { data, error } = await supabase
-        .from('listings')
-        .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
-        .eq('type', 'spare_part')
-        .order('created_at', { ascending: false });
+      // 2. Fetch Spare Part Listings for Verified IDs
+      if (verifiedIds.length > 0) {
+        const { data, error } = await supabase
+          .from('listings')
+          .select('id, business_id, name, description, price, created_at, listing_type')
+          .eq('listing_type', 'spare_part')
+          .in('business_id', verifiedIds)
+          .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setParts((data || []).map(p => ({ ...p, business: bizMap[p.business_id] })));
+        if (error) throw error;
+        setParts((data || []).map(p => ({ 
+          ...p, 
+          verified: true,
+          business: bizMap[p.business_id] 
+        })));
+      } else {
+        setParts([]);
+      }
     } catch (e: any) {
-      console.error("Spare Parts fetch failure:", e.message);
+      console.error("Spare Parts discovery failure:", e.message);
     } finally {
       setLoading(false);
     }
@@ -229,7 +212,7 @@ export default function SparePartsMarketplacePage() {
           ) : (
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
               <Package className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-xl font-bold text-muted-foreground">No parts found matching your criteria.</p>
+              <p className="text-xl font-bold text-muted-foreground">No verified parts found matching your criteria.</p>
               <Button variant="link" onClick={() => setSearch('')} className="font-bold">
                 Reset All Filters
               </Button>

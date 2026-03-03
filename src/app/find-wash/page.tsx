@@ -6,7 +6,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, History, MessageCircle } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, History } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -56,7 +56,7 @@ function MarketplaceContent() {
       if (verifiedIds.length > 0) {
         const { data, error: listingError } = await supabase
           .from('listings')
-          .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at')
+          .select('id, business_id, listing_type, name, description, price, created_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
@@ -64,14 +64,14 @@ function MarketplaceContent() {
         listingData = data || [];
       }
 
-      // Stage 3: In-Memory Wiring
+      // Stage 3: In-Memory Wiring & Verified Flag Injection
       setAllListings(listingData.map(l => ({ 
         ...l, 
         verified: true,
         business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
       })));
     } catch (e: any) {
-      console.error('Marketplace discovery failure:', e.message || e);
+      console.error('Marketplace discovery failure:', e.message);
     } finally {
       setLoading(false);
     }
@@ -98,7 +98,7 @@ function MarketplaceContent() {
       const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
                            (l.description && l.description.toLowerCase().includes(search.toLowerCase()));
       
-      const matchesCategory = category === 'all' || l.listing_type === category || l.type === category;
+      const matchesCategory = category === 'all' || l.listing_type === category;
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
@@ -194,14 +194,14 @@ function MarketplaceContent() {
               <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
                 <div className="relative h-48 bg-muted overflow-hidden">
                   <Image 
-                    src={item.itemType === 'business' ? (item.logo_url || 'https://picsum.photos/seed/biz/600/400') : `https://picsum.photos/seed/${item.id}/600/400`} 
+                    src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/${item.id}/600/400`) : `https://picsum.photos/seed/${item.id}/600/400`} 
                     alt={item.name} 
                     fill 
                     className="object-cover transition-transform duration-500 group-hover:scale-110" 
                   />
                   <div className="absolute top-2 left-2">
                     <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
-                      {item.itemType === 'business' ? (item.category || 'Operator') : (item.listing_type || item.type).replace('_', ' ')}
+                      {item.itemType === 'business' ? (item.category || 'Operator') : (item.listing_type || 'Listing').replace('_', ' ')}
                     </Badge>
                   </div>
                   <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
@@ -227,17 +227,14 @@ function MarketplaceContent() {
                 </CardHeader>
                 <CardContent className="flex-grow">
                   <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                    {item.description || item.address || "Automotive solution available from our trusted partner network."}
+                    {item.description || item.address || "Verified automotive solution available from our trusted partner network."}
                   </p>
                 </CardContent>
                 <CardFooter className="mt-auto flex flex-col gap-2">
                   <Button asChild className="w-full font-bold h-11 shadow-sm">
-                    <Link href={item.itemType === 'business' || item.type === 'wash_service' || item.listing_type === 'wash_service' ? `/find-wash/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' || item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                    <Link href={item.itemType === 'business' || item.listing_type === 'wash_service' ? `/find-wash/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                       {item.itemType === 'business' ? 'View Profile' : 'View Details'}
                     </Link>
-                  </Button>
-                  <Button variant="outline" size="sm" className="w-full h-10 font-bold border-green-600/20 hover:bg-green-600 hover:text-white transition-all group">
-                    <MessageCircle className="h-4 w-4 mr-2 text-green-600 group-hover:text-white" /> AI Help → WhatsApp
                   </Button>
                 </CardFooter>
               </Card>
