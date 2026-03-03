@@ -3,34 +3,32 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Business, BusinessLocation } from '@/lib/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Business } from '@/lib/types';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Plus, Camera, Banknote, Calendar, ShieldCheck, ArrowLeft, Info, Type, MapPin } from 'lucide-react';
+import { Loader2, Plus, Camera, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
+/**
+ * @fileOverview List Vehicle Page
+ * Aligned with unified 'listings' table schema.
+ */
+
 export default function AddCarListingPage() {
   const router = useRouter();
   const [business, setBusiness] = useState<Business | null>(null);
-  const [locations, setLocations] = useState<BusinessLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
   // Form State
-  const [title, setTitle] = useState('');
-  const [make, setMake] = useState('');
-  const [model, setModel] = useState('');
-  const [year, setYear] = useState(new Date().getFullYear().toString());
+  const [name, setName] = useState('');
   const [price, setPrice] = useState('');
-  const [mileage, setMileage] = useState('');
-  const [locationId, setLocationId] = useState<string>('');
   const [description, setDescription] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -48,19 +46,7 @@ export default function AddCarListingPage() {
         .eq('owner_id', user.id)
         .maybeSingle();
 
-      if (biz) {
-        setBusiness(biz as Business);
-        
-        // Fetch locations for assignment
-        const { data: locs } = await supabase
-          .from('business_locations')
-          .select('*')
-          .eq('business_id', biz.id);
-        
-        const locList = locs || [];
-        setLocations(locList);
-        if (locList.length > 0) setLocationId(locList[0].id);
-      }
+      if (biz) setBusiness(biz as Business);
       setLoading(false);
     }
     checkAuth();
@@ -87,27 +73,23 @@ export default function AddCarListingPage() {
     try {
       const fileExt = imageFile.name.split('.').pop();
       const filePath = `cars/${business.id}/${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
-      if (uploadError) throw uploadError;
+      await supabase.storage.from('business-assets').upload(filePath, imageFile);
       const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
 
-      const { error } = await supabase.from('car_listing').insert({
+      // STRICT ALIGNMENT: Targeting 'listings' table with mandatory type fields
+      const { error } = await supabase.from('listings').insert({
         business_id: business.id,
-        location_id: locationId || null,
-        title: title.trim(),
-        make: make.trim(),
-        model: model.trim(),
-        year: parseInt(year),
+        type: 'car', // Contract required
+        listing_type: 'car', // Contract required
+        name: name.trim(),
         price: parseFloat(price),
-        mileage: parseInt(mileage),
         description: description.trim(),
-        images: [publicUrl],
-        status: 'active'
+        images: [publicUrl]
       });
 
       if (error) throw error;
 
-      toast({ title: 'Listing Published', description: `${make} ${model} is now visible.` });
+      toast({ title: 'Listing Published', description: 'Your vehicle is now visible.' });
       router.push('/business/cars');
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message });
@@ -133,52 +115,13 @@ export default function AddCarListingPage() {
             <CardHeader className="bg-muted/10 border-b"><CardTitle>Vehicle Details</CardTitle></CardHeader>
             <CardContent className="pt-6 space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="title">Listing Title *</Label>
-                <Input id="title" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Pristine 2022 Toyota Hilux" required />
+                <Label>Listing Title *</Label>
+                <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. 2022 Toyota Hilux" required />
               </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Make *</Label>
-                  <Input value={make} onChange={e => setMake(e.target.value)} placeholder="Toyota" required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Model *</Label>
-                  <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Hilux" required />
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Year</Label>
-                  <Input type="number" value={year} onChange={e => setYear(e.target.value)} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Mileage (KM)</Label>
-                  <Input type="number" value={mileage} onChange={e => setMileage(e.target.value)} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Price (BWP)</Label>
-                  <Input type="number" value={price} onChange={e => setPrice(e.target.value)} required />
-                </div>
-              </div>
-
               <div className="space-y-2">
-                <Label>Inventory Location (Branch) *</Label>
-                <Select value={locationId} onValueChange={setLocationId}>
-                  <SelectTrigger className="bg-white">
-                    <MapPin className="h-4 w-4 mr-2 text-primary" />
-                    <SelectValue placeholder="Select Branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map(loc => (
-                      <SelectItem key={loc.id} value={loc.id}>{loc.name} ({loc.city})</SelectItem>
-                    ))}
-                    {locations.length === 0 && <SelectItem value="default">Main Office (Profile Address)</SelectItem>}
-                  </SelectContent>
-                </Select>
+                <Label>Price (BWP) *</Label>
+                <Input type="number" value={price} onChange={e => setPrice(e.target.value)} required />
               </div>
-
               <div className="space-y-2">
                 <Label>Description</Label>
                 <Textarea value={description} onChange={e => setDescription(e.target.value)} className="min-h-[120px]" />
@@ -200,7 +143,7 @@ export default function AddCarListingPage() {
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
             </CardContent>
           </Card>
-          <Button type="submit" className="w-full h-14 text-lg shadow-xl" disabled={submitting}>
+          <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={submitting}>
             {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
             Publish Listing
           </Button>

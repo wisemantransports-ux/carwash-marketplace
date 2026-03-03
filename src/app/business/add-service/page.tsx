@@ -9,18 +9,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Plus, Sparkles, Banknote, AlertCircle, MapPin } from 'lucide-react';
+import { Loader2, Plus, Sparkles } from 'lucide-react';
 import { generateServiceDescription } from '@/ai/flows/business-owner-service-description-flow';
 import { useRouter } from 'next/navigation';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import Link from 'next/link';
+
+/**
+ * @fileOverview Add Service Page
+ * Aligned with unified 'listings' table schema.
+ */
 
 export default function AddServicePage() {
   const router = useRouter();
   const [business, setBusiness] = useState<Business | null>(null);
-  const [locations, setLocations] = useState<BusinessLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
@@ -28,7 +29,6 @@ export default function AddServicePage() {
   const [serviceName, setServiceName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [locationId, setLocationId] = useState<string>('');
 
   const fetchLatestBusiness = useCallback(async () => {
     setLoading(true);
@@ -42,19 +42,7 @@ export default function AddServicePage() {
         .eq('owner_id', user.id)
         .maybeSingle();
 
-      if (biz) {
-        setBusiness(biz as Business);
-        
-        // Fetch locations
-        const { data: locs } = await supabase
-          .from('business_locations')
-          .select('*')
-          .eq('business_id', biz.id);
-        
-        const locList = locs || [];
-        setLocations(locList);
-        if (locList.length > 0) setLocationId(locList[0].id);
-      }
+      if (biz) setBusiness(biz as Business);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Load Error', description: e.message });
     } finally {
@@ -91,15 +79,16 @@ export default function AddServicePage() {
 
     setSubmitting(true);
     try {
+        // STRICT ALIGNMENT: Targeting 'listings' table with mandatory type fields
         const { error } = await supabase
-          .from('services')
+          .from('listings')
           .insert([{
             business_id: business.id,
-            location_id: locationId || null,
+            type: 'wash_service', // Contract required
+            listing_type: 'wash_service', // Contract required
             name: serviceName.trim(),
             description: description.trim(),
-            price: parseFloat(price),
-            currency_code: 'BWP'
+            price: parseFloat(price)
           }]);
 
         if (error) throw error;
@@ -126,22 +115,6 @@ export default function AddServicePage() {
             <div className="space-y-2">
               <Label>Service Name *</Label>
               <Input value={serviceName} onChange={(e) => setServiceName(e.target.value)} required />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Operating Branch *</Label>
-              <Select value={locationId} onValueChange={setLocationId}>
-                <SelectTrigger className="bg-white">
-                  <MapPin className="h-4 w-4 mr-2 text-primary" />
-                  <SelectValue placeholder="Select Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map(loc => (
-                    <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                  ))}
-                  {locations.length === 0 && <SelectItem value="default">Main Office</SelectItem>}
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="space-y-2">

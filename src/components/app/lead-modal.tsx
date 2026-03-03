@@ -14,19 +14,16 @@ interface LeadModalProps {
   isOpen: boolean;
   onClose: () => void;
   listingId: string;
-  listingType: 'car' | 'spare_part';
   listingTitle: string;
-  sellerId: string;
-  sellerWhatsapp?: string;
 }
 
 /**
  * @fileOverview Frictionless Lead Modal
- * Implements Level 2 Progressive Identity: Captures Name + WhatsApp.
- * Creates an unverified user record if it doesn't exist.
+ * Strictly aligned with listings/leads database contract.
+ * Derives seller and type data server-side (from listing record).
  */
 
-export function LeadModal({ isOpen, onClose, listingId, listingType, listingTitle, sellerId, sellerWhatsapp }: LeadModalProps) {
+export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModalProps) {
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,7 +35,18 @@ export function LeadModal({ isOpen, onClose, listingId, listingType, listingTitl
 
     setLoading(true);
     try {
-      // 1. Create or Find Unverified User (Progressive Identity)
+      // 1. FETCH LISTING FIRST (Backend Alignment Requirement)
+      const { data: listing, error: fetchError } = await supabase
+        .from('listings')
+        .select('business_id, type')
+        .eq('id', listingId)
+        .single();
+
+      if (fetchError || !listing) {
+        throw new Error("Target listing is no longer available.");
+      }
+
+      // 2. Resolve Identity (Progressive User Creation)
       let { data: user } = await supabase
         .from('users')
         .select('*')
@@ -61,23 +69,34 @@ export function LeadModal({ isOpen, onClose, listingId, listingType, listingTitl
         user = newUser;
       }
 
-      // 2. Create Lead Record (linked by user_id AND redundant whatsapp for consolidation)
+      // 3. Create Lead Record (Deriving fields from listing record as per contract)
       const { error: leadError } = await supabase
         .from('leads')
         .insert({
+          customer_name: name.trim(),
+          customer_whatsapp: cleanWhatsapp,
+          whatsapp_number: cleanWhatsapp, // Schema redundancy for indexing
           user_id: user?.id || null,
-          whatsapp_number: cleanWhatsapp,
           listing_id: listingId,
-          listing_type: listingType,
-          seller_id: sellerId,
-          status: 'new'
+          listing_type: listing.type, // Derived
+          lead_type: listing.type,    // Derived
+          seller_id: listing.business_id, // Derived
+          seller_business_id: listing.business_id, // Derived
+          status: 'new' // Explicit constant
         });
 
       if (leadError) throw leadError;
 
-      // 3. Redirect to WhatsApp
-      const message = `Hi! 👋 I'm interested in the *${listingTitle}* (${listingType}) I saw on AutoLink Africa. My name is ${name}.`;
-      const waUrl = `https://wa.me/${sellerWhatsapp?.replace(/\D/g, '') || '26777491261'}?text=${encodeURIComponent(message)}`;
+      // 4. Redirect to WhatsApp (Fetch seller phone from business table if needed)
+      const { data: business } = await supabase
+        .from('businesses')
+        .select('whatsapp_number')
+        .eq('id', listing.business_id)
+        .single();
+
+      const sellerPhone = business?.whatsapp_number || '26777491261';
+      const message = `Hi! 👋 I'm interested in the *${listingTitle}* I saw on AutoLink Africa. My name is ${name}.`;
+      const waUrl = `https://wa.me/${sellerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
       
       toast({ title: "Connecting to Seller", description: "Opening WhatsApp..." });
       window.open(waUrl, '_blank');
