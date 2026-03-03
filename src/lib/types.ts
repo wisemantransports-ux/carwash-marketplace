@@ -15,18 +15,28 @@ export type User = {
   created_at?: string;
 };
 
-export type LeadStatus = 'new' | 'contacted' | 'converted';
+export type LeadStatus = 'new' | 'contacted' | 'converted' | 'closed';
 export type ListingType = 'car' | 'spare_part';
 
 export type Lead = {
   id: string;
   user_id?: string | null;
-  whatsapp_number?: string; // Captured if user_id is null
+  whatsapp_number: string;
   listing_id: string;
   listing_type: ListingType;
   seller_id: string;
   status: LeadStatus;
   created_at: string;
+  contacted_at?: string | null;
+  // Joined fields
+  user?: {
+    name: string;
+    is_verified: boolean;
+  };
+  listing_details?: {
+    title?: string;
+    name?: string;
+  };
 };
 
 export type BookingStatus = 'pending_assignment' | 'assigned' | 'confirmed' | 'completed' | 'cancelled';
@@ -34,15 +44,24 @@ export type BookingStatus = 'pending_assignment' | 'assigned' | 'confirmed' | 'c
 export type WashBooking = {
   id: string;
   user_id?: string | null;
-  whatsapp_number?: string; // Captured if user_id is null
+  whatsapp_number: string;
   wash_business_id: string;
   service_type: string;
   booking_date: string;
   booking_time: string;
   status: BookingStatus;
-  employee_id?: string;
+  employee_id?: string | null;
   price: number;
   created_at: string;
+  // Joined fields
+  user?: {
+    name: string;
+    is_verified: boolean;
+  };
+  employee?: {
+    name: string;
+    image_url?: string;
+  };
 };
 
 export type Business = {
