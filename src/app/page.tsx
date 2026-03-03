@@ -14,6 +14,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
+/**
+ * Robust image parsing for Postgres array columns
+ */
 function getDisplayImage(images: any, fallback: string): string {
   if (!images) return fallback;
   if (Array.isArray(images) && images.length > 0) return images[0];
@@ -25,16 +28,16 @@ function getDisplayImage(images: any, fallback: string): string {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
       }
       const parts = images.replace(/[{}]/g, '').split(',');
-      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
+      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '').trim();
     } catch { return images; }
   }
   return fallback;
 }
 
 const CATEGORIES = [
-  { id: 'Wash', label: 'Car Wash', icon: Droplets, desc: 'Premium wash & detailing services.', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', href: '/find-wash?category=Wash' },
-  { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart, desc: 'Genuine parts from verified sellers.', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20', href: '/find-wash?category=Spare' },
-  { id: 'Cars', label: 'Car Sales', icon: CarIcon, desc: 'Verified vehicles & dealerships.', color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20', href: '/find-wash?category=Cars' },
+  { id: 'Wash', label: 'Car Wash', icon: Droplets, desc: 'Premium wash & detailing services.', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', href: '/find-wash?category=wash_service' },
+  { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart, desc: 'Genuine parts from verified sellers.', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20', href: '/find-wash?category=spare_part' },
+  { id: 'Cars', label: 'Car Sales', icon: CarIcon, desc: 'Verified vehicles & dealerships.', color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20', href: '/find-wash?category=car' },
 ];
 
 const PLANS = [
@@ -45,9 +48,8 @@ const PLANS = [
 
 export default function LandingPage() {
   const router = useRouter();
+  const [listings, setListings] = useState<any[]>([]);
   const [businesses, setBusinesses] = useState<any[]>([]);
-  const [cars, setCars] = useState<any[]>([]);
-  const [spareParts, setSpareParts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,6 +63,7 @@ export default function LandingPage() {
       }
       setLoading(true);
       try {
+        // 1. Fetch Verified Businesses (Source of Truth)
         const { data: bizData } = await supabase
             .from('businesses')
             .select('*')
@@ -77,25 +80,19 @@ export default function LandingPage() {
         setBusinesses(verifiedBusinesses);
 
         if (verifiedIds.length > 0) {
-          const { data: carData } = await supabase
-            .from('car_listing')
+          // 2. Fetch Trending Listings from unified table
+          const { data: listingData } = await supabase
+            .from('listings')
             .select('*')
-            .in('status', ['active', 'available'])
             .in('business_id', verifiedIds)
             .order('created_at', { ascending: false })
-            .limit(6);
+            .limit(9);
           
-          setCars((carData || []).map(c => ({ ...c, business: bizMap[c.business_id] })));
-
-          const { data: partData } = await supabase
-            .from('spare_parts')
-            .select('*')
-            .in('status', ['active', 'available'])
-            .in('business_id', verifiedIds)
-            .order('created_at', { ascending: false })
-            .limit(6);
-          
-          setSpareParts((partData || []).map(p => ({ ...p, business: bizMap[p.business_id] })));
+          // 3. In-Memory Wiring
+          setListings((listingData || []).map(l => ({ 
+            ...l, 
+            business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+          })));
         }
       } catch (e: any) {
         console.error("Landing discovery failure:", e);
@@ -105,15 +102,6 @@ export default function LandingPage() {
     }
     loadData();
   }, []);
-
-  const unifiedTrending = useMemo(() => {
-    const bizItems = businesses.map(b => ({ ...b, itemType: 'business' }));
-    const carItems = cars.map(c => ({ ...c, itemType: 'car' }));
-    const partItems = spareParts.map(p => ({ ...p, itemType: 'part' }));
-    return [...bizItems, ...carItems, ...partItems].sort((a, b) => 
-      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-    );
-  }, [businesses, cars, spareParts]);
 
   if (!mounted) return null;
 
@@ -137,7 +125,7 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* REVISED HERO SECTION */}
+      {/* HERO SECTION */}
       <section className="relative pt-40 pb-24 md:pt-56 md:pb-40 overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none overflow-hidden">
             <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/20 blur-[120px] rounded-full opacity-50" />
@@ -163,17 +151,17 @@ export default function LandingPage() {
           
           <div className="flex flex-wrap items-center justify-center gap-4 pt-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
             <Button size="lg" className="h-16 px-8 text-md font-black rounded-2xl shadow-2xl hover:scale-[1.03] transition-all bg-green-600 hover:bg-green-700" asChild>
-              <Link href="/find-wash?category=Cars">
+              <Link href="/find-wash?category=car">
                 <CarIcon className="mr-2 h-5 w-5" /> Search Cars
               </Link>
             </Button>
             <Button size="lg" className="h-16 px-8 text-md font-black rounded-2xl shadow-2xl hover:scale-[1.03] transition-all bg-orange-600 hover:bg-orange-700" asChild>
-              <Link href="/find-wash?category=Spare">
+              <Link href="/find-wash?category=spare_part">
                 <ShoppingCart className="mr-2 h-5 w-5" /> Find Spare Parts
               </Link>
             </Button>
             <Button size="lg" className="h-16 px-8 text-md font-black rounded-2xl shadow-2xl hover:scale-[1.03] transition-all bg-blue-600 hover:bg-blue-700" asChild>
-              <Link href="/find-wash?category=Wash">
+              <Link href="/find-wash?category=wash_service">
                 <Droplets className="mr-2 h-5 w-5" /> Book Carwash
               </Link>
             </Button>
@@ -184,7 +172,7 @@ export default function LandingPage() {
               <div className="flex-1 relative group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within:text-primary transition-colors" />
                 <Input 
-                  placeholder="Search by car model, spare part, or service location…" 
+                  placeholder="Search car model, spare part, or location…" 
                   className="pl-12 h-14 border-none bg-transparent shadow-none focus-visible:ring-0 text-lg placeholder:text-slate-600 font-medium"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -250,14 +238,16 @@ export default function LandingPage() {
                       </div>
                     </Card>
                 ))
-            ) : unifiedTrending.length > 0 ? (
-                unifiedTrending.slice(0, 9).map((item: any) => (
-                  <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-500 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)] border-white/5 hover:border-primary/30 bg-slate-900/30 rounded-[2rem] h-full group">
+            ) : listings.length > 0 ? (
+                listings.map((item: any) => (
+                  <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-500 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)] border-white/5 hover:border-primary/30 bg-slate-900/30 rounded-[2rem] h-full group">
                     <div className="relative h-56 bg-slate-800 overflow-hidden">
-                      <Image src={getDisplayImage(item.images || [item.logo_url], 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
+                      <Image src={getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-60" />
                       <div className="absolute top-4 left-4">
-                        <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1 shadow-2xl">{item.itemType}</Badge>
+                        <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1 shadow-2xl">
+                          {item.type.replace('_', ' ')}
+                        </Badge>
                       </div>
                       <div className="absolute top-4 right-4">
                         <div className="bg-green-500/20 backdrop-blur-md border border-green-500/30 p-1.5 rounded-full shadow-2xl">
@@ -273,14 +263,14 @@ export default function LandingPage() {
                       )}
                     </div>
                     <CardHeader className="p-8 pb-4">
-                      <CardTitle className="text-2xl font-black text-white line-clamp-1 group-hover:text-primary transition-colors duration-300">{item.name || item.title}</CardTitle>
+                      <CardTitle className="text-2xl font-black text-white line-clamp-1 group-hover:text-primary transition-colors duration-300">{item.name}</CardTitle>
                       <div className="flex items-center gap-2 text-xs text-slate-500 font-bold uppercase tracking-widest mt-2">
-                        <MapPin className="h-4 w-4 text-primary" /> <span>{item.city || 'Available Nationwide'}</span>
+                        <MapPin className="h-4 w-4 text-primary" /> <span>{item.business?.city || 'Available Nationwide'}</span>
                       </div>
                     </CardHeader>
                     <CardFooter className="p-8 pt-0 mt-auto flex flex-col gap-3">
                       <Button asChild className="w-full font-black rounded-xl h-14 shadow-2xl transition-all hover:scale-[1.02]">
-                        <Link href={item.itemType === 'business' ? `/find-wash/${item.id}` : `/marketplace/${item.itemType === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                        <Link href={item.type === 'wash_service' ? `/find-wash/${item.business_id}` : `/marketplace/${item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                           View Particulars
                         </Link>
                       </Button>
@@ -296,6 +286,7 @@ export default function LandingPage() {
                         <Store className="h-10 w-10 text-slate-600" />
                     </div>
                     <p className="text-slate-500 font-bold text-xl italic">The catalog is currently being refreshed.</p>
+                    <p className="text-sm text-slate-600 mt-2">Ensure partners are verified in the admin panel to show trending listings.</p>
                 </div>
             )}
           </div>
