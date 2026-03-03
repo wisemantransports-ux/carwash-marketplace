@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,9 +17,8 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 
-export default function CarDetailPage() {
-  const params = useParams();
-  const id = params?.id as string;
+export default function CarDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
   const router = useRouter();
   const [car, setCar] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -30,29 +29,43 @@ export default function CarDetailPage() {
       if (!id) return;
       setLoading(true);
       try {
+        // Stage 1: Fetch the Listing from the unified table
         const { data: listing, error: listingError } = await supabase
           .from('listings')
           .select('*')
           .eq('id', id)
           .eq('type', 'car')
-          .single();
+          .maybeSingle();
         
         if (listingError) throw listingError;
 
-        if (listing) {
-          const { data: bizData } = await supabase
-            .from('businesses')
-            .select('name, city, logo_url, whatsapp_number, subscription_plan')
-            .eq('id', listing.business_id)
-            .single();
-
-          setCar({
-            ...listing,
-            business: bizData || { name: 'Verified Seller', city: 'Botswana' }
-          });
+        if (!listing) {
+          setCar(null);
+          return;
         }
-      } catch (e) {
-        console.error("Detail Error:", e);
+
+        // Stage 2: Fetch Business details (Manual Wiring)
+        const { data: bizData, error: bizError } = await supabase
+          .from('businesses')
+          .select('name, city, logo_url, whatsapp_number, subscription_plan')
+          .eq('id', listing.business_id)
+          .maybeSingle();
+
+        if (bizError) {
+          console.warn("Could not fetch business details, using fallback:", bizError.message);
+        }
+
+        setCar({
+          ...listing,
+          business: bizData || { name: 'Verified Seller', city: 'Botswana' }
+        });
+      } catch (e: any) {
+        console.error("Detail Error:", {
+          message: e.message || "Unknown error",
+          details: e.details,
+          hint: e.hint,
+          code: e.code
+        });
       } finally {
         setLoading(false);
       }
@@ -61,7 +74,15 @@ export default function CarDetailPage() {
   }, [id]);
 
   if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
-  if (!car) return <div className="text-center py-20">Listing not found.</div>;
+  
+  if (!car) return (
+    <div className="flex flex-col items-center justify-center min-h-screen text-center px-4 space-y-6">
+      <div className="bg-destructive/10 p-6 rounded-full"><Info className="h-12 w-12 text-destructive" /></div>
+      <h1 className="text-2xl font-bold">Listing not found</h1>
+      <p className="text-muted-foreground">The vehicle listing you are looking for may have been removed or is currently unavailable.</p>
+      <Button onClick={() => router.back()} variant="outline" className="rounded-full px-8">Return to Discovery</Button>
+    </div>
+  );
 
   const images = car.images && car.images.length > 0 ? car.images : ['https://picsum.photos/seed/car/800/600'];
 
@@ -73,7 +94,7 @@ export default function CarDetailPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase">
-            ACTIVE
+            {car.listing_type || 'CAR'}
           </Badge>
         </div>
       </header>
@@ -87,7 +108,7 @@ export default function CarDetailPage() {
                 {images.map((img: string, index: number) => (
                   <CarouselItem key={index}>
                     <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-muted">
-                      <Image src={img} alt={`${car.name} view ${index + 1}`} fill className="object-cover" />
+                      <Image src={img} alt={`${car.name} view ${index + 1}`} fill className="object-cover" priority={index === 0} />
                     </div>
                   </CarouselItem>
                 ))}
@@ -103,24 +124,24 @@ export default function CarDetailPage() {
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <Clock className="h-5 w-5 text-primary opacity-60" />
-                <span className="text-[10px] uppercase font-black text-muted-foreground">Condition</span>
-                <span className="font-bold text-sm">{car.condition || 'Excellent'}</span>
+                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Mileage</span>
+                <span className="font-bold text-sm">{car.mileage ? `${car.mileage.toLocaleString()} KM` : 'Low KM'}</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <Calendar className="h-5 w-5 text-primary opacity-60" />
-                <span className="text-[10px] uppercase font-black text-muted-foreground">Year</span>
+                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Year</span>
                 <span className="font-bold text-sm">{car.year || '2024'}</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <MapPin className="h-5 w-5 text-primary opacity-60" />
-                <span className="text-[10px] uppercase font-black text-muted-foreground">Location</span>
+                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Location</span>
                 <span className="font-bold text-sm truncate w-full text-center">{car.business?.city || 'Botswana'}</span>
               </div>
             </div>
 
             <div className="space-y-4">
               <h3 className="text-xl font-bold border-b pb-2">Listing Description</h3>
-              <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{car.description}</p>
+              <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{car.description || "No detailed description provided by the seller."}</p>
             </div>
           </div>
 
@@ -144,15 +165,15 @@ export default function CarDetailPage() {
               </CardHeader>
               <CardContent className="p-6 space-y-8">
                 <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center border overflow-hidden">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center border overflow-hidden shrink-0">
                     {car.business?.logo_url ? (
                       <Image src={car.business.logo_url} alt="Logo" width={64} height={64} className="object-cover" />
                     ) : (
                       <Store className="h-8 w-8 text-primary opacity-40" />
                     )}
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xl font-bold text-slate-900">{car.business?.name}</p>
+                  <div className="space-y-1 overflow-hidden">
+                    <p className="text-xl font-bold text-slate-900 truncate">{car.business?.name}</p>
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                       <MapPin className="h-3 w-3" /> {car.business?.city}
                     </p>
