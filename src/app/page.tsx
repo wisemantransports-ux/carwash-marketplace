@@ -75,23 +75,28 @@ export default function LandingPage() {
         }, {});
 
         // Stage 2: Fetch Listings linked to Verified Partners
-        const { data: listingData } = await supabase
-          .from('listings')
-          .select('id, business_id, type, listing_type, name, description, price, created_at, images')
-          .in('business_id', verifiedIds)
-          .order('created_at', { ascending: false })
-          .limit(12);
-        
-        // Stage 3: Manual Wiring with "verified" flag injection
-        const wiredListings = (listingData || []).map(l => ({ 
-          ...l, 
-          verified: true,
-          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
-        }));
+        let wiredListings: any[] = [];
+        if (verifiedIds.length > 0) {
+          const { data: listingData, error: listingError } = await supabase
+            .from('listings')
+            .select('id, business_id, type, listing_type, name, description, price, created_at')
+            .in('business_id', verifiedIds)
+            .order('created_at', { ascending: false })
+            .limit(12);
+          
+          if (listingError) throw listingError;
+
+          // Stage 3: Manual Wiring
+          wiredListings = (listingData || []).map(l => ({ 
+            ...l, 
+            verified: true,
+            business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+          }));
+        }
 
         setListings(wiredListings);
       } catch (e: any) {
-        console.error("Landing discovery failure:", e);
+        console.error("Landing discovery failure:", e?.message || e);
       } finally {
         setLoading(false);
       }

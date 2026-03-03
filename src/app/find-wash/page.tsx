@@ -69,22 +69,26 @@ function MarketplaceContent() {
       setBusinesses(partnerBusinesses);
 
       // Stage 2: Parallel Product Fetching (Only from Verified IDs)
-      const { data: listingData, error: listingError } = await supabase
-        .from('listings')
-        .select('id, business_id, type, listing_type, name, description, price, created_at, images')
-        .in('business_id', verifiedIds)
-        .order('created_at', { ascending: false });
+      let listingData: any[] = [];
+      if (verifiedIds.length > 0) {
+        const { data, error: listingError } = await supabase
+          .from('listings')
+          .select('id, business_id, type, listing_type, name, description, price, created_at')
+          .in('business_id', verifiedIds)
+          .order('created_at', { ascending: false });
 
-      if (listingError) throw listingError;
+        if (listingError) throw listingError;
+        listingData = data || [];
+      }
 
       // Stage 3: In-Memory Wiring
-      setAllListings((listingData || []).map(l => ({ 
+      setAllListings(listingData.map(l => ({ 
         ...l, 
         verified: true,
         business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
       })));
     } catch (e: any) {
-      console.error('Marketplace discovery failure:', e);
+      console.error('Marketplace discovery failure:', e?.message || e);
     } finally {
       setLoading(false);
     }
