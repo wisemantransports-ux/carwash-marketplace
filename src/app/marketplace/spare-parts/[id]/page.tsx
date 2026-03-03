@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Loader2, MapPin, Package, ShieldCheck, ShoppingCart, Store, Info, Banknote, Tags, Calendar } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Package, ShieldCheck, Store, Info, Banknote, Tags } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -31,8 +31,9 @@ function getDisplayImage(images: any, fallback: string): string {
   return fallback;
 }
 
-export default function SparePartDetailPage() {
-  const { id } = useParams();
+export default function SparePartDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = React.use(params);
+  const id = resolvedParams.id;
   const router = useRouter();
   const [part, setPart] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -41,22 +42,33 @@ export default function SparePartDetailPage() {
   useEffect(() => {
     setMounted(true);
     async function loadPart() {
+      if (!id) return;
       setLoading(true);
       try {
+        // Query restricted to public fields and active status.
+        // Removed !inner to avoid strict join failures and handle missing business data gracefully.
         const { data, error } = await supabase
           .from('spare_parts')
           .select(`
             *,
-            business:business_id!inner ( name, city, logo_url, verification_status, whatsapp_number )
+            business:business_id ( name, city, logo_url, verification_status, whatsapp_number )
           `)
           .eq('id', id)
           .eq('status', 'active')
           .maybeSingle();
         
-        if (error) throw error;
+        if (error) {
+          console.error("Database Error Details:", {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+          throw error;
+        }
         setPart(data);
-      } catch (e) {
-        console.error("Detail Fetch Error:", e);
+      } catch (e: any) {
+        console.error("Detail Fetch Error:", e.message || e);
       } finally {
         setLoading(false);
       }
