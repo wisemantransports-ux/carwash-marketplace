@@ -8,6 +8,9 @@ export type User = {
   name: string;
   role: UserRole;
   is_verified: boolean;
+  otp_code?: string | null;
+  otp_expires_at?: string | null;
+  last_login_at?: string | null;
   avatarUrl?: string;
   created_at?: string;
 };
@@ -17,7 +20,8 @@ export type ListingType = 'car' | 'spare_part';
 
 export type Lead = {
   id: string;
-  user_id?: string; // Nullable for initial leads
+  user_id?: string | null;
+  whatsapp_number?: string; // Captured if user_id is null
   listing_id: string;
   listing_type: ListingType;
   seller_id: string;
@@ -29,7 +33,8 @@ export type BookingStatus = 'pending_assignment' | 'assigned' | 'confirmed' | 'c
 
 export type WashBooking = {
   id: string;
-  user_id?: string; // Captured via WhatsApp lead
+  user_id?: string | null;
+  whatsapp_number?: string; // Captured if user_id is null
   wash_business_id: string;
   service_type: string;
   booking_date: string;
@@ -40,7 +45,6 @@ export type WashBooking = {
   created_at: string;
 };
 
-// Existing types preserved/adapted
 export type Business = {
   id: string;
   owner_id: string;
