@@ -53,42 +53,35 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses (Source of Truth)
-      // We check both verification_status and status for maximum compatibility
+      // 1. Fetch All Businesses (Primary Partners)
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*')
-          .or('verification_status.eq.verified,status.eq.verified')
           .order('name', { ascending: true });
       
       if (bizError) throw bizError;
 
-      const verifiedBusinesses = bizData || [];
-      const verifiedIds = verifiedBusinesses.map(b => b.id);
-      const bizMap = verifiedBusinesses.reduce((acc: any, b: any) => {
+      const partnerBusinesses = bizData || [];
+      const partnerIds = partnerBusinesses.map(b => b.id);
+      const bizMap = partnerBusinesses.reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
       }, {});
 
-      setBusinesses(verifiedBusinesses);
+      setBusinesses(partnerBusinesses);
 
-      // 2. Fetch All Listings from unified table for those verified businesses
-      if (verifiedIds.length > 0) {
-        const { data: listingData, error: listError } = await supabase
-          .from('listings')
-          .select('*')
-          .in('business_id', verifiedIds)
-          .order('created_at', { ascending: false });
+      // 2. Fetch All Listings from unified table
+      const { data: listingData, error: listError } = await supabase
+        .from('listings')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-        if (listError) throw listError;
+      if (listError) throw listError;
 
-        setAllListings((listingData || []).map(l => ({ 
-          ...l, 
-          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
-        })));
-      } else {
-        setAllListings([]);
-      }
+      setAllListings((listingData || []).map(l => ({ 
+        ...l, 
+        business: bizMap[l.business_id] || { name: 'Marketplace Partner', city: 'Botswana' }
+      })));
     } catch (e: any) {
       console.error('Marketplace discovery failure:', e);
     } finally {
@@ -162,9 +155,9 @@ function MarketplaceContent() {
         <div className="space-y-4 max-w-4xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
             <ShieldCheck className="h-3 w-3" />
-            <span>Verified Marketplace Partners</span>
+            <span>Premium Marketplace Partners</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tight text-slate-900">Find Cars, Spare Parts, or Carwash Services Near You</h1>
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">Find Cars, Spare Parts, or Carwash Services</h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
             Discover verified automotive solutions across Botswana. Genuine parts, elite detailing, and high-quality vehicles.
           </p>
@@ -245,9 +238,11 @@ function MarketplaceContent() {
                     </Badge>
                   </div>
                   <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
-                      <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
-                    </Badge>
+                    {item.verification_status === 'verified' && (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
+                        <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
+                      </Badge>
+                    )}
                   </div>
                   {item.price && (
                     <div className="absolute bottom-2 right-2">
@@ -265,7 +260,7 @@ function MarketplaceContent() {
                 </CardHeader>
                 <CardContent className="flex-grow">
                   <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                    {item.description || item.address || "Verified automotive listing from our trusted partner network."}
+                    {item.description || item.address || "Automotive component available from our trusted partner network."}
                   </p>
                 </CardContent>
                 <CardFooter className="mt-auto flex flex-col gap-2">
@@ -283,7 +278,7 @@ function MarketplaceContent() {
           ) : (
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/10">
               <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-muted-foreground font-bold text-lg">No verified listings found matching your search.</p>
+              <p className="text-muted-foreground font-bold text-lg">No listings found matching your search.</p>
               <Button variant="link" className="mt-2 font-bold" onClick={() => { setSearch(''); setCategory('all'); }}>
                 Clear all filters
               </Button>

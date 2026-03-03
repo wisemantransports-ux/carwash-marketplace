@@ -61,38 +61,30 @@ export default function LandingPage() {
       }
       setLoading(true);
       try {
-        // 1. Fetch Verified Businesses (Source of Truth)
-        // We look for any business verified via verification_status OR status
+        // 1. Fetch All Partners (No verification gate for public marketplace listings display as per requirements)
         const { data: bizData } = await supabase
             .from('businesses')
-            .select('*')
-            .or('verification_status.eq.verified,status.eq.verified')
-            .order('rating', { ascending: false });
+            .select('id, name, city, logo_url, status, verification_status')
+            .order('name', { ascending: true });
         
-        const verifiedBusinesses = bizData || [];
-        const verifiedIds = verifiedBusinesses.map(b => b.id);
-        const bizMap = verifiedBusinesses.reduce((acc: any, b: any) => {
+        const allBusinesses = bizData || [];
+        const bizMap = allBusinesses.reduce((acc: any, b: any) => {
           acc[b.id] = b;
           return acc;
         }, {});
 
-        if (verifiedIds.length > 0) {
-          // 2. Fetch Trending Listings from unified table
-          const { data: listingData } = await supabase
-            .from('listings')
-            .select('*')
-            .in('business_id', verifiedIds)
-            .order('created_at', { ascending: false })
-            .limit(9);
-          
-          // 3. In-Memory Wiring
-          setListings((listingData || []).map(l => ({ 
-            ...l, 
-            business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
-          })));
-        } else {
-          setListings([]);
-        }
+        // 2. Fetch Latest Listings from unified table
+        const { data: listingData } = await supabase
+          .from('listings')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(9);
+        
+        // 3. In-Memory Wiring
+        setListings((listingData || []).map(l => ({ 
+          ...l, 
+          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+        })));
       } catch (e: any) {
         console.error("Landing discovery failure:", e);
       } finally {
@@ -218,7 +210,7 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-white/5 pb-12">
               <div className="space-y-3">
                 <h2 className="text-5xl font-black tracking-tighter text-white">Trending Discovery</h2>
-                <p className="text-slate-400 text-lg font-medium">The latest verified luxury listings from our elite partners.</p>
+                <p className="text-slate-400 text-lg font-medium">The latest luxury listings from our elite partners.</p>
               </div>
               <Button variant="outline" size="lg" asChild className="rounded-full border-white/10 hover:bg-white/5 h-14 px-10 font-black tracking-tight shadow-2xl transition-all">
                   <Link href="/find-wash">Full Marketplace</Link>
@@ -285,7 +277,7 @@ export default function LandingPage() {
                         <Store className="h-10 w-10 text-slate-600" />
                     </div>
                     <p className="text-slate-500 font-bold text-xl italic">The catalog is currently being refreshed.</p>
-                    <p className="text-sm text-slate-600 mt-2">Ensure partners are verified in the admin panel to show trending listings.</p>
+                    <p className="text-sm text-slate-600 mt-2">Discover verified automotive solutions in your area.</p>
                 </div>
             )}
           </div>

@@ -28,7 +28,7 @@ function getDisplayImage(images: any, fallback: string): string {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
       }
       const parts = images.replace(/[{}]/g, '').split(',');
-      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
+      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '').trim();
     } catch {
       return images;
     }
@@ -86,7 +86,7 @@ export function CarCard({ car }: { car: any }) {
 
       <CardContent className="flex-grow pb-4">
         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 italic">
-          {car.description || "View this verified vehicle listing from one of our partners."}
+          {car.description || "View this premium vehicle listing from one of our partners."}
         </p>
       </CardContent>
 
@@ -112,27 +112,19 @@ export default function CarMarketplace() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      const { data: verifiedBiz } = await supabase
+      const { data: allBiz } = await supabase
         .from('businesses')
-        .select('id, name, city, subscription_plan')
-        .or('verification_status.eq.verified,status.eq.verified');
+        .select('id, name, city, subscription_plan');
       
-      const verifiedIds = (verifiedBiz || []).map(b => b.id);
-      const bizMap = (verifiedBiz || []).reduce((acc: any, b: any) => {
+      const bizMap = (allBiz || []).reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
       }, {});
       
-      if (verifiedIds.length === 0) {
-        setListings([]);
-        return;
-      }
-
       const { data, error } = await supabase
         .from('listings')
         .select('*')
         .eq('type', 'car')
-        .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -167,7 +159,7 @@ export default function CarMarketplace() {
         <div className="flex-1 w-full space-y-2">
           <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Search Listings</Label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input 
               placeholder="Search model, make, or description..." 
               className="pl-10 h-12 rounded-xl bg-white"
@@ -211,7 +203,7 @@ export default function CarMarketplace() {
         ) : (
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-            <p className="text-xl font-bold text-muted-foreground">No verified car listings found.</p>
+            <p className="text-xl font-bold text-muted-foreground">No car listings found matching your search.</p>
             <Button variant="link" onClick={() => setSearch('')} className="font-bold">
               View All Active Listings
             </Button>
