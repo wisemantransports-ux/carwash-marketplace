@@ -18,6 +18,7 @@ import Image from 'next/image';
 /**
  * @fileOverview List Spare Part Page
  * Aligned with unified 'listings' table schema.
+ * Strictly uses image_url (string) instead of images (array).
  */
 
 export default function AddSparePartPage() {
@@ -71,20 +72,24 @@ export default function AddSparePartPage() {
 
     setSubmitting(true);
     try {
+      // 1. Storage Upload with unique path
       const fileExt = imageFile.name.split('.').pop();
       const filePath = `parts/${business.id}/${Date.now()}.${fileExt}`;
-      await supabase.storage.from('business-assets').upload(filePath, imageFile);
+      const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
+      
+      if (uploadError) throw uploadError;
+
       const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
 
-      // STRICT ALIGNMENT: Targeting 'listings' table with mandatory type fields
+      // 2. Database Insert - TARGETING image_url column
       const { error } = await supabase.from('listings').insert({
         business_id: business.id,
-        type: 'spare_part', // Contract required
-        listing_type: 'spare_part', // Contract required
+        type: 'spare_part',
+        listing_type: 'spare_part',
         name: name.trim(),
         price: parseFloat(price),
         description: description.trim(),
-        images: [publicUrl]
+        image_url: publicUrl // Corrected from legacy 'images' array
       });
 
       if (error) throw error;

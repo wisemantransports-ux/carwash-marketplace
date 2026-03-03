@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -100,7 +101,9 @@ export default function EditCarListingPage() {
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const filePath = `cars/${business.id}/${Date.now()}.${fileExt}`;
-        await supabase.storage.from('business-assets').upload(filePath, imageFile);
+        const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
+        if (uploadError) throw uploadError;
+
         const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
         finalImageUrl = publicUrl;
       }
@@ -165,7 +168,7 @@ export default function EditCarListingPage() {
         <div className="space-y-6">
           <Card className="border-2 shadow-lg overflow-hidden">
             <CardHeader className="bg-muted/10 border-b">
-              <CardTitle>Photo</CardTitle>
+              <CardTitle>Photo</CardTitleExternal>
             </CardHeader>
             <CardContent className="pt-6">
               <div 

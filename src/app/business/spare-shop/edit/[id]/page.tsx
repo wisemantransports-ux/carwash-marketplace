@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -98,7 +99,9 @@ export default function EditSparePartPage() {
 
       if (imageFile) {
         const filePath = `parts/${business.id}/${Date.now()}.${imageFile.name.split('.').pop()}`;
-        await supabase.storage.from('business-assets').upload(filePath, imageFile);
+        const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
+        if (uploadError) throw uploadError;
+
         const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
         finalImageUrl = publicUrl;
       }
