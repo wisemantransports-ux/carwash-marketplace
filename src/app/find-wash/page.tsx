@@ -51,12 +51,16 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch ALL Businesses (No verification gate here to ensure visibility)
-      const { data: bizData } = await supabase
+      // Stage 1: The Source of Truth (Verified Businesses Only)
+      const { data: verifiedBiz, error: bizError } = await supabase
           .from('businesses')
-          .select('id, name, city, logo_url, verification_status, category');
+          .select('id, name, city, logo_url, verification_status, category')
+          .eq('verification_status', 'verified');
       
-      const partnerBusinesses = bizData || [];
+      if (bizError) throw bizError;
+
+      const partnerBusinesses = verifiedBiz || [];
+      const verifiedIds = partnerBusinesses.map(b => b.id);
       const bizMap = partnerBusinesses.reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
@@ -64,15 +68,20 @@ function MarketplaceContent() {
 
       setBusinesses(partnerBusinesses);
 
-      // 2. Fetch ALL Listings (Source of Truth)
-      const { data: listingData } = await supabase
+      // Stage 2: Parallel Product Fetching (Only from Verified IDs)
+      const { data: listingData, error: listingError } = await supabase
         .from('listings')
-        .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
+        .select('id, business_id, type, listing_type, name, description, price, created_at, images')
+        .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
+      if (listingError) throw listingError;
+
+      // Stage 3: In-Memory Wiring
       setAllListings((listingData || []).map(l => ({ 
         ...l, 
-        business: bizMap[l.business_id] || { name: 'Marketplace Partner', city: 'Botswana' }
+        verified: true,
+        business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
       })));
     } catch (e: any) {
       console.error('Marketplace discovery failure:', e);
@@ -87,6 +96,7 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
+    // Interleave business profiles and individual listings
     const bizItems = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
@@ -96,7 +106,7 @@ function MarketplaceContent() {
                               (category === 'car' && b.category === 'Cars') ||
                               (category === 'spare_part' && b.category === 'Spare');
       return matchesSearch && bizCategoryMatch;
-    }).map(b => ({ ...b, itemType: 'business' as const }));
+    }).map(b => ({ ...b, itemType: 'business' as const, verified: true }));
 
     const productItems = allListings.filter(l => {
       const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
@@ -209,7 +219,7 @@ function MarketplaceContent() {
                     </Badge>
                   </div>
                   <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
-                    {(item.verification_status === 'verified' || item.business?.verification_status === 'verified') && (
+                    {item.verified && (
                       <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
                         <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
                       </Badge>
@@ -249,7 +259,7 @@ function MarketplaceContent() {
           ) : (
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
               <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-muted-foreground font-bold text-lg">No listings found matching your search.</p>
+              <p className="text-muted-foreground font-bold text-lg">No verified listings found matching your search.</p>
               <Button variant="link" className="mt-2 font-bold" onClick={() => { setSearch(''); setCategory('all'); }}>
                 Clear all filters
               </Button>

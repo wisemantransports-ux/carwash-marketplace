@@ -61,27 +61,31 @@ export default function LandingPage() {
       }
       setLoading(true);
       try {
-        // 1. Fetch ALL Businesses (Source of Truth)
+        // Stage 1: Verified Businesses Only
         const { data: bizData } = await supabase
             .from('businesses')
-            .select('id, name, city, logo_url, verification_status');
+            .select('id, name, city, logo_url, verification_status')
+            .eq('verification_status', 'verified');
         
         const allBusinesses = bizData || [];
+        const verifiedIds = allBusinesses.map(b => b.id);
         const bizMap = allBusinesses.reduce((acc: any, b: any) => {
           acc[b.id] = b;
           return acc;
         }, {});
 
-        // 2. Fetch Latest Listings from unified table (Source of Intent)
+        // Stage 2: Fetch Listings linked to Verified Partners
         const { data: listingData } = await supabase
           .from('listings')
-          .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
+          .select('id, business_id, type, listing_type, name, description, price, created_at, images')
+          .in('business_id', verifiedIds)
           .order('created_at', { ascending: false })
           .limit(12);
         
-        // 3. Manual Wiring
+        // Stage 3: Manual Wiring with "verified" flag injection
         const wiredListings = (listingData || []).map(l => ({ 
           ...l, 
+          verified: true,
           business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
         }));
 
@@ -241,7 +245,7 @@ export default function LandingPage() {
                         </Badge>
                       </div>
                       <div className="absolute top-4 right-4">
-                        {item.business?.verification_status === 'verified' && (
+                        {item.verified && (
                           <div className="bg-green-500/20 backdrop-blur-md border border-green-500/30 p-1.5 rounded-full shadow-2xl">
                             <ShieldCheck className="h-4 w-4 text-green-400" />
                           </div>
@@ -278,8 +282,8 @@ export default function LandingPage() {
                     <div className="bg-white/5 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
                         <Store className="h-10 w-10 text-slate-600" />
                     </div>
-                    <p className="text-slate-500 font-bold text-xl italic">The catalog is currently being refreshed.</p>
-                    <p className="text-sm text-slate-600 mt-2">Discover verified automotive solutions in your area.</p>
+                    <p className="text-slate-500 font-bold text-xl italic">Verified listings are currently being refreshed.</p>
+                    <p className="text-sm text-slate-600 mt-2">Discover elite automotive solutions in your area.</p>
                 </div>
             )}
           </div>
