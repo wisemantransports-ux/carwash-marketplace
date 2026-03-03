@@ -1,9 +1,10 @@
 
 // src/lib/types.ts
-export type UserRole = 'customer' | 'seller' | 'wash_business' | 'employee' | 'admin';
+export type UserRole = 'customer' | 'business-owner' | 'admin' | 'seller' | 'wash_business' | 'employee';
 
 export type User = {
   id: string;
+  email: string;
   whatsapp_number: string;
   name: string;
   role: UserRole;
@@ -13,6 +14,9 @@ export type User = {
   last_login_at?: string | null;
   avatarUrl?: string;
   created_at?: string;
+  paid?: boolean;
+  trial_expiry?: string;
+  access_active?: boolean;
 };
 
 export type LeadStatus = 'new' | 'contacted' | 'closed';
@@ -26,17 +30,9 @@ export type Listing = {
   name: string;
   description: string | null;
   price: number | null;
-  images?: string[];
+  verified?: boolean;
   created_at: string;
   updated_at: string;
-  // Optional metadata for legacy/UI support
-  make?: string;
-  model?: string;
-  year?: number;
-  mileage?: number;
-  category?: string;
-  condition?: string;
-  stock_quantity?: number;
 };
 
 export type Lead = {
@@ -72,6 +68,7 @@ export type Business = {
   subscription_status: 'inactive' | 'awaiting_payment' | 'payment_submitted' | 'active' | 'expired' | 'suspended';
   logo_url?: string;
   id_number?: string;
+  sub_end_date?: string;
 };
 
 export type Employee = {
@@ -80,6 +77,7 @@ export type Employee = {
   name: string;
   phone: string;
   image_url?: string;
+  id_reference?: string;
 };
 
 export type BusinessLocation = {
@@ -89,4 +87,19 @@ export type BusinessLocation = {
   address: string;
   city: string;
   phone: string | null;
+};
+
+export type WashBooking = {
+  id: string;
+  user_id: string | null;
+  whatsapp_number: string;
+  wash_business_id: string;
+  employee_id: string | null;
+  service_type: string;
+  booking_date: string;
+  booking_time: string;
+  status: 'pending_assignment' | 'assigned' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  price?: number;
+  user?: { name: string; is_verified: boolean };
+  employee?: { name: string; image_url: string };
 };
