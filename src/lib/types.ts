@@ -1,6 +1,6 @@
 
 // src/lib/types.ts
-export type UserRole = 'customer' | 'business-owner' | 'admin' | 'seller' | 'wash_business' | 'employee';
+export type UserRole = 'customer' | 'business-owner' | 'admin';
 
 export type User = {
   id: string;
@@ -19,7 +19,7 @@ export type User = {
   access_active?: boolean;
 };
 
-export type LeadStatus = 'new' | 'contacted' | 'closed';
+export type LeadStatus = 'new' | 'contacted' | 'converted' | 'closed';
 export type ListingCategory = 'car' | 'spare_part' | 'wash_service';
 
 export type Listing = {
@@ -30,6 +30,7 @@ export type Listing = {
   name: string;
   description: string | null;
   price: number | null;
+  image_url: string | null;
   verified?: boolean;
   created_at: string;
   updated_at: string;
@@ -42,13 +43,16 @@ export type Lead = {
   customer_whatsapp: string;
   whatsapp_number: string;
   seller_id: string;
-  seller_business_id: string;
   listing_id: string;
   listing_type: ListingCategory;
-  lead_type: ListingCategory;
   status: LeadStatus;
   created_at: string;
+  contacted_at?: string;
+  user?: { name: string; is_verified: boolean };
 };
+
+export type BusinessType = 'individual' | 'registered';
+export type BusinessCategory = 'Wash' | 'Spare' | 'Cars';
 
 export type Business = {
   id: string;
@@ -57,8 +61,8 @@ export type Business = {
   address: string;
   city: string;
   type: 'station' | 'mobile';
-  business_type: 'individual' | 'registered';
-  category: 'Wash' | 'Spare' | 'Cars';
+  business_type: BusinessType;
+  category: BusinessCategory;
   whatsapp_number?: string;
   rating: number;
   review_count: number;
@@ -68,6 +72,8 @@ export type Business = {
   subscription_status: 'inactive' | 'awaiting_payment' | 'payment_submitted' | 'active' | 'expired' | 'suspended';
   logo_url?: string;
   id_number?: string;
+  selfie_url?: string;
+  certificate_url?: string;
   sub_end_date?: string;
 };
 
@@ -76,17 +82,8 @@ export type Employee = {
   business_id: string;
   name: string;
   phone: string;
-  image_url?: string;
+  image_url: string; // Mandatory for carwash assignment
   id_reference?: string;
-};
-
-export type BusinessLocation = {
-  id: string;
-  business_id: string;
-  name: string;
-  address: string;
-  city: string;
-  phone: string | null;
 };
 
 export type WashBooking = {
@@ -102,4 +99,13 @@ export type WashBooking = {
   price?: number;
   user?: { name: string; is_verified: boolean };
   employee?: { name: string; image_url: string };
+};
+
+export type BusinessLocation = {
+  id: string;
+  business_id: string;
+  name: string;
+  address: string;
+  city: string;
+  phone: string | null;
 };

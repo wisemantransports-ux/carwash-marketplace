@@ -2,31 +2,25 @@
 'use client';
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { 
-  MapPin, 
   ShieldCheck, 
-  Search, 
-  ShoppingCart, 
-  Car as CarIcon, 
-  Droplets, 
   ArrowRight, 
   Store, 
-  Sparkles, 
   CheckCircle2, 
   MessageCircle, 
   Users, 
   Zap,
-  TrendingUp,
-  ShieldAlert,
-  Clock
+  Clock,
+  Car as CarIcon,
+  ShoppingCart,
+  Droplets,
+  MapPin
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -35,14 +29,14 @@ const PRICING_PLANS = [
     name: "Starter",
     price: "199",
     desc: "For micro-businesses starting their digital journey.",
-    features: ["15 Monthly Lead Requests", "Basic Profile", "WhatsApp Integration", "Verified Badge"],
+    features: ["15 Monthly Lead Requests", "Basic Profile", "WhatsApp Integration", "Verified Badge", "Free 14-Day Trial"],
     accent: "border-slate-800"
   },
   {
     name: "Pro",
     price: "350",
     desc: "The standard for established automotive shops.",
-    features: ["Unlimited Lead Requests", "Priority Search Ranking", "Staff Management", "Advanced Analytics"],
+    features: ["Unlimited Lead Requests", "Priority Search Ranking", "Staff Management", "Advanced Analytics", "Free 14-Day Trial"],
     accent: "border-primary shadow-primary/10 shadow-2xl scale-105 z-10",
     popular: true
   },
@@ -50,16 +44,14 @@ const PRICING_PLANS = [
     name: "Enterprise",
     price: "599",
     desc: "For multi-location groups and dealerships.",
-    features: ["Unlimited Everything", "Multi-Location Support", "Dedicated Manager", "Custom Branding"],
+    features: ["Unlimited Everything", "Multi-Location Support", "Dedicated Manager", "Custom Branding", "Free 14-Day Trial"],
     accent: "border-slate-800"
   }
 ];
 
 export default function LandingPage() {
-  const router = useRouter();
   const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const loadDiscoveryData = useCallback(async () => {
     if (!isSupabaseConfigured) {
@@ -72,7 +64,7 @@ export default function LandingPage() {
       const { data: verifiedBiz } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status')
-          .or('verification_status.eq.verified,status.eq.verified');
+          .eq('verification_status', 'verified');
       
       const partners = verifiedBiz || [];
       const verifiedIds = partners.map(b => b.id);
@@ -85,7 +77,7 @@ export default function LandingPage() {
       if (verifiedIds.length > 0) {
         const { data: listingData, error } = await supabase
           .from('listings')
-          .select('id, business_id, name, description, price, listing_type, type, image_url, created_at')
+          .select('id, business_id, name, description, price, listing_type, image_url, created_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false })
           .limit(6);
@@ -148,7 +140,7 @@ export default function LandingPage() {
               <span className="bg-gradient-to-r from-primary via-blue-400 to-white bg-clip-text text-transparent">Cars, Parts & Wash.</span>
             </h1>
             <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed font-medium">
-              Buy from trusted local businesses. Secure. Verified. Transparent. The only automotive hub built for Africa.
+              Buy from trusted businesses. Secure. Verified. Transparent. The only automotive hub built for Africa.
             </p>
           </div>
           
@@ -202,7 +194,6 @@ export default function LandingPage() {
       <section className="py-32 relative">
         <div className="container mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-24">
-            {/* For Customers */}
             <div className="space-y-12">
               <div className="space-y-4">
                 <Badge className="bg-primary text-white font-black uppercase text-[10px] tracking-widest px-4 py-1">For Customers</Badge>
@@ -225,7 +216,6 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* For Businesses */}
             <div className="space-y-12">
               <div className="space-y-4">
                 <Badge className="bg-slate-800 text-white font-black uppercase text-[10px] tracking-widest px-4 py-1">For Businesses</Badge>
@@ -346,27 +336,6 @@ export default function LandingPage() {
                 </Button>
               </Card>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FINAL CTA */}
-      <section className="py-32 relative">
-        <div className="container mx-auto px-4 text-center">
-          <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-white/5 p-16 md:p-24 rounded-[3rem] shadow-2xl space-y-10 max-w-5xl mx-auto relative overflow-hidden">
-            <div className="absolute inset-0 bg-primary/10 blur-[120px]" />
-            <div className="relative space-y-6">
-              <h2 className="text-4xl md:text-7xl font-black tracking-tight uppercase italic leading-[0.9]">
-                Turn Your Auto Business <br />
-                <span className="text-primary">Into a Lead Machine</span>
-              </h2>
-              <p className="text-lg text-slate-400 max-w-xl mx-auto font-medium">
-                Join hundreds of verified partners across Africa. Start listing your inventory today.
-              </p>
-            </div>
-            <Button size="lg" className="relative h-20 px-12 text-xl font-black rounded-3xl shadow-[0_0_40px_rgba(32,128,223,0.4)] hover:scale-105 transition-all bg-primary hover:bg-primary/90" asChild>
-              <Link href="/signup">Create Business Account</Link>
-            </Button>
           </div>
         </div>
       </section>

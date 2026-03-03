@@ -1,49 +1,33 @@
 
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Lock, UserCircle, Receipt, Package, Loader2, RefreshCw, CarFront, MapPin } from "lucide-react";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { LayoutDashboard, Car, Users, DollarSign, CreditCard, AlertCircle, Lock, UserCircle, Receipt, Package, Loader2, MapPin, CarFront } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
 import { Business } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
-import { toast } from "@/hooks/use-toast";
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [business, setBusiness] = useState<Business | null>(null);
   const [isRestricted, setIsRestricted] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const trialTriggered = useRef(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    setFetchError(null);
-    setIsRestricted(false);
-    
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user?.id) {
-        setLoading(false);
-        return;
-      }
+      if (!user) return;
 
-      // 1. STATUS CHECK
-      const { data: profile, error: profileError } = await supabase
-        .from('users_with_access')
+      // 1. Status Check (Unified view or profiles check)
+      const { data: profile } = await supabase
+        .from('users')
         .select('paid, trial_expiry')
         .eq('id', user.id)
         .maybeSingle();
-
-      if (profileError) {
-        setFetchError(profileError.message);
-        setLoading(false);
-        return;
-      }
 
       const now = new Date();
       const isPaid = profile?.paid === true;
@@ -53,29 +37,16 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
       const restricted = !isPaid && !isTrialValid;
       setIsRestricted(restricted);
 
-      if (restricted) {
-        setBusiness(null);
-        setLoading(false);
-        return;
-      }
-
-      // 2. FETCH BUSINESS DATA
-      const { data: biz, error: bizError } = await supabase
+      // 2. Fetch Business Data
+      const { data: biz } = await supabase
         .from('businesses')
         .select('*')
         .eq('owner_id', user.id)
         .maybeSingle();
       
-      if (bizError) {
-        setFetchError(bizError.message);
-        setBusiness(null);
-      } else if (biz) {
-        setBusiness(biz as Business);
-      } else {
-        setBusiness(null);
-      }
-    } catch (e: any) {
-      setFetchError(e.message || "An unexpected error occurred.");
+      if (biz) setBusiness(biz as Business);
+    } catch (e) {
+      console.error("Layout fetch error:", e);
     } finally {
       setLoading(false);
     }
@@ -85,28 +56,30 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     fetchData();
   }, [fetchData]);
 
-  const isBlocked = isRestricted && pathname !== "/business/subscription" && pathname !== "/business/profile";
+  // Block sensitive pages if restricted
+  const isBlocked = isRestricted && !["/business/subscription", "/business/profile"].includes(pathname);
 
   const navItems = [
     { href: "/business/dashboard", label: "Operations", icon: LayoutDashboard },
-    { href: "/business/locations", label: "Branch Locations", icon: MapPin },
-    { href: "/business/services", label: "Services", icon: Car },
-    { href: "/business/cars", label: "Car Sales", icon: CarFront },
-    { href: "/business/spare-shop", label: "Spare Shop", icon: Package },
-    { href: "/business/invoices", label: "Invoices", icon: Receipt },
-    { href: "/business/employees", label: "Employees", icon: Users },
-    { href: "/business/earnings", label: "Earnings", icon: DollarSign },
-    { href: "/business/subscription", label: "Subscription", icon: CreditCard },
-    { href: "/business/profile", label: "Profile", icon: UserCircle },
+    { href: "/business/locations", label: "Branches", icon: MapPin },
+    { href: "/business/services", label: "Services", icon: Droplets },
+    { href: "/business/cars", label: "Inventory", icon: CarFront },
+    { href: "/business/spare-shop", label: "Retail", icon: Package },
+    { href: "/business/invoices", label: "Billing", icon: Receipt },
+    { href: "/business/employees", label: "Team", icon: Users },
+    { href: "/business/earnings", label: "Revenue", icon: DollarSign },
+    { href: "/business/subscription", label: "Growth Plan", icon: CreditCard },
+    { href: "/business/profile", label: "Credentials", icon: UserCircle },
   ];
 
-  const criticalNavItems = navItems.filter(item => ["/business/subscription", "/business/profile"].includes(item.href));
-  const filteredNavItems = !isRestricted ? navItems : criticalNavItems;
+  const filteredNavItems = !isRestricted 
+    ? navItems 
+    : navItems.filter(item => ["/business/subscription", "/business/profile"].includes(item.href));
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
       <Loader2 className="animate-spin h-10 w-10 text-primary" />
-      <p className="text-sm text-muted-foreground animate-pulse font-medium">Securing your session...</p>
+      <p className="text-sm text-muted-foreground animate-pulse font-medium tracking-widest uppercase">ALM Partner Session</p>
     </div>
   );
 
@@ -116,32 +89,30 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         {isRestricted && (
           <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800">
             <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertTitle className="font-bold">Restricted Access Mode</AlertTitle>
+            <AlertTitle className="font-bold">Subscription Required</AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
-              <span>Your account data is currently restricted. Upgrade or extend your trial to access your business dashboard.</span>
+              <span>Your access to professional tools has expired. Upgrade your plan to resume operations.</span>
               <Button size="sm" variant="outline" className="border-red-200 hover:bg-red-100" asChild>
-                <Link href="/business/subscription">View Plans</Link>
+                <Link href="/business/subscription">Select Plan</Link>
               </Button>
             </AlertDescription>
           </Alert>
         )}
 
         {isBlocked ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-background border rounded-xl shadow-lg space-y-6 text-center px-4 animate-in fade-in zoom-in duration-300">
-            <div className="bg-destructive/10 p-4 rounded-full">
+          <div className="flex flex-col items-center justify-center py-20 bg-background border rounded-2xl shadow-lg space-y-6 text-center px-4">
+            <div className="bg-destructive/10 p-6 rounded-full">
               <Lock className="h-12 w-12 text-destructive" />
             </div>
-            <div className="space-y-2">
-              <h2 className="text-3xl font-bold">Dashboard Restricted</h2>
-              <p className="text-muted-foreground max-md mx-auto">
-                Access to operations, services, and earnings is disabled for inactive accounts. Please select a plan to resume your professional dashboard.
+            <div className="space-y-2 max-w-md">
+              <h2 className="text-3xl font-black uppercase italic tracking-tight">Dashboard Restricted</h2>
+              <p className="text-muted-foreground font-medium">
+                Operations, inventory, and revenue tracking are locked. Upgrade to an active tier to unlock these features.
               </p>
             </div>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Button size="lg" asChild className="shadow-lg">
-                <Link href="/business/subscription">Renew Access Now</Link>
-              </Button>
-            </div>
+            <Button size="lg" asChild className="shadow-xl rounded-full px-8">
+              <Link href="/business/subscription">Activate Now</Link>
+            </Button>
           </div>
         ) : (
           children

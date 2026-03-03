@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
@@ -8,10 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, MapPin, ShieldCheck, Upload, FileText, CheckCircle2, Phone, Tag, Building2, User, Info, LayoutGrid } from 'lucide-react';
+import { Loader2, Store, MapPin, ShieldCheck, Upload, FileText, CheckCircle2, Phone, Building2, User, Info, LayoutGrid, Camera } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { ShareBusinessCard } from '@/components/app/share-business-card';
 import { Business, BusinessType, BusinessCategory } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -19,24 +19,15 @@ export default function BusinessProfilePage() {
   const [profile, setProfile] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  // Editable fields state
+  
+  // Form fields
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
-  const [type, setType] = useState<'station' | 'mobile'>('station');
   const [whatsapp, setWhatsapp] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
-  const [businessType, setBusinessType] = useState<BusinessType>('individual');
+  const [bizType, setBizType] = useState<BusinessType>('individual');
   const [category, setCategory] = useState<BusinessCategory>('Wash');
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const [idNumber, setIdNumber] = useState('');
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -44,28 +35,25 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: profileData, error: profileError } = await supabase
+      const { data: biz } = await supabase
         .from('businesses')
-        .select(`*`)
+        .select('*')
         .eq('owner_id', user.id)
         .maybeSingle();
 
-      if (profileError) {
-        toast({ variant: 'destructive', title: 'Load Error', description: profileError.message });
-      } else if (profileData) {
-        const biz = profileData as Business;
-        setProfile(biz);
-        setName(biz.name || '');
-        setAddress(biz.address || '');
-        setCity(biz.city || '');
-        setType(biz.type || 'station');
-        setWhatsapp(biz.whatsapp_number || '');
-        setLogoUrl(biz.logo_url || '');
-        setBusinessType(biz.business_type || 'individual');
-        setCategory(biz.category || 'Wash');
+      if (biz) {
+        const typed = biz as Business;
+        setProfile(typed);
+        setName(typed.name || '');
+        setAddress(typed.address || '');
+        setCity(typed.city || '');
+        setWhatsapp(typed.whatsapp_number || '');
+        setBizType(typed.business_type || 'individual');
+        setCategory(typed.category || 'Wash');
+        setIdNumber(typed.id_number || '');
       }
     } catch (error: any) {
-      console.error("Fatal fetch error:", error);
+      toast({ variant: 'destructive', title: 'Load Error' });
     } finally {
       setLoading(false);
     }
@@ -75,300 +63,163 @@ export default function BusinessProfilePage() {
     fetchProfile();
   }, [fetchProfile]);
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast({ variant: 'destructive', title: 'File Too Large', description: 'Logo must be under 2MB.' });
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const fileExt = file.name.split('.').pop();
-      const filePath = `logos/${user.id}-${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('business-assets')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('business-assets')
-        .getPublicUrl(filePath);
-
-      setLogoUrl(publicUrl);
-      toast({ title: 'Logo Prepared', description: 'Your logo preview is ready. Click save to finalize.' });
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Upload Failed', description: error.message });
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      // RLS-Safe Payload: Only send editable fields. 
-      const payload: any = {
-        name: name.trim(),
-        address: address.trim(),
-        city: city.trim(),
-        type,
-        whatsapp_number: whatsapp.trim(),
-        logo_url: logoUrl,
-        category,
-      };
-
-      // Only include business_type if it hasn't been locked yet
-      if (!profile?.business_type) {
-        payload.business_type = businessType;
-      }
-
-      const { error: updateError } = await supabase
+      const { error } = await supabase
         .from('businesses')
-        .update(payload)
-        .eq('owner_id', user.id);
+        .update({
+          name: name.trim(),
+          address: address.trim(),
+          city: city.trim(),
+          whatsapp_number: whatsapp.trim(),
+          business_type: bizType,
+          category: category,
+          id_number: idNumber.trim()
+        })
+        .eq('owner_id', profile?.owner_id);
 
-      if (updateError) throw updateError;
-
-      toast({ title: 'Profile Updated', description: 'Business details saved successfully.' });
+      if (error) throw error;
+      toast({ title: 'Profile Updated', description: 'Changes saved successfully.' });
       await fetchProfile();
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Update failed', description: 'Update failed. Please try again.' });
+      toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
     } finally {
       setSaving(false);
     }
   };
 
-  if (!mounted || loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
-
-  const isStructureLocked = !!profile?.business_type;
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-12 animate-in fade-in duration-500">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Business Profile</h1>
-        <p className="text-muted-foreground font-medium">Manage your credentials, branding, and contact information.</p>
+        <h1 className="text-4xl font-black uppercase italic tracking-tight text-primary">Business Credentials</h1>
+        <p className="text-muted-foreground font-medium text-lg">Manage your identity and marketplace presence.</p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <Card className="shadow-lg border-2">
+          <Card className="shadow-xl border-2">
             <CardHeader className="bg-muted/10 border-b">
-              <CardTitle>Business Branding</CardTitle>
-              <CardDescription>Upload your logo to increase trust in the marketplace.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-6 items-center">
-                <div className="relative h-32 w-32 rounded-2xl overflow-hidden border-2 bg-muted shadow-inner group">
-                  {logoUrl ? (
-                    <Image src={logoUrl} alt="Logo" fill className="object-cover" />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center">
-                      <Store className="h-10 w-10 text-muted-foreground opacity-40" />
-                    </div>
-                  )}
-                  {uploading && (
-                    <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2 flex-1">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => fileInputRef.current?.click()} 
-                    disabled={uploading}
-                    className="w-full sm:w-auto font-bold"
-                  >
-                    <Upload className="h-4 w-4 mr-2" /> Change Logo
-                  </Button>
-                  <p className="text-[10px] text-muted-foreground">Recommended: Square image, max 2MB.</p>
-                </div>
-                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-lg border-2">
-            <CardHeader className="bg-muted/10 border-b">
-              <CardTitle>Contact & Marketplace Category</CardTitle>
-              <CardDescription>Visible to all customers when browsing the automotive marketplace.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <form onSubmit={handleSave} className="space-y-6">
-                <div className="grid gap-4">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name" className="font-bold text-xs uppercase">Business Name *</Label>
-                      <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sparkle Wash" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="cat" className="font-bold text-xs uppercase">Marketplace Category *</Label>
-                      <Select value={category} onValueChange={(v: any) => setCategory(v)}>
-                        <SelectTrigger className="font-medium">
-                          <LayoutGrid className="h-3 w-3 mr-2 text-primary opacity-60" />
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Wash">Car Wash Service</SelectItem>
-                          <SelectItem value="Spare">Spare Parts Shop</SelectItem>
-                          <SelectItem value="Cars">Vehicle Dealership</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="address" className="font-bold text-xs uppercase">Physical Address</Label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input id="address" className="pl-10" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. Plot 1234, Main Mall" />
-                    </div>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="city" className="font-bold text-xs uppercase">Operating City</Label>
-                      <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Gaborone" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="type" className="font-bold text-xs uppercase">Service Model</Label>
-                      <Select value={type} onValueChange={(v: any) => setType(v)}>
-                        <SelectTrigger className="font-medium"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="station">Fixed Station Only</SelectItem>
-                          <SelectItem value="mobile">Mobile Detailing Service</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="whatsapp" className="font-bold text-xs uppercase">WhatsApp Business Number</Label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input id="whatsapp" className="pl-10" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="e.g. 77123456" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="btype" className="font-bold text-xs uppercase">Business Structure</Label>
-                      <Select 
-                        value={businessType} 
-                        onValueChange={(v: any) => setBusinessType(v)}
-                        disabled={isStructureLocked}
-                      >
-                        <SelectTrigger className={cn("font-medium", isStructureLocked && "bg-muted cursor-not-allowed opacity-80")}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="individual">Individual / Micro-Business</SelectItem>
-                          <SelectItem value="registered">Registered Entity (CIPA)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {isStructureLocked && (
-                        <p className="text-[10px] text-muted-foreground italic flex items-center gap-1">
-                          <Info className="h-2.5 w-2.5" /> Structure is locked after registration.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full h-12 shadow-md text-lg font-bold" disabled={saving}>
-                  {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
-                  Save Profile Changes
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 overflow-hidden">
-            <CardHeader className="bg-muted/10 border-b">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-primary" />
-                Legal Verification Status
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Store className="h-5 w-5 text-primary" />
+                Partner Particulars
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 rounded-xl border bg-card shadow-sm">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Verification</p>
-                    <div className="flex items-center gap-2">
-                      {profile?.verification_status === 'verified' ? (
-                        <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200 font-black px-3">
-                          <CheckCircle2 className="h-3 w-3 mr-1" /> VERIFIED
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="animate-pulse font-black px-3">
-                          {profile?.verification_status?.toUpperCase() || 'PENDING'}
-                        </Badge>
-                      )}
-                    </div>
+            <CardContent className="pt-8">
+              <form onSubmit={handleSave} className="space-y-6">
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Entity Name</Label>
+                    <Input value={name} onChange={e => setName(e.target.value)} required />
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Account Tier</p>
-                    <div className="flex flex-col items-end gap-1">
-                        <p className="text-sm font-extrabold capitalize">{profile?.business_type || 'Micro-Business'}</p>
-                        {profile?.business_type === 'registered' && (
-                            <Badge className="bg-primary text-white text-[10px] font-black">CIPA TRUST SEAL</Badge>
-                        )}
-                    </div>
+                  <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Primary Category</Label>
+                    <Select value={category} onValueChange={(v: any) => setCategory(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Wash">Car Wash Service</SelectItem>
+                        <SelectItem value="Spare">Spare Parts Shop</SelectItem>
+                        <SelectItem value="Cars">Vehicle Dealership</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl border bg-muted/20">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">
-                        Reference Number
-                    </p>
-                    <p className="font-mono text-sm font-bold">{profile?.id_number || '---'}</p>
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Business Structure</Label>
+                    <Select value={bizType} onValueChange={(v: any) => setBizType(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="individual">Individual (Micro-Business)</SelectItem>
+                        <SelectItem value="registered">Registered Entity (CIPA)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="p-4 rounded-xl border bg-muted/20 flex items-center justify-between">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Documents</p>
-                      <p className="text-xs font-bold text-primary">Stored Securely</p>
-                    </div>
-                    <FileText className="h-5 w-5 text-muted-foreground" />
+                  <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">
+                      {bizType === 'individual' ? 'Omang / ID Number' : 'CIPA Registration No.'}
+                    </Label>
+                    <Input value={idNumber} onChange={e => setIdNumber(e.target.value)} required />
                   </div>
                 </div>
-              </div>
+
+                <div className="space-y-2">
+                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Physical Address</Label>
+                  <Input value={address} onChange={e => setAddress(e.target.value)} />
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">City</Label>
+                    <Input value={city} onChange={e => setCity(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">WhatsApp Business No.</Label>
+                    <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="26777123456" />
+                  </div>
+                </div>
+
+                <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={saving}>
+                  {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
+                  Save Credentials
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </div>
 
         <div className="space-y-6">
-          <ShareBusinessCard businessId={profile?.id || ''} />
-          
-          <Card className="bg-primary/5 border-primary/20 overflow-hidden shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Marketplace Tip</CardTitle>
+          <Card className="border-2 shadow-lg overflow-hidden">
+            <CardHeader className="bg-primary/5 border-b">
+              <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" />
+                Verification Center
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center gap-4 text-center py-4">
-                <div className="bg-white p-4 rounded-full shadow-inner border-2 border-primary/20">
-                  <ShieldCheck className="h-12 w-12 text-primary" />
+            <CardContent className="pt-6 space-y-6">
+              <div className="text-center space-y-4">
+                <div className={cn(
+                  "p-4 rounded-2xl border-2 flex flex-col items-center gap-2",
+                  profile?.verification_status === 'verified' ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"
+                )}>
+                  {profile?.verification_status === 'verified' ? (
+                    <>
+                      <CheckCircle2 className="h-10 w-10 text-green-600" />
+                      <p className="font-black text-green-800">FULLY VERIFIED</p>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="h-10 w-10 text-orange-600 animate-spin" />
+                      <p className="font-black text-orange-800 uppercase">Awaiting Review</p>
+                    </>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <p className="font-bold">Correct Categorization</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed font-medium">
-                    Ensure your marketplace category is correct. Wash businesses show up in the booking tool, while dealers show up in the car discovery section.
-                  </p>
-                </div>
+                <p className="text-[10px] font-bold text-muted-foreground leading-relaxed">
+                  Admins manually inspect {bizType === 'individual' ? 'Selfie + Omang' : 'CIPA Certificates'} to maintain marketplace integrity.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Button variant="outline" className="w-full justify-start h-12 rounded-xl" asChild>
+                  <label className="cursor-pointer">
+                    <Camera className="mr-3 h-4 w-4 text-primary" />
+                    Upload ID Selfie
+                    <input type="file" className="hidden" />
+                  </label>
+                </Button>
+                {bizType === 'registered' && (
+                  <Button variant="outline" className="w-full justify-start h-12 rounded-xl" asChild>
+                    <label className="cursor-pointer">
+                      <FileText className="mr-3 h-4 w-4 text-primary" />
+                      CIPA Certificate
+                      <input type="file" className="hidden" />
+                    </label>
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
