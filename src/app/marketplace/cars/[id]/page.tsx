@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -29,7 +30,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
       if (!id) return;
       setLoading(true);
       try {
-        // Stage 1: Fetch the Listing from the unified table
+        // Stage 1: Fetch from unified 'listings' table
         const { data: listing, error: listingError } = await supabase
           .from('listings')
           .select('*')
@@ -37,34 +38,31 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
           .eq('type', 'car')
           .maybeSingle();
         
-        if (listingError) throw listingError;
+        if (listingError) {
+          console.error("Supabase Error:", listingError.message);
+          throw listingError;
+        }
 
-        if (!listing) {
+        if (listing) {
+          // Stage 2: Fetch Business details (Manual Wiring Pattern)
+          const { data: bizData } = await supabase
+            .from('businesses')
+            .select('name, city, logo_url, whatsapp_number, subscription_plan')
+            .eq('id', listing.business_id)
+            .maybeSingle();
+
+          setCar({
+            ...listing,
+            business: bizData || { name: 'Verified Seller', city: 'Botswana' }
+          });
+        } else {
           setCar(null);
-          return;
         }
-
-        // Stage 2: Fetch Business details (Manual Wiring)
-        const { data: bizData, error: bizError } = await supabase
-          .from('businesses')
-          .select('name, city, logo_url, whatsapp_number, subscription_plan')
-          .eq('id', listing.business_id)
-          .maybeSingle();
-
-        if (bizError) {
-          console.warn("Could not fetch business details, using fallback:", bizError.message);
-        }
-
-        setCar({
-          ...listing,
-          business: bizData || { name: 'Verified Seller', city: 'Botswana' }
-        });
       } catch (e: any) {
-        console.error("Detail Error:", {
-          message: e.message || "Unknown error",
-          details: e.details,
-          hint: e.hint,
-          code: e.code
+        console.error("Detail Error Details:", {
+          message: e.message,
+          code: e.code,
+          details: e.details
         });
       } finally {
         setLoading(false);
@@ -94,21 +92,20 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase">
-            {car.listing_type || 'CAR'}
+            CAR DISCOVERY
           </Badge>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-6xl space-y-12 animate-in fade-in duration-500">
         <div className="grid lg:grid-cols-5 gap-12">
-          
           <div className="lg:col-span-3 space-y-8">
             <Carousel className="w-full relative group">
               <CarouselContent>
                 {images.map((img: string, index: number) => (
                   <CarouselItem key={index}>
                     <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-muted">
-                      <Image src={img} alt={`${car.name} view ${index + 1}`} fill className="object-cover" priority={index === 0} />
+                      <Image src={img} alt={car.name} fill className="object-cover" priority={index === 0} />
                     </div>
                   </CarouselItem>
                 ))}
@@ -124,13 +121,13 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <Clock className="h-5 w-5 text-primary opacity-60" />
-                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Mileage</span>
-                <span className="font-bold text-sm">{car.mileage ? `${car.mileage.toLocaleString()} KM` : 'Low KM'}</span>
+                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Status</span>
+                <span className="font-bold text-sm">Available</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
-                <Calendar className="h-5 w-5 text-primary opacity-60" />
-                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Year</span>
-                <span className="font-bold text-sm">{car.year || '2024'}</span>
+                <ShieldCheck className="h-5 w-5 text-primary opacity-60" />
+                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Verified</span>
+                <span className="font-bold text-sm">Genuine</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <MapPin className="h-5 w-5 text-primary opacity-60" />
@@ -140,7 +137,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-xl font-bold border-b pb-2">Listing Description</h3>
+              <h3 className="text-xl font-bold border-b pb-2">Listing Particulars</h3>
               <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{car.description || "No detailed description provided by the seller."}</p>
             </div>
           </div>
