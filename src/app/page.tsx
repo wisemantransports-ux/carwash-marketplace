@@ -61,11 +61,10 @@ export default function LandingPage() {
       }
       setLoading(true);
       try {
-        // 1. Fetch All Partners (No verification gate for public marketplace listings display as per requirements)
+        // 1. Fetch ALL Businesses (Source of Truth)
         const { data: bizData } = await supabase
             .from('businesses')
-            .select('id, name, city, logo_url, status, verification_status')
-            .order('name', { ascending: true });
+            .select('id, name, city, logo_url, verification_status');
         
         const allBusinesses = bizData || [];
         const bizMap = allBusinesses.reduce((acc: any, b: any) => {
@@ -76,15 +75,17 @@ export default function LandingPage() {
         // 2. Fetch Latest Listings from unified table
         const { data: listingData } = await supabase
           .from('listings')
-          .select('*')
+          .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at')
           .order('created_at', { ascending: false })
-          .limit(9);
+          .limit(12);
         
-        // 3. In-Memory Wiring
-        setListings((listingData || []).map(l => ({ 
+        // 3. Manual Wiring
+        const wiredListings = (listingData || []).map(l => ({ 
           ...l, 
           business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
-        })));
+        }));
+
+        setListings(wiredListings);
       } catch (e: any) {
         console.error("Landing discovery failure:", e);
       } finally {
@@ -210,7 +211,7 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-white/5 pb-12">
               <div className="space-y-3">
                 <h2 className="text-5xl font-black tracking-tighter text-white">Trending Discovery</h2>
-                <p className="text-slate-400 text-lg font-medium">The latest luxury listings from our elite partners.</p>
+                <p className="text-slate-400 text-lg font-medium">The latest elite listings from our verified partners.</p>
               </div>
               <Button variant="outline" size="lg" asChild className="rounded-full border-white/10 hover:bg-white/5 h-14 px-10 font-black tracking-tight shadow-2xl transition-all">
                   <Link href="/find-wash">Full Marketplace</Link>
@@ -241,9 +242,11 @@ export default function LandingPage() {
                         </Badge>
                       </div>
                       <div className="absolute top-4 right-4">
-                        <div className="bg-green-500/20 backdrop-blur-md border border-green-500/30 p-1.5 rounded-full shadow-2xl">
-                          <ShieldCheck className="h-4 w-4 text-green-400" />
-                        </div>
+                        {item.business?.verification_status === 'verified' && (
+                          <div className="bg-green-500/20 backdrop-blur-md border border-green-500/30 p-1.5 rounded-full shadow-2xl">
+                            <ShieldCheck className="h-4 w-4 text-green-400" />
+                          </div>
+                        )}
                       </div>
                       {item.price && (
                         <div className="absolute bottom-4 right-4">

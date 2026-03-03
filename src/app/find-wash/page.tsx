@@ -53,16 +53,13 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch All Businesses (Primary Partners)
-      const { data: bizData, error: bizError } = await supabase
+      // 1. Fetch All Businesses
+      const { data: bizData } = await supabase
           .from('businesses')
           .select('*')
           .order('name', { ascending: true });
       
-      if (bizError) throw bizError;
-
       const partnerBusinesses = bizData || [];
-      const partnerIds = partnerBusinesses.map(b => b.id);
       const bizMap = partnerBusinesses.reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
@@ -71,12 +68,10 @@ function MarketplaceContent() {
       setBusinesses(partnerBusinesses);
 
       // 2. Fetch All Listings from unified table
-      const { data: listingData, error: listError } = await supabase
+      const { data: listingData } = await supabase
         .from('listings')
-        .select('*')
+        .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at')
         .order('created_at', { ascending: false });
-
-      if (listError) throw listError;
 
       setAllListings((listingData || []).map(l => ({ 
         ...l, 
@@ -95,40 +90,33 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
-    // Interleave Businesses and Listings based on Category
     const bizItems = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
       
-      // If a specific product category is selected, we only show businesses of that category
       const bizCategoryMatch = category === 'all' || 
                               (category === 'wash_service' && b.category === 'Wash') ||
                               (category === 'car' && b.category === 'Cars') ||
                               (category === 'spare_part' && b.category === 'Spare');
       return matchesSearch && bizCategoryMatch;
-    }).map(b => ({ ...b, itemType: 'business' as const, type: 'business' }));
+    }).map(b => ({ ...b, itemType: 'business' as const }));
 
     const productItems = allListings.filter(l => {
       const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
-                           (l.description && l.description.toLowerCase().includes(search.toLowerCase())) ||
-                           (l.business?.city && l.business.city.toLowerCase().includes(search.toLowerCase()));
+                           (l.description && l.description.toLowerCase().includes(search.toLowerCase()));
       
-      // Match against the listing type
       const matchesCategory = category === 'all' || l.type === category;
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
-    // Merge and sort
     const combined = [...bizItems, ...productItems].sort((a, b) => {
-      if (sortOrder === 'price-low') return (Number(a.price) || 0) - (Number(b.price) || 0);
-      if (sortOrder === 'price-high') return (Number(b.price) || 0) - (Number(a.price) || 0);
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
     });
 
     return combined;
-  }, [businesses, allListings, search, category, sortOrder]);
+  }, [businesses, allListings, search, category]);
 
   if (!mounted) return null;
 
@@ -194,20 +182,6 @@ function MarketplaceContent() {
                 ))}
               </div>
             </div>
-            
-            <div className="space-y-2 lg:w-40">
-              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Sort By</Label>
-              <Select value={sortOrder} onValueChange={setSortOrder}>
-                <SelectTrigger className="h-11 rounded-xl bg-white border-2">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest">Newest First</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         </div>
 
@@ -224,7 +198,7 @@ function MarketplaceContent() {
               ))
           ) : filteredItems.length > 0 ? (
             filteredItems.map((item: any) => (
-              <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
+              <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
                 <div className="relative h-48 bg-muted overflow-hidden">
                   <Image 
                     src={item.itemType === 'business' ? (item.logo_url || 'https://picsum.photos/seed/biz/600/400') : getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} 
@@ -238,7 +212,7 @@ function MarketplaceContent() {
                     </Badge>
                   </div>
                   <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
-                    {item.verification_status === 'verified' && (
+                    {(item.verification_status === 'verified' || item.business?.verification_status === 'verified') && (
                       <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
                         <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
                       </Badge>
@@ -255,12 +229,12 @@ function MarketplaceContent() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground font-bold uppercase tracking-wider">
-                    <MapPin className="h-3.5 w-3.5" /> <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Available'}</span>
+                    <MapPin className="h-3.5 w-3.5" /> <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Botswana'}</span>
                   </div>
                 </CardHeader>
                 <CardContent className="flex-grow">
                   <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                    {item.description || item.address || "Automotive component available from our trusted partner network."}
+                    {item.description || item.address || "Automotive solution available from our trusted partner network."}
                   </p>
                 </CardContent>
                 <CardFooter className="mt-auto flex flex-col gap-2">
