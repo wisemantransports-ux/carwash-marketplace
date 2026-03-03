@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -28,9 +27,7 @@ export default function LandingPage() {
     }
     setLoading(true);
     try {
-      // REQUIREMENT: Three-Stage Manual Wiring for Verified Listings
-      
-      // Stage 1: Get Verified Businesses
+      // 1. Fetch Verified Businesses
       const { data: verifiedBiz } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status')
@@ -43,21 +40,21 @@ export default function LandingPage() {
         return acc;
       }, {});
 
-      // Stage 2: Fetch Listings only for those verified business IDs
+      // 2. Fetch Listings for verified businesses
       if (verifiedIds.length > 0) {
         const { data: listingData, error } = await supabase
           .from('listings')
-          .select('id, business_id, type, listing_type, name, description, price, created_at')
+          .select('id, business_id, name, description, price, listing_type, image_url, created_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false })
           .limit(12);
         
         if (error) throw error;
 
-        // Stage 3: Merge in memory
+        // 3. Map and Enrich
         setListings((listingData || []).map(l => ({ 
           ...l, 
-          verified: true, // virtual attribute for component compatibility
+          verified: true,
           business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
         })));
       }
@@ -181,7 +178,7 @@ export default function LandingPage() {
                   <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-500 hover:shadow-[0_30px_60px_rgba(32,128,223,0.1)] border-white/5 hover:border-primary/30 bg-slate-900/30 rounded-[2rem] h-full group">
                     <div className="relative h-56 bg-slate-800 overflow-hidden">
                       <Image 
-                        src={`https://picsum.photos/seed/${item.id}/600/400`} 
+                        src={item.image_url || `https://picsum.photos/seed/${item.id}/600/400`} 
                         alt={item.name} 
                         fill 
                         className="object-cover transition-transform duration-700 group-hover:scale-110" 

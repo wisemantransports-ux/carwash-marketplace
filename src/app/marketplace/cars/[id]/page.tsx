@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -10,13 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Loader2, MapPin, Calendar, ShieldCheck, Clock, Store, Info, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
 import { LeadModal } from '@/components/app/lead-modal';
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel";
 
 export default function CarDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
@@ -30,24 +22,19 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
       if (!id) return;
       setLoading(true);
       try {
-        // Stage 1: Fetch from unified 'listings' table
         const { data: listing, error: listingError } = await supabase
           .from('listings')
-          .select('*')
+          .select('id, business_id, name, description, price, listing_type, image_url')
           .eq('id', id)
-          .eq('type', 'car')
+          .eq('listing_type', 'car')
           .maybeSingle();
         
-        if (listingError) {
-          console.error("Supabase Error:", listingError.message);
-          throw listingError;
-        }
+        if (listingError) throw listingError;
 
         if (listing) {
-          // Stage 2: Fetch Business details (Manual Wiring Pattern)
           const { data: bizData } = await supabase
             .from('businesses')
-            .select('name, city, logo_url, whatsapp_number, subscription_plan')
+            .select('name, city, logo_url, whatsapp_number')
             .eq('id', listing.business_id)
             .maybeSingle();
 
@@ -59,11 +46,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
           setCar(null);
         }
       } catch (e: any) {
-        console.error("Detail Error Details:", {
-          message: e.message,
-          code: e.code,
-          details: e.details
-        });
+        console.error("Car detail fetch error:", e.message);
       } finally {
         setLoading(false);
       }
@@ -82,7 +65,7 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
     </div>
   );
 
-  const images = car.images && car.images.length > 0 ? car.images : ['https://picsum.photos/seed/car/800/600'];
+  const displayImage = car.image_url || `https://picsum.photos/seed/${car.id}/800/600`;
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20">
@@ -100,23 +83,9 @@ export default function CarDetailPage({ params }: { params: Promise<{ id: string
       <main className="container mx-auto px-4 py-8 max-w-6xl space-y-12 animate-in fade-in duration-500">
         <div className="grid lg:grid-cols-5 gap-12">
           <div className="lg:col-span-3 space-y-8">
-            <Carousel className="w-full relative group">
-              <CarouselContent>
-                {images.map((img: string, index: number) => (
-                  <CarouselItem key={index}>
-                    <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-muted">
-                      <Image src={img} alt={car.name} fill className="object-cover" priority={index === 0} />
-                    </div>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              {images.length > 1 && (
-                <>
-                  <CarouselPrevious className="left-4" />
-                  <CarouselNext className="right-4" />
-                </>
-              )}
-            </Carousel>
+            <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-muted">
+              <Image src={displayImage} alt={car.name} fill className="object-cover" priority />
+            </div>
             
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -15,18 +14,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
-/**
- * @fileOverview List Vehicle Page
- * Aligned with unified 'listings' table schema.
- */
-
 export default function AddCarListingPage() {
   const router = useRouter();
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
-  // Form State
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
@@ -73,18 +66,19 @@ export default function AddCarListingPage() {
     try {
       const fileExt = imageFile.name.split('.').pop();
       const filePath = `cars/${business.id}/${Date.now()}.${fileExt}`;
-      await supabase.storage.from('business-assets').upload(filePath, imageFile);
+      const { error: uploadError } = await supabase.storage.from('business-assets').upload(filePath, imageFile);
+      if (uploadError) throw uploadError;
+
       const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
 
-      // STRICT ALIGNMENT: Targeting 'listings' table with mandatory type fields
       const { error } = await supabase.from('listings').insert({
         business_id: business.id,
-        type: 'car', // Contract required
-        listing_type: 'car', // Contract required
+        type: 'car', 
+        listing_type: 'car',
         name: name.trim(),
         price: parseFloat(price),
         description: description.trim(),
-        images: [publicUrl]
+        image_url: publicUrl
       });
 
       if (error) throw error;
@@ -135,7 +129,7 @@ export default function AddCarListingPage() {
             <CardHeader className="bg-muted/10 border-b"><CardTitle>Visuals</CardTitle></CardHeader>
             <CardContent className="pt-6 text-center">
               <div 
-                className="relative aspect-square rounded-xl border-4 border-dashed bg-muted flex flex-col items-center justify-center cursor-pointer group"
+                className="relative aspect-square rounded-xl border-4 border-dashed bg-muted flex flex-col items-center justify-center cursor-pointer group overflow-hidden"
                 onClick={() => fileInputRef.current?.click()}
               >
                 {imagePreview ? <Image src={imagePreview} alt="Preview" fill className="object-cover" /> : <Camera className="h-10 w-10 opacity-20" />}

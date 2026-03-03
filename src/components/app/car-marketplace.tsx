@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 export function CarCard({ car }: { car: any }) {
-  const displayImage = `https://picsum.photos/seed/${car.id}/600/400`;
+  const displayImage = car.image_url || `https://picsum.photos/seed/${car.id}/600/400`;
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
@@ -30,11 +30,9 @@ export function CarCard({ car }: { car: any }) {
           <Badge className="bg-white/90 text-black backdrop-blur-sm border-none shadow-sm uppercase text-[10px] font-black">
             Verified
           </Badge>
-          {car.verified && (
-            <Badge className="bg-primary text-white border-none shadow-sm uppercase text-[9px] font-black flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3" /> Partner Seal
-            </Badge>
-          )}
+          <Badge className="bg-primary text-white border-none shadow-sm uppercase text-[9px] font-black flex items-center gap-1">
+            <ShieldCheck className="h-3 w-3" /> Partner Seal
+          </Badge>
         </div>
         <div className="absolute bottom-3 right-3">
           <Badge className="bg-primary text-white font-black px-3 py-1 text-sm shadow-lg">
@@ -99,7 +97,7 @@ export default function CarMarketplace() {
       if (verifiedIds.length > 0) {
         const { data, error } = await supabase
           .from('listings')
-          .select('id, business_id, name, description, price, created_at, listing_type')
+          .select('id, business_id, name, description, price, listing_type, image_url, created_at')
           .eq('listing_type', 'car')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
@@ -108,7 +106,7 @@ export default function CarMarketplace() {
         setListings((data || []).map(l => ({ 
           ...l, 
           verified: true,
-          business: bizMap[l.business_id] 
+          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
         })));
       } else {
         setListings([]);

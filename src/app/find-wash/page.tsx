@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -35,16 +34,12 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // REQUIREMENT: Manual Wiring Pattern for Verified Listings
-      
-      // Stage 1: Get Verified Partners
-      const { data: bizData, error: bizError } = await supabase
+      // 1. Fetch Verified Businesses
+      const { data: bizData } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status, category')
           .eq('verification_status', 'verified');
       
-      if (bizError) throw bizError;
-
       const verifiedPartners = bizData || [];
       const verifiedIds = verifiedPartners.map(b => b.id);
       const bizMap = verifiedPartners.reduce((acc: any, b: any) => {
@@ -54,17 +49,16 @@ function MarketplaceContent() {
 
       setBusinesses(verifiedPartners);
 
-      // Stage 2: Fetch Listings only for Verified partners
+      // 2. Fetch Listings for Verified partners only
       if (verifiedIds.length > 0) {
-        const { data: listingData, error: listingError } = await supabase
+        const { data: listingData, error } = await supabase
           .from('listings')
-          .select('id, business_id, type, listing_type, name, description, price, created_at')
+          .select('id, business_id, name, description, price, listing_type, image_url, created_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
-        if (listingError) throw listingError;
+        if (error) throw error;
         
-        // Stage 3: In-memory enrichment
         setAllListings((listingData || []).map(l => ({ 
           ...l, 
           verified: true,
@@ -74,7 +68,7 @@ function MarketplaceContent() {
         setAllListings([]);
       }
     } catch (e: any) {
-      console.error('Marketplace discovery error:', e.message);
+      console.error('Marketplace discovery failure:', e.message);
     } finally {
       setLoading(false);
     }
@@ -88,30 +82,25 @@ function MarketplaceContent() {
   const filteredItems = useMemo(() => {
     const sTerm = search.toLowerCase();
 
-    // 1. Process Business Entries (Profiles)
+    // 1. Business Entries
     const bizItems = businesses.filter(b => {
       const bName = (b.name || '').toLowerCase();
       const bCity = (b.city || '').toLowerCase();
       const bCat = (b.category || '').toLowerCase();
-
       const matchesSearch = bName.includes(sTerm) || bCity.includes(sTerm);
-      
       const bizCategoryMatch = category === 'all' || 
                               (category === 'wash_service' && bCat === 'wash') ||
                               (category === 'car' && bCat === 'cars') ||
                               (category === 'spare_part' && bCat === 'spare');
-      
       return matchesSearch && bizCategoryMatch;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
-    // 2. Process Product Entries (Individual Listings)
+    // 2. Product Entries
     const productItems = allListings.filter(l => {
       const lName = (l.name || '').toLowerCase();
       const lDesc = (l.description || '').toLowerCase();
-
       const matchesSearch = lName.includes(sTerm) || lDesc.includes(sTerm);
-      const matchesCategory = category === 'all' || l.listing_type === category || l.type === category;
-      
+      const matchesCategory = category === 'all' || l.listing_type === category;
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
@@ -206,7 +195,7 @@ function MarketplaceContent() {
               <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
                 <div className="relative h-48 bg-muted overflow-hidden">
                   <Image 
-                    src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/biz-${item.id}/600/400`) : `https://picsum.photos/seed/list-${item.id}/600/400`} 
+                    src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/biz-${item.id}/600/400`) : (item.image_url || `https://picsum.photos/seed/list-${item.id}/600/400`)} 
                     alt={item.name} 
                     fill 
                     className="object-cover transition-transform duration-500 group-hover:scale-110" 
