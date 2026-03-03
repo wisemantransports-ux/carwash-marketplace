@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { SparePart } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -51,18 +50,18 @@ export function SparePartCard({ part }: { part: any }) {
         />
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           <Badge className="bg-white/90 text-black backdrop-blur-sm border-none shadow-sm uppercase text-[9px] font-black">
-            {part.category}
+            {part.category || 'Automotive'}
           </Badge>
           <Badge className={cn(
             "border-none shadow-sm uppercase text-[9px] font-black text-white",
-            part.condition === 'new' ? "bg-green-600" : "bg-orange-600"
+            part.condition === 'used' ? "bg-orange-600" : "bg-green-600"
           )}>
-            {part.condition}
+            {part.condition || 'New'}
           </Badge>
         </div>
         <div className="absolute bottom-3 right-3">
           <Badge className="bg-primary text-white font-black px-3 py-1 text-sm shadow-lg">
-            P{Number(part.price).toLocaleString()}
+            P{Number(part.price || 0).toLocaleString()}
           </Badge>
         </div>
       </div>
@@ -76,7 +75,7 @@ export function SparePartCard({ part }: { part: any }) {
           </div>
           <div className="flex items-center gap-1">
             <Package className="h-3 w-3 text-primary" />
-            <span>{part.stock_quantity} In Stock</span>
+            <span>{part.stock_quantity || 1} In Stock</span>
           </div>
         </div>
       </CardHeader>
@@ -103,48 +102,39 @@ export default function SparePartsMarketplacePage() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('newest');
 
   const fetchParts = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch verified businesses first (Resilient pattern)
-      const { data: verifiedBiz, error: bizError } = await supabase
+      const { data: verifiedBiz } = await supabase
         .from('businesses')
-        .select('id')
+        .select('id, name, city')
         .or('verification_status.eq.verified,status.eq.verified');
       
-      if (bizError) throw bizError;
-      
       const verifiedIds = (verifiedBiz || []).map(b => b.id);
+      const bizMap = (verifiedBiz || []).reduce((acc: any, b: any) => {
+        acc[b.id] = b;
+        return acc;
+      }, {});
       
       if (verifiedIds.length === 0) {
         setParts([]);
         return;
       }
 
-      // 2. Fetch parts linked to verified partners
       const { data, error } = await supabase
-        .from('spare_parts')
-        .select(`
-          id, name, category, price, condition, images, stock_quantity, description, status, created_at, business_id,
-          business:business_id ( name, city, verification_status )
-        `)
-        .eq('status', 'active')
+        .from('listings')
+        .select('*')
+        .eq('type', 'spare_part')
         .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setParts(data || []);
+      setParts((data || []).map(p => ({ ...p, business: bizMap[p.business_id] })));
     } catch (e: any) {
-      console.error("Spare Parts fetch failure details:", {
-        message: e.message,
-        details: e.details,
-        hint: e.hint,
-        code: e.code
-      });
+      console.error("Spare Parts fetch failure:", e.message);
     } finally {
       setLoading(false);
     }
@@ -159,16 +149,13 @@ export default function SparePartsMarketplacePage() {
 
   const filtered = parts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
-                         p.category.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+                         (p.description && p.description.toLowerCase().includes(search.toLowerCase()));
+    return matchesSearch;
   }).sort((a, b) => {
     if (sortOrder === 'price-low') return a.price - b.price;
     if (sortOrder === 'price-high') return b.price - a.price;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
-
-  const categories = Array.from(new Set(parts.map(p => p.category))).sort();
 
   return (
     <div className="min-h-screen bg-background">
@@ -207,7 +194,7 @@ export default function SparePartsMarketplacePage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Part name, category, or model..." 
+                placeholder="Part name, category, or description..." 
                 className="pl-10 h-12 rounded-xl bg-white"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -215,33 +202,18 @@ export default function SparePartsMarketplacePage() {
             </div>
           </div>
           
-          <div className="flex flex-wrap gap-4 w-full md:w-auto">
-            <div className="space-y-2 flex-1 md:w-40">
-              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Category</Label>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="h-12 rounded-xl bg-white">
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2 flex-1 md:w-40">
-              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Sort By</Label>
-              <Select value={sortOrder} onValueChange={setSortOrder}>
-                <SelectTrigger className="h-12 rounded-xl bg-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest">Newest First</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-2 lg:w-48">
+            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Sort By</Label>
+            <Select value={sortOrder} onValueChange={setSortOrder}>
+              <SelectTrigger className="h-12 rounded-xl bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="price-low">Price: Low to High</SelectItem>
+                <SelectItem value="price-high">Price: High to Low</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -264,7 +236,7 @@ export default function SparePartsMarketplacePage() {
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
               <Package className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
               <p className="text-xl font-bold text-muted-foreground">No parts found matching your criteria.</p>
-              <Button variant="link" onClick={() => { setSearch(''); setCategoryFilter('all'); }} className="font-bold">
+              <Button variant="link" onClick={() => setSearch('')} className="font-bold">
                 Reset All Filters
               </Button>
             </div>

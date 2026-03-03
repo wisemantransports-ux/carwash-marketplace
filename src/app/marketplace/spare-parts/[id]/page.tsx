@@ -6,17 +6,15 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Loader2, MapPin, Package, ShieldCheck, Store, Info, Banknote, Tags } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Package, ShieldCheck, Store, Info, Banknote, Tags, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { LeadModal } from '@/components/app/lead-modal';
 
 /**
- * @fileOverview Spare Part Detail Page (Public)
- * Full specification view for individual automotive components.
- * Uses the Manual Wiring Pattern for maximum data resilience.
+ * Robust image parsing for Postgres array columns
  */
-
 function getDisplayImage(images: any, fallback: string): string {
   if (!images) return fallback;
   if (Array.isArray(images) && images.length > 0) return images[0];
@@ -32,53 +30,42 @@ function getDisplayImage(images: any, fallback: string): string {
   return fallback;
 }
 
-export default function SparePartDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = React.use(params);
-  const id = resolvedParams.id;
+export default function SparePartDetailPage() {
+  const params = useParams();
+  const id = params?.id as string;
   const router = useRouter();
   const [part, setPart] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     async function loadPart() {
       if (!id) return;
       setLoading(true);
       try {
-        // STAGE 1: Fetch the core part data (Following Manual Wiring Pattern)
-        const { data: partData, error: partError } = await supabase
-          .from('spare_parts')
+        const { data: listing, error: listingError } = await supabase
+          .from('listings')
           .select('*')
           .eq('id', id)
-          .eq('status', 'active')
-          .maybeSingle();
+          .eq('type', 'spare_part')
+          .single();
         
-        if (partError) {
-          console.error("Spare Part Fetch Error:", JSON.stringify(partError, null, 2));
-          throw partError;
-        }
+        if (listingError) throw listingError;
 
-        if (partData) {
-          // STAGE 2: Fetch the associated business data in parallel (Manual Wiring)
-          const { data: bizData, error: bizError } = await supabase
+        if (listing) {
+          const { data: bizData } = await supabase
             .from('businesses')
-            .select('name, city, logo_url, verification_status, whatsapp_number')
-            .eq('id', partData.business_id)
-            .maybeSingle();
+            .select('name, city, logo_url, whatsapp_number')
+            .eq('id', listing.business_id)
+            .single();
 
-          if (bizError) {
-            console.warn("Wired Business Fetch Error (Graceful Fallback):", JSON.stringify(bizError, null, 2));
-          }
-
-          // STAGE 3: Combine in memory
           setPart({
-            ...partData,
-            business: bizData || { name: 'Verified Partner', city: 'Botswana' }
+            ...listing,
+            business: bizData || { name: 'Verified Retailer', city: 'Botswana' }
           });
         }
       } catch (e: any) {
-        console.error("Detail Fetch Error Trace:", e.message || e);
+        console.error("Detail Fetch Error:", e.message);
       } finally {
         setLoading(false);
       }
@@ -86,18 +73,11 @@ export default function SparePartDetailPage({ params }: { params: Promise<{ id: 
     loadPart();
   }, [id]);
 
-  if (!mounted || loading) return (
-    <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
-      <Loader2 className="animate-spin h-10 w-10 text-primary" />
-      <p className="text-muted-foreground animate-pulse font-medium">Loading component details...</p>
-    </div>
-  );
-
+  if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
   if (!part) return (
     <div className="flex flex-col items-center justify-center min-h-screen text-center px-4 space-y-6">
       <div className="bg-destructive/10 p-6 rounded-full"><Info className="h-12 w-12 text-destructive" /></div>
       <h1 className="text-2xl font-bold">Product not found</h1>
-      <p className="text-muted-foreground max-w-sm">This component may have been sold out or removed from the catalog.</p>
       <Button onClick={() => router.back()} variant="outline" className="rounded-full px-8">Return to Catalog</Button>
     </div>
   );
@@ -117,7 +97,7 @@ export default function SparePartDetailPage({ params }: { params: Promise<{ id: 
             </h1>
           </div>
           <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase">
-            {part.category}
+            {part.category || 'Spare Part'}
           </Badge>
         </div>
       </header>
@@ -131,19 +111,17 @@ export default function SparePartDetailPage({ params }: { params: Promise<{ id: 
             </div>
             
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5 transition-transform hover:scale-105">
+              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <Tags className="h-5 w-5 text-primary opacity-60" />
                 <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Condition</span>
-                <span className="font-bold text-sm capitalize">{part.condition}</span>
+                <span className="font-bold text-sm capitalize">{part.condition || 'New'}</span>
               </div>
-              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5 transition-transform hover:scale-105">
+              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <Package className="h-5 w-5 text-primary opacity-60" />
-                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Stock</span>
-                <span className={cn("font-bold text-sm", part.stock_quantity > 0 ? "text-green-600" : "text-destructive")}>
-                  {part.stock_quantity > 0 ? `${part.stock_quantity} Units` : 'Out of Stock'}
-                </span>
+                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Availability</span>
+                <span className="font-bold text-sm text-green-600">In Stock</span>
               </div>
-              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5 transition-transform hover:scale-105">
+              <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <MapPin className="h-5 w-5 text-primary opacity-60" />
                 <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Location</span>
                 <span className="font-bold text-sm truncate w-full text-center">{part.business?.city || 'Botswana'}</span>
@@ -153,7 +131,7 @@ export default function SparePartDetailPage({ params }: { params: Promise<{ id: 
             <div className="space-y-4">
               <h3 className="text-xl font-bold border-b pb-2">Technical Description</h3>
               <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">
-                {part.description || "Authentic automotive component. Please contact the verified retailer for compatibility checks and warranty information."}
+                {part.description || "Authentic automotive component available from a verified retailer."}
               </p>
             </div>
           </div>
@@ -166,7 +144,7 @@ export default function SparePartDetailPage({ params }: { params: Promise<{ id: 
               </div>
               <div className="space-y-1">
                 <h2 className="text-5xl font-black tracking-tighter text-slate-900">
-                  P{Number(part.price).toLocaleString()}
+                  P{Number(part.price || 0).toLocaleString()}
                 </h2>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Market Price (BWP)</p>
               </div>
@@ -178,7 +156,7 @@ export default function SparePartDetailPage({ params }: { params: Promise<{ id: 
               </CardHeader>
               <CardContent className="p-6 space-y-8">
                 <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center border-2 border-white shadow-md overflow-hidden">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center border overflow-hidden">
                     {part.business?.logo_url ? (
                       <Image src={part.business.logo_url} alt="Logo" width={64} height={64} className="object-cover" />
                     ) : (
@@ -186,55 +164,28 @@ export default function SparePartDetailPage({ params }: { params: Promise<{ id: 
                     )}
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xl font-bold text-slate-900">{part.business?.name || "Verified Seller"}</p>
+                    <p className="text-xl font-bold text-slate-900">{part.business?.name}</p>
                     <p className="text-xs text-muted-foreground flex items-center gap-1 font-medium">
-                      <MapPin className="h-3 w-3" /> {part.business?.city || "Botswana"}
+                      <MapPin className="h-3 w-3" /> {part.business?.city}
                     </p>
                   </div>
                 </div>
                 
-                <div className="grid gap-4">
-                  <Button size="lg" className="w-full h-14 text-lg font-black rounded-2xl shadow-lg" asChild>
-                    <Link href="/signup">Contact Retailer</Link>
-                  </Button>
-                  <Button variant="outline" size="lg" className="w-full h-14 font-bold rounded-2xl border-2" asChild>
-                    <Link href={`/find-wash/${part.business_id}`}>
-                      View Shop Services
-                    </Link>
-                  </Button>
-                </div>
-                
-                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3">
-                  <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-blue-800 leading-relaxed font-medium">
-                    Genuine parts verification. All platform retailers are checked for business registration and identification.
-                  </p>
-                </div>
+                <Button size="lg" className="w-full h-14 text-lg font-black rounded-2xl shadow-lg" onClick={() => setLeadModalOpen(true)}>
+                  <MessageCircle className="mr-2 h-5 w-5" /> Contact Retailer
+                </Button>
               </CardContent>
             </Card>
-
-            <div className="flex flex-col gap-4 p-6 bg-white border-2 rounded-3xl shadow-sm">
-              <p className="text-[10px] font-black uppercase text-muted-foreground text-center flex items-center justify-center gap-2">
-                <Banknote className="h-3 w-3" /> Secure Transaction Tips
-              </p>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
-                  <div className="h-2 w-2 rounded-full bg-green-500" />
-                  Verify part condition in person.
-                </div>
-                <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
-                  <div className="h-2 w-2 rounded-full bg-green-500" />
-                  Check compatibility with your car.
-                </div>
-                <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
-                  <div className="h-2 w-2 rounded-full bg-green-500" />
-                  No advance payments for delivery.
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </main>
+
+      <LeadModal 
+        isOpen={leadModalOpen}
+        onClose={() => setLeadModalOpen(false)}
+        listingId={part.id}
+        listingTitle={part.name}
+      />
     </div>
   );
 }

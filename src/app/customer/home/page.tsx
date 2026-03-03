@@ -13,10 +13,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { CarListing, SparePart } from '@/lib/types';
+import { Listing } from '@/lib/types';
 
 /**
- * Robust image parsing for Postgres array columns to prevent hydration issues
+ * Robust image parsing for Postgres array columns
  */
 function getDisplayImage(images: any, fallback: string): string {
   if (!images) return fallback;
@@ -39,9 +39,9 @@ function getDisplayImage(images: any, fallback: string): string {
 
 const CATEGORIES = [
   { id: 'all', label: 'All Partners', icon: Filter },
-  { id: 'Wash', label: 'Car Wash', icon: Droplets },
-  { id: 'Spare', label: 'Spare Parts', icon: ShoppingCart },
-  { id: 'Cars', label: 'Car Sales', icon: CarIcon },
+  { id: 'wash_service', label: 'Car Wash', icon: Droplets },
+  { id: 'spare_part', label: 'Spare Parts', icon: ShoppingCart },
+  { id: 'car', label: 'Car Sales', icon: CarIcon },
 ];
 
 function BusinessCard({ business }: { business: any }) {
@@ -132,98 +132,51 @@ function BusinessCard({ business }: { business: any }) {
   );
 }
 
-function CarCardSimple({ car }: { car: CarListing }) {
-  const displayImage = getDisplayImage(car.images, 'https://picsum.photos/seed/car/600/400');
+function ProductCard({ item }: { item: any }) {
+  const displayImage = getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400');
+  const isCar = item.type === 'car';
 
   return (
     <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
-      <Link href={`/marketplace/cars/${car.id}`} className="relative h-48 w-full overflow-hidden bg-muted">
+      <Link href={`/marketplace/${isCar ? 'cars' : 'spare-parts'}/${item.id}`} className="relative h-48 w-full overflow-hidden bg-muted">
         <Image
           src={displayImage}
-          alt={car.title}
+          alt={item.name}
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-110"
         />
         <div className="absolute top-2 left-2">
           <Badge className="bg-white/90 text-black shadow-sm uppercase text-[9px] font-black">
-            {car.year}
+            {isCar ? (item.year || 'Premium') : item.category || 'Retail'}
           </Badge>
         </div>
         <div className="absolute bottom-2 right-2">
           <Badge className="bg-primary text-white font-black px-2 py-1 text-xs shadow-lg">
-            P{Number(car.price).toLocaleString()}
+            P{Number(item.price || 0).toLocaleString()}
           </Badge>
         </div>
       </Link>
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-bold line-clamp-1">{car.title}</CardTitle>
+        <CardTitle className="text-lg font-bold line-clamp-1">{item.name}</CardTitle>
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-bold uppercase">
           <div className="flex items-center gap-1">
-            <MapPin className="h-3 w-3" /> {car.business?.city || 'Botswana'}
+            <MapPin className="h-3 w-3" /> {item.business?.city || 'Botswana'}
           </div>
-          <div className="flex items-center gap-1">
-            <Clock className="h-3 w-3" /> {car.mileage?.toLocaleString() || 0} KM
-          </div>
+          {isCar && (
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3" /> {item.mileage?.toLocaleString() || 0} KM
+            </div>
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
         <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-          {car.description || "View this premium vehicle listing from one of our verified partners."}
+          {item.description || "Verified automotive listing from our trusted partner network."}
         </p>
       </CardContent>
       <CardFooter className="pt-0 mt-auto">
         <Button asChild variant="outline" className="w-full font-bold h-11">
-          <Link href={`/marketplace/cars/${car.id}`}>View Showroom</Link>
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-}
-
-function SparePartCardSimple({ part }: { part: SparePart }) {
-  const displayImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/400/300');
-
-  return (
-    <Card className="flex flex-col h-[580px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
-      <div className="relative h-48 w-full overflow-hidden bg-muted">
-        <Image
-          src={displayImage}
-          alt={part.name}
-          fill
-          className="object-cover transition-transform duration-500 group-hover:scale-110"
-        />
-        <div className="absolute top-2 left-2 flex flex-col gap-1">
-          <Badge className="bg-white/90 text-black backdrop-blur-sm shadow-sm uppercase text-[9px] font-black">
-            {part.category}
-          </Badge>
-          <Badge className={cn(
-            "border-none shadow-sm uppercase text-[9px] font-black text-white",
-            part.condition === 'new' ? "bg-green-600" : "bg-orange-600"
-          )}>
-            {part.condition}
-          </Badge>
-        </div>
-        <div className="absolute bottom-2 right-2">
-          <Badge className="bg-primary text-white font-black px-2 py-1 text-xs shadow-lg">
-            P{Number(part.price).toLocaleString()}
-          </Badge>
-        </div>
-      </div>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xl font-bold line-clamp-1">{part.name}</CardTitle>
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase pt-1">
-          <Store className="h-3.5 w-3.5 text-primary" />
-          <span className="truncate">{part.business?.name || 'Verified Seller'}</span>
-        </div>
-      </CardHeader>
-      <CardContent className="flex-grow">
-        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed italic">
-          {part.description || "Authentic automotive component available from a verified local retailer."}
-        </p>
-      </CardContent>
-      <CardFooter className="pt-0 mt-auto">
-        <Button asChild className="w-full font-bold h-11" variant="outline">
-          <Link href={`/marketplace/spare-parts/${part.id}`}>View Details</Link>
+          <Link href={`/marketplace/${isCar ? 'cars' : 'spare-parts'}/${item.id}`}>View Details</Link>
         </Button>
       </CardFooter>
     </Card>
@@ -233,8 +186,7 @@ function SparePartCardSimple({ part }: { part: SparePart }) {
 function CustomerHomeContent() {
   const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<any[]>([]);
-  const [cars, setCars] = useState<CarListing[]>([]);
-  const [spareParts, setSpareParts] = useState<SparePart[]>([]);
+  const [listings, setListings] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -245,18 +197,16 @@ function CustomerHomeContent() {
     const q = searchParams.get('q') || '';
     const cat = searchParams.get('category') || 'all';
     setSearch(q);
-    
-    const match = CATEGORIES.find(c => c.id.toLowerCase() === cat.toLowerCase());
-    setCategory(match ? match.id : 'all');
+    setCategory(cat);
   }, [searchParams]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // EXACT QUERY: Gating by verification status
+      // 1. Fetch Verified Businesses
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
-          .select('*, services(*)')
+          .select('*, services:listings(*)')
           .or('verification_status.eq.verified,status.eq.verified')
           .order('name', { ascending: true });
       
@@ -272,31 +222,18 @@ function CustomerHomeContent() {
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
-        // EXACT QUERY: Manual wiring for Cars
-        const { data: carData } = await supabase
-          .from('car_listing')
+        // 2. Fetch Listings (Cars & Parts) from the unified table
+        const { data: listingData } = await supabase
+          .from('listings')
           .select('*')
-          .in('status', ['active', 'available'])
+          .in('type', ['car', 'spare_part'])
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
-        setCars((carData || []).map(c => ({
-          ...c,
-          business: bizMap[c.business_id] || { name: 'Verified Partner', city: 'Botswana' }
-        })) as any[]);
-
-        // EXACT QUERY: Manual wiring for Parts
-        const { data: partData } = await supabase
-          .from('spare_parts')
-          .select('*')
-          .in('status', ['active', 'available'])
-          .in('business_id', verifiedIds)
-          .order('created_at', { ascending: false });
-        
-        setSpareParts((partData || []).map(p => ({
-          ...p,
-          business: bizMap[p.business_id] || { name: 'Verified Retailer', city: 'Botswana' }
-        })) as any[]);
+        setListings((listingData || []).map(l => ({
+          ...l,
+          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+        })));
       }
     } catch (e: any) {
       console.error('Customer Discovery Error:', e.message);
@@ -311,36 +248,31 @@ function CustomerHomeContent() {
     }
   }, [loadData, mounted]);
 
-  const unifiedList = useMemo(() => {
+  const filteredItems = useMemo(() => {
     const bizItems = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
-      const bizCategory = b.category || 'Wash';
-      const matchesCategory = category === 'all' || bizCategory.toLowerCase() === category.toLowerCase();
-      return matchesSearch && matchesCategory;
+      // Map category 'wash_service' to business category 'Wash'
+      const bizCategoryMatch = category === 'all' || 
+                              (category === 'wash_service' && b.category === 'Wash') ||
+                              (category === 'car' && b.category === 'Cars') ||
+                              (category === 'spare_part' && b.category === 'Spare');
+      return matchesSearch && bizCategoryMatch;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
-    const carItems = cars.filter(c => {
-      const matchesSearch = (c.title?.toLowerCase().includes(search.toLowerCase())) || 
-                           (c.make?.toLowerCase().includes(search.toLowerCase())) ||
-                           (c.model?.toLowerCase().includes(search.toLowerCase()));
-      const matchesCategory = category === 'all' || category.toLowerCase() === 'cars';
+    const productItems = listings.filter(l => {
+      const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
+                           (l.description?.toLowerCase().includes(search.toLowerCase()));
+      const matchesCategory = category === 'all' || l.type === category;
       return matchesSearch && matchesCategory;
-    }).map(c => ({ ...c, itemType: 'car' as const }));
+    }).map(l => ({ ...l, itemType: 'product' as const }));
 
-    const partItems = spareParts.filter(p => {
-      const matchesSearch = (p.name?.toLowerCase().includes(search.toLowerCase())) || 
-                           (p.category?.toLowerCase().includes(search.toLowerCase()));
-      const matchesCategory = category === 'all' || category.toLowerCase() === 'spare';
-      return matchesSearch && matchesCategory;
-    }).map(p => ({ ...p, itemType: 'part' as const }));
-
-    return [...bizItems, ...carItems, ...partItems].sort((a, b) => {
+    return [...bizItems, ...productItems].sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
     });
-  }, [businesses, cars, spareParts, search, category]);
+  }, [businesses, listings, search, category]);
 
   if (!mounted) return null;
 
@@ -369,12 +301,12 @@ function CustomerHomeContent() {
               {CATEGORIES.map(cat => (
                 <Button 
                   key={cat.id} 
-                  variant={category.toLowerCase() === cat.id.toLowerCase() ? 'default' : 'outline'} 
+                  variant={category === cat.id ? 'default' : 'outline'} 
                   size="sm" 
                   className="rounded-full px-4 font-bold h-9 transition-all shadow-sm"
                   onClick={() => setCategory(cat.id)}
                 >
-                  <cat.icon className={cn("h-3.5 w-3.5 mr-2", category.toLowerCase() === cat.id.toLowerCase() ? "text-white" : "text-primary")} />
+                  <cat.icon className={cn("h-3.5 w-3.5 mr-2", category === cat.id ? "text-white" : "text-primary")} />
                   {cat.label}
                 </Button>
               ))}
@@ -395,12 +327,10 @@ function CustomerHomeContent() {
               </div>
             </Card>
           ))
-        ) : unifiedList.length > 0 ? (
-          unifiedList.map((item: any) => {
+        ) : filteredItems.length > 0 ? (
+          filteredItems.map((item: any) => {
             if (item.itemType === 'business') return <BusinessCard key={`biz-${item.id}`} business={item} />;
-            if (item.itemType === 'car') return <CarCardSimple key={`car-${item.id}`} car={item} />;
-            if (item.itemType === 'part') return <SparePartCardSimple key={`part-${item.id}`} part={item} />;
-            return null;
+            return <ProductCard key={`prod-${item.id}`} item={item} />;
           })
         ) : (
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">

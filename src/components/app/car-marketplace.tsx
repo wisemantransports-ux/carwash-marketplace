@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { CarListing } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,13 +45,13 @@ export function CarCard({ car }: { car: any }) {
       <Link href={`/marketplace/cars/${car.id}`} className="relative h-56 w-full overflow-hidden bg-muted">
         <Image
           src={displayImage}
-          alt={`${car.make} ${car.model} ${car.year}`}
+          alt={car.name}
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-110"
         />
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           <Badge className="bg-white/90 text-black backdrop-blur-sm border-none shadow-sm uppercase text-[10px] font-black">
-            {car.year}
+            {car.year || 'Premium'}
           </Badge>
           {isPremiumDealer && (
             <Badge className="bg-primary text-white border-none shadow-sm uppercase text-[9px] font-black flex items-center gap-1">
@@ -62,26 +61,26 @@ export function CarCard({ car }: { car: any }) {
         </div>
         <div className="absolute bottom-3 right-3">
           <Badge className="bg-primary text-white font-black px-3 py-1 text-sm shadow-lg">
-            P{Number(car.price).toLocaleString()}
+            P{Number(car.price || 0).toLocaleString()}
           </Badge>
         </div>
       </Link>
       
       <CardHeader className="pb-2">
-        <div className="flex justify-between items-start gap-2">
-          <CardTitle className="text-xl font-bold line-clamp-1">
-            {car.title || `${car.make} ${car.model}`}
-          </CardTitle>
-        </div>
+        <CardTitle className="text-xl font-bold line-clamp-1">
+          {car.name}
+        </CardTitle>
         <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium">
           <div className="flex items-center gap-1">
             <MapPin className="h-3 w-3" />
-            <span>{car.location || car.business?.city || 'Botswana'}</span>
+            <span>{car.business?.city || 'Botswana'}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            <span>{Number(car.mileage || 0).toLocaleString()} KM</span>
-          </div>
+          {car.mileage && (
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <span>{Number(car.mileage).toLocaleString()} KM</span>
+            </div>
+          )}
         </div>
       </CardHeader>
 
@@ -103,52 +102,43 @@ export function CarCard({ car }: { car: any }) {
 }
 
 export default function CarMarketplace() {
-  const [listings, setListings] = useState<CarListing[]>([]);
+  const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
-  const [makeFilter, setMakeFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('newest');
 
   const fetchListings = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch verified businesses first (Resilient pattern)
-      const { data: verifiedBiz, error: bizError } = await supabase
+      const { data: verifiedBiz } = await supabase
         .from('businesses')
-        .select('id')
+        .select('id, name, city, subscription_plan')
         .or('verification_status.eq.verified,status.eq.verified');
       
-      if (bizError) throw bizError;
-      
       const verifiedIds = (verifiedBiz || []).map(b => b.id);
+      const bizMap = (verifiedBiz || []).reduce((acc: any, b: any) => {
+        acc[b.id] = b;
+        return acc;
+      }, {});
       
       if (verifiedIds.length === 0) {
         setListings([]);
         return;
       }
 
-      // 2. Fetch listings linked to verified partners
       const { data, error } = await supabase
-        .from('car_listing')
-        .select(`
-          id, title, make, model, year, price, mileage, location, images, description, status, created_at, business_id,
-          business:business_id ( name, city, subscription_plan, verification_status )
-        `)
-        .in('status', ['active', 'available'])
+        .from('listings')
+        .select('*')
+        .eq('type', 'car')
         .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setListings((data as any[]) || []);
+      setListings((data || []).map(l => ({ ...l, business: bizMap[l.business_id] })));
     } catch (e: any) {
-      console.error("Marketplace fetch failure details:", {
-        message: e.message,
-        details: e.details,
-        hint: e.hint,
-        code: e.code
-      });
+      console.error("Marketplace fetch failure:", e.message);
     } finally {
       setLoading(false);
     }
@@ -162,20 +152,14 @@ export default function CarMarketplace() {
   if (!mounted) return null;
 
   const filtered = listings.filter(l => {
-    const matchesSearch = l.make.toLowerCase().includes(search.toLowerCase()) || 
-                         l.model.toLowerCase().includes(search.toLowerCase()) ||
-                         (l.location && l.location.toLowerCase().includes(search.toLowerCase())) ||
-                         (l.title && l.title.toLowerCase().includes(search.toLowerCase()));
-    const matchesMake = makeFilter === 'all' || l.make === makeFilter;
-    return matchesSearch && matchesMake;
+    const matchesSearch = l.name.toLowerCase().includes(search.toLowerCase()) || 
+                         (l.description && l.description.toLowerCase().includes(search.toLowerCase()));
+    return matchesSearch;
   }).sort((a, b) => {
     if (sortOrder === 'price-low') return a.price - b.price;
     if (sortOrder === 'price-high') return b.price - a.price;
-    if (sortOrder === 'year-new') return b.year - a.year;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
-
-  const makes = Array.from(new Set(listings.map(l => l.make))).sort();
 
   return (
     <div className="space-y-8">
@@ -185,7 +169,7 @@ export default function CarMarketplace() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Search make, model, or location..." 
+              placeholder="Search model, make, or description..." 
               className="pl-10 h-12 rounded-xl bg-white"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -193,34 +177,18 @@ export default function CarMarketplace() {
           </div>
         </div>
         
-        <div className="flex flex-wrap gap-4 w-full md:w-auto">
-          <div className="space-y-2 flex-1 md:w-40">
-            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Make</Label>
-            <Select value={makeFilter} onValueChange={setMakeFilter}>
-              <SelectTrigger className="h-12 rounded-xl bg-white">
-                <SelectValue placeholder="All Makes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Makes</SelectItem>
-                {makes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="space-y-2 flex-1 md:w-40">
-            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Sort By</Label>
-            <Select value={sortOrder} onValueChange={setSortOrder}>
-              <SelectTrigger className="h-12 rounded-xl bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">Latest Listings</SelectItem>
-                <SelectItem value="price-low">Price: Low to High</SelectItem>
-                <SelectItem value="price-high">Price: High to Low</SelectItem>
-                <SelectItem value="year-new">Year: Newest First</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="space-y-2 lg:w-48">
+          <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Sort By</Label>
+          <Select value={sortOrder} onValueChange={setSortOrder}>
+            <SelectTrigger className="h-12 rounded-xl bg-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Latest Listings</SelectItem>
+              <SelectItem value="price-low">Price: Low to High</SelectItem>
+              <SelectItem value="price-high">Price: High to Low</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -244,7 +212,7 @@ export default function CarMarketplace() {
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
             <p className="text-xl font-bold text-muted-foreground">No verified car listings found.</p>
-            <Button variant="link" onClick={() => { setSearch(''); setMakeFilter('all'); }} className="font-bold">
+            <Button variant="link" onClick={() => setSearch('')} className="font-bold">
               View All Active Listings
             </Button>
           </div>

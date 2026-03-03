@@ -1,10 +1,9 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { Service, Business } from '@/lib/types';
+import type { Business } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,15 +13,17 @@ import Link from 'next/link';
 import { BookingModal } from '@/components/app/booking-modal';
 
 export default function PublicBusinessServicesPage() {
-    const { businessId } = React.use(useParams() as any);
+    const params = useParams();
+    const businessId = params?.businessId as string;
     const router = useRouter();
     const [bizRecord, setBizRecord] = useState<Business | null>(null);
-    const [services, setServices] = useState<Service[]>([]);
+    const [services, setServices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [bookingOpen, setBookingOpen] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
+            if (!businessId) return;
             setLoading(true);
             try {
                 const { data: bRec } = await supabase
@@ -34,9 +35,10 @@ export default function PublicBusinessServicesPage() {
                 if (bRec) {
                     setBizRecord(bRec as any);
                     const { data: svcsData } = await supabase
-                        .from('services')
+                        .from('listings')
                         .select('*')
-                        .eq('business_id', bRec.id);
+                        .eq('business_id', bRec.id)
+                        .eq('type', 'wash_service');
                     setServices(svcsData || []);
                 }
             } catch (e) {
@@ -103,8 +105,8 @@ export default function PublicBusinessServicesPage() {
                                     <div className="space-y-1">
                                         <CardTitle className="text-2xl font-bold group-hover:text-primary transition-colors">{service.name}</CardTitle>
                                         <div className="flex items-center gap-4 text-[10px] font-black pt-2">
-                                            <span className="flex items-center gap-1.5 bg-muted px-2 py-1 rounded uppercase tracking-widest"><Clock className="h-3 w-3" /> {service.duration} MIN</span>
-                                            <span className="flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-1 rounded uppercase tracking-widest">P{Number(service.price).toFixed(2)}</span>
+                                            {service.duration && <span className="flex items-center gap-1.5 bg-muted px-2 py-1 rounded uppercase tracking-widest"><Clock className="h-3 w-3" /> {service.duration} MIN</span>}
+                                            <span className="flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-1 rounded uppercase tracking-widest">P{Number(service.price || 0).toFixed(2)}</span>
                                         </div>
                                     </div>
                                     <Button onClick={() => setBookingOpen(true)} className="shrink-0 rounded-full font-black px-6">Select Package</Button>

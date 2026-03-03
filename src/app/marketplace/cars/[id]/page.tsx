@@ -1,10 +1,8 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { CarListing } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,27 +18,39 @@ import {
 } from "@/components/ui/carousel";
 
 export default function CarDetailPage() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = params?.id as string;
   const router = useRouter();
-  const [car, setCar] = useState<CarListing | null>(null);
+  const [car, setCar] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
 
   useEffect(() => {
     async function loadCar() {
+      if (!id) return;
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('car_listing')
-          .select(`
-            *,
-            business:business_id ( name, city, logo_url, whatsapp_number )
-          `)
+        const { data: listing, error: listingError } = await supabase
+          .from('listings')
+          .select('*')
           .eq('id', id)
-          .maybeSingle();
+          .eq('type', 'car')
+          .single();
         
-        if (error) throw error;
-        setCar(data as any);
+        if (listingError) throw listingError;
+
+        if (listing) {
+          const { data: bizData } = await supabase
+            .from('businesses')
+            .select('name, city, logo_url, whatsapp_number, subscription_plan')
+            .eq('id', listing.business_id)
+            .single();
+
+          setCar({
+            ...listing,
+            business: bizData || { name: 'Verified Seller', city: 'Botswana' }
+          });
+        }
       } catch (e) {
         console.error("Detail Error:", e);
       } finally {
@@ -63,7 +73,7 @@ export default function CarDetailPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase">
-            {car.status}
+            ACTIVE
           </Badge>
         </div>
       </header>
@@ -74,10 +84,10 @@ export default function CarDetailPage() {
           <div className="lg:col-span-3 space-y-8">
             <Carousel className="w-full relative group">
               <CarouselContent>
-                {images.map((img, index) => (
+                {images.map((img: string, index: number) => (
                   <CarouselItem key={index}>
                     <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-muted">
-                      <Image src={img} alt={`${car.make} view ${index + 1}`} fill className="object-cover" />
+                      <Image src={img} alt={`${car.name} view ${index + 1}`} fill className="object-cover" />
                     </div>
                   </CarouselItem>
                 ))}
@@ -93,13 +103,13 @@ export default function CarDetailPage() {
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <Clock className="h-5 w-5 text-primary opacity-60" />
-                <span className="text-[10px] uppercase font-black text-muted-foreground">Mileage</span>
-                <span className="font-bold text-sm">{car.mileage.toLocaleString()} KM</span>
+                <span className="text-[10px] uppercase font-black text-muted-foreground">Condition</span>
+                <span className="font-bold text-sm">{car.condition || 'Excellent'}</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <Calendar className="h-5 w-5 text-primary opacity-60" />
                 <span className="text-[10px] uppercase font-black text-muted-foreground">Year</span>
-                <span className="font-bold text-sm">{car.year}</span>
+                <span className="font-bold text-sm">{car.year || '2024'}</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <MapPin className="h-5 w-5 text-primary opacity-60" />
@@ -109,7 +119,7 @@ export default function CarDetailPage() {
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-xl font-bold border-b pb-2">Vehicle Description</h3>
+              <h3 className="text-xl font-bold border-b pb-2">Listing Description</h3>
               <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{car.description}</p>
             </div>
           </div>
@@ -122,7 +132,7 @@ export default function CarDetailPage() {
               </div>
               <div className="space-y-1">
                 <h2 className="text-5xl font-black tracking-tighter text-slate-900">
-                  P{Number(car.price).toLocaleString()}
+                  P{Number(car.price || 0).toLocaleString()}
                 </h2>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Market Price</p>
               </div>
@@ -162,10 +172,7 @@ export default function CarDetailPage() {
         isOpen={leadModalOpen}
         onClose={() => setLeadModalOpen(false)}
         listingId={car.id}
-        listingType="car"
-        listingTitle={`${car.year} ${car.make} ${car.model}`}
-        sellerId={car.business_id}
-        sellerWhatsapp={car.business?.whatsapp_number}
+        listingTitle={car.name}
       />
     </div>
   );

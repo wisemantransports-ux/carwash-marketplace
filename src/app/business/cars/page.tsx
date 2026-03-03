@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { CarListing, Business } from '@/lib/types';
+import { Business } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,7 +16,7 @@ import Image from 'next/image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function BusinessCarsPage() {
-  const [listings, setListings] = useState<CarListing[]>([]);
+  const [listings, setListings] = useState<any[]>([]);
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -36,12 +36,13 @@ export default function BusinessCarsPage() {
       if (biz) {
         setBusiness(biz as Business);
         const { data: cars } = await supabase
-          .from('car_listing')
+          .from('listings')
           .select('*')
           .eq('business_id', biz.id)
+          .eq('type', 'car')
           .order('created_at', { ascending: false });
         
-        setListings((cars as CarListing[]) || []);
+        setListings(cars || []);
       }
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Load Error', description: e.message });
@@ -58,23 +59,12 @@ export default function BusinessCarsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this listing?')) return;
     try {
-      const { error } = await supabase.from('car_listing').delete().eq('id', id);
+      const { error } = await supabase.from('listings').delete().eq('id', id);
       if (error) throw error;
       setListings(prev => prev.filter(l => l.id !== id));
       toast({ title: 'Listing Deleted' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Delete Failed', description: e.message });
-    }
-  };
-
-  const updateStatus = async (id: string, status: CarListing['status']) => {
-    try {
-      const { error } = await supabase.from('car_listing').update({ status }).eq('id', id);
-      if (error) throw error;
-      setListings(prev => prev.map(l => l.id === id ? { ...l, status } : l));
-      toast({ title: `Status Updated to ${status.toUpperCase()}` });
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
     }
   };
 
@@ -94,11 +84,6 @@ export default function BusinessCarsPage() {
           <p className="text-muted-foreground font-medium">List vehicles for sale and manage test drive interest.</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" asChild className="rounded-full">
-            <Link href="/business/cars/test-drives">
-              <History className="mr-2 h-4 w-4" /> Test Drive Requests
-            </Link>
-          </Button>
           <Button asChild disabled={isStarter || isUnverified} className="rounded-full shadow-lg">
             <Link href="/business/cars/add">
               <Plus className="mr-2 h-4 w-4" /> List New Car
@@ -117,11 +102,6 @@ export default function BusinessCarsPage() {
                   ? "Verification Required: Your business must be verified before listing vehicles." 
                   : "Upgrade Required: Car sales listings are exclusive to Pro and Enterprise tiers."}
               </p>
-              <p className="text-sm text-orange-800">
-                {isUnverified 
-                  ? "Please ensure your Omang or CIPA documents are uploaded in your profile." 
-                  : "Starter plan accounts can view the inventory manager but cannot publish new listings."}
-              </p>
               <Button size="sm" variant="outline" className="border-orange-300" asChild>
                 <Link href={isUnverified ? "/business/profile" : "/business/subscription"}>
                   {isUnverified ? "Review Profile" : "View Premium Plans"}
@@ -132,141 +112,51 @@ export default function BusinessCarsPage() {
         </Card>
       )}
 
-      <Tabs defaultValue="active" className="w-full">
-        <TabsList className="mb-6 bg-muted/50 p-1 rounded-xl">
-          <TabsTrigger value="active" className="rounded-lg font-bold">Active Listings ({listings.filter(l => l.status === 'available' || l.status === 'active').length})</TabsTrigger>
-          <TabsTrigger value="sold" className="rounded-lg font-bold">Sold & Archived ({listings.filter(l => l.status !== 'available' && l.status !== 'active').length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="active">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {listings.filter(l => l.status === 'available' || l.status === 'active').length > 0 ? (
-              listings.filter(l => l.status === 'available' || l.status === 'active').map(car => (
-                <Card key={car.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all group">
-                  <div className="relative aspect-video bg-muted">
-                    <Image 
-                      src={car.images?.[0] || 'https://picsum.photos/seed/car/600/400'} 
-                      alt={`${car.make} ${car.model}`} 
-                      fill 
-                      className="object-cover"
-                    />
-                    <div className="absolute top-2 right-2">
-                      <Badge className="bg-white/90 text-primary font-black backdrop-blur">
-                        P{Number(car.price).toLocaleString()}
-                      </Badge>
-                    </div>
-                  </div>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-xl">{car.year} {car.make} {car.model}</CardTitle>
-                    <CardDescription className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[10px] uppercase font-bold">{car.mileage.toLocaleString()} KM</Badge>
-                      <span className="text-[10px] text-muted-foreground uppercase font-black">Listed {new Date(car.created_at).toLocaleDateString()}</span>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardFooter className="bg-muted/10 border-t pt-4 flex justify-between">
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="h-8 text-xs font-bold" onClick={() => updateStatus(car.id, 'sold')}>
-                        Mark Sold
-                      </Button>
-                      <Button variant="secondary" size="sm" className="h-8 text-xs font-bold" asChild>
-                        <Link href={`/business/cars/edit/${car.id}`}>
-                          <Edit className="mr-1 h-3 w-3" /> Edit
-                        </Link>
-                      </Button>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full border">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/business/cars/edit/${car.id}`}>
-                            <Edit className="mr-2 h-4 w-4" /> Edit Details
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => updateStatus(car.id, 'archived')}>
-                          Archive Listing
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDelete(car.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete Permanently
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </CardFooter>
-                </Card>
-              ))
-            ) : (
-              <div className="col-span-full py-20 text-center border-2 border-dashed rounded-3xl bg-muted/10">
-                <CarFront className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                <p className="text-lg font-bold text-muted-foreground">No active listings.</p>
-                <p className="text-sm text-muted-foreground mb-6">List your first vehicle to reach thousands of buyers.</p>
-                <Button asChild variant="outline" disabled={isStarter}>
-                  <Link href="/business/cars/add">Start Listing</Link>
-                </Button>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {listings.length > 0 ? (
+          listings.map(car => (
+            <Card key={car.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all group">
+              <div className="relative aspect-video bg-muted">
+                <Image 
+                  src={car.images?.[0] || 'https://picsum.photos/seed/car/600/400'} 
+                  alt={car.name} 
+                  fill 
+                  className="object-cover"
+                />
+                <div className="absolute top-2 right-2">
+                  <Badge className="bg-white/90 text-primary font-black backdrop-blur">
+                    P{Number(car.price || 0).toLocaleString()}
+                  </Badge>
+                </div>
               </div>
-            )}
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xl">{car.name}</CardTitle>
+                <CardDescription className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground uppercase font-black">Listed {new Date(car.created_at).toLocaleDateString()}</span>
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="bg-muted/10 border-t pt-4 flex justify-between">
+                <Button variant="secondary" size="sm" className="h-8 text-xs font-bold" asChild>
+                  <Link href={`/business/cars/edit/${car.id}`}>
+                    <Edit className="mr-1 h-3 w-3" /> Edit
+                  </Link>
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(car.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </CardFooter>
+            </Card>
+          ))
+        ) : (
+          <div className="col-span-full py-20 text-center border-2 border-dashed rounded-3xl bg-muted/10">
+            <CarFront className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+            <p className="text-lg font-bold text-muted-foreground">No active listings.</p>
+            <Button asChild variant="outline" disabled={isStarter}>
+              <Link href="/business/cars/add">Start Listing</Link>
+            </Button>
           </div>
-        </TabsContent>
-
-        <TabsContent value="sold">
-          <Card className="shadow-lg overflow-hidden border-2">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50 border-b-2">
-                  <TableHead className="font-bold">Vehicle</TableHead>
-                  <TableHead className="font-bold">Date Listed</TableHead>
-                  <TableHead className="font-bold">Final Status</TableHead>
-                  <TableHead className="text-right pr-6 font-bold">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listings.filter(l => l.status !== 'available' && l.status !== 'active').map(car => (
-                  <TableRow key={car.id} className="opacity-70 grayscale">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="relative h-10 w-16 rounded overflow-hidden border">
-                          <Image src={car.images?.[0] || 'https://picsum.photos/seed/car/200/150'} alt="Car" fill className="object-cover" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-sm">{car.year} {car.make} {car.model}</span>
-                          <span className="text-[10px] text-muted-foreground">P{car.price.toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs font-medium">
-                      {new Date(car.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={car.status === 'sold' ? 'secondary' : 'outline'} className="uppercase text-[9px] font-black">
-                        {car.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right pr-6">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" asChild className="h-8 text-[10px] font-black uppercase">
-                          <Link href={`/business/cars/edit/${car.id}`}>Edit</Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => updateStatus(car.id, 'active')} className="h-8 text-[10px] font-black uppercase text-primary">
-                          Relist
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {listings.filter(l => l.status !== 'available' && l.status !== 'active').length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic">
-                      No archived listings found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        )}
+      </div>
     </div>
   );
 }

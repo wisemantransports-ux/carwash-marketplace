@@ -1,7 +1,6 @@
-
 'use client';
 import { supabase } from "@/lib/supabase";
-import type { Service, Business } from "@/lib/types";
+import type { Business } from "@/lib/types";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
 export default function ServicesManagementPage() {
-    const [services, setServices] = useState<Service[]>([]);
+    const [services, setServices] = useState<any[]>([]);
     const [business, setBusiness] = useState<Business | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -27,7 +26,6 @@ export default function ServicesManagementPage() {
                 return;
             }
 
-            // 1. Fetch freshest business data
             const { data: biz, error: bizError } = await supabase
                 .from('businesses')
                 .select('*')
@@ -43,20 +41,15 @@ export default function ServicesManagementPage() {
 
             setBusiness(biz as Business);
 
-            // 2. Access Gate
-            const isVerified = biz.verification_status === 'verified';
-            const isActive = biz.subscription_status === 'active';
-            
-            if (isVerified && isActive) {
-                const { data: svcs, error: servicesError } = await supabase
-                    .from('services')
-                    .select('*')
-                    .eq('business_id', biz.id)
-                    .order('created_at', { ascending: false });
+            const { data: svcs, error: servicesError } = await supabase
+                .from('listings')
+                .select('*')
+                .eq('business_id', biz.id)
+                .eq('type', 'wash_service')
+                .order('created_at', { ascending: false });
 
-                if (servicesError) throw servicesError;
-                setServices(svcs || []);
-            }
+            if (servicesError) throw servicesError;
+            setServices(svcs || []);
 
         } catch (e: any) {
             console.error("Service catalog load error:", e.message);
@@ -77,7 +70,7 @@ export default function ServicesManagementPage() {
     const handleDelete = async (id: string) => {
         try {
             const { error } = await supabase
-                .from('services')
+                .from('listings')
                 .delete()
                 .eq('id', id);
 
@@ -136,7 +129,7 @@ export default function ServicesManagementPage() {
                     <TableHeader>
                         <TableRow className="bg-muted/50">
                             <TableHead className="font-bold">Service Package</TableHead>
-                            <TableHead className="font-bold text-center">Currency</TableHead>
+                            <TableHead className="font-bold text-center">Type</TableHead>
                             <TableHead className="font-bold">Price</TableHead>
                             <TableHead className="text-right font-bold pr-6">Action</TableHead>
                         </TableRow>
@@ -152,10 +145,10 @@ export default function ServicesManagementPage() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-center">
-                                        <code className="text-xs font-bold text-muted-foreground">{service.currency_code || 'BWP'}</code>
+                                        <code className="text-xs font-bold text-muted-foreground">WASH</code>
                                     </TableCell>
                                     <TableCell className="font-mono font-bold text-sm">
-                                        {Number(service.price).toFixed(2)}
+                                        {Number(service.price || 0).toFixed(2)}
                                     </TableCell>
                                     <TableCell className="text-right pr-6">
                                         <DropdownMenu>
