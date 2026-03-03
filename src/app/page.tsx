@@ -1,16 +1,15 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, ArrowRight, Loader2, Store, Check, Sparkles } from "lucide-react";
+import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, ArrowRight, Store, Sparkles } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
 export default function LandingPage() {
@@ -27,7 +26,7 @@ export default function LandingPage() {
     }
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses
+      // 1. STAGE 1: Fetch Verified Businesses
       const { data: verifiedBiz } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status')
@@ -40,18 +39,18 @@ export default function LandingPage() {
         return acc;
       }, {});
 
-      // 2. Fetch Listings for verified businesses
+      // 2. STAGE 2: Fetch Listings for verified businesses
       if (verifiedIds.length > 0) {
         const { data: listingData, error } = await supabase
           .from('listings')
-          .select('id, business_id, name, description, price, listing_type, image_url, created_at')
+          .select('id, business_id, name, description, price, listing_type, type, image_url, created_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false })
           .limit(12);
         
         if (error) throw error;
 
-        // 3. Map and Enrich
+        // 3. STAGE 3: In-Memory Wiring
         setListings((listingData || []).map(l => ({ 
           ...l, 
           verified: true,
@@ -59,7 +58,7 @@ export default function LandingPage() {
         })));
       }
     } catch (e: any) {
-      console.error("Discovery error:", e.message);
+      console.error("Discovery error:", e.message || e);
     } finally {
       setLoading(false);
     }
@@ -178,14 +177,14 @@ export default function LandingPage() {
                   <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-500 hover:shadow-[0_30px_60px_rgba(32,128,223,0.1)] border-white/5 hover:border-primary/30 bg-slate-900/30 rounded-[2rem] h-full group">
                     <div className="relative h-56 bg-slate-800 overflow-hidden">
                       <Image 
-                        src={item.image_url || `https://picsum.photos/seed/${item.id}/600/400`} 
+                        src={item.image_url || `https://picsum.photos/seed/trend-${item.id}/600/400`} 
                         alt={item.name} 
                         fill 
                         className="object-cover transition-transform duration-700 group-hover:scale-110" 
                       />
                       <div className="absolute top-4 left-4">
                         <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1">
-                          {item.listing_type?.replace('_', ' ') || 'VERIFIED'}
+                          {(item.listing_type || item.type || 'VERIFIED').replace('_', ' ')}
                         </Badge>
                       </div>
                       <div className="absolute top-4 right-4">
@@ -209,7 +208,7 @@ export default function LandingPage() {
                     </CardHeader>
                     <CardFooter className="p-8 pt-0 mt-auto">
                       <Button asChild className="w-full font-black rounded-xl h-14 shadow-2xl transition-all">
-                        <Link href={item.listing_type === 'wash_service' ? `/find-wash/${item.business_id}` : `/marketplace/${item.listing_type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                        <Link href={item.listing_type === 'wash_service' || item.type === 'wash_service' ? `/find-wash/${item.business_id}` : `/marketplace/${item.listing_type === 'car' || item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                           View Details
                         </Link>
                       </Button>

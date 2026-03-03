@@ -5,10 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { Business } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Package, MoreHorizontal, Trash2, Edit, RefreshCw, ShieldCheck } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Loader2, Plus, Package, Trash2, Edit, RefreshCw } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -42,7 +40,7 @@ export default function BusinessSpareShopPage() {
         
         const { data: partData, error: partError } = await supabase
           .from('listings')
-          .select('*')
+          .select('id, name, price, image_url, created_at')
           .eq('business_id', biz.id)
           .eq('type', 'spare_part')
           .order('created_at', { ascending: false });
@@ -51,7 +49,7 @@ export default function BusinessSpareShopPage() {
         setParts(partData || []);
       }
     } catch (e: any) {
-      console.error("Dashboard Load Error:", e);
+      console.error("Inventory Load Error:", e);
       toast({ variant: 'destructive', title: 'Load Error', description: e.message });
     } finally {
       setLoading(false);
@@ -114,7 +112,7 @@ export default function BusinessSpareShopPage() {
             <Card key={part.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all group shadow-sm">
               <div className="relative aspect-square bg-muted">
                 <Image 
-                  src={part.images?.[0] || 'https://picsum.photos/seed/part/400/400'} 
+                  src={part.image_url || `https://picsum.photos/seed/part-${part.id}/400/400`} 
                   alt={part.name} 
                   fill 
                   className="object-cover"

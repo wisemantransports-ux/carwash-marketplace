@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Save, ArrowLeft, Type, Calendar, Banknote, ShieldCheck, Camera, Upload } from 'lucide-react';
+import { Loader2, Save, ArrowLeft, Camera } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -51,7 +51,7 @@ export default function EditCarListingPage() {
 
       const { data: car, error } = await supabase
         .from('listings')
-        .select('*')
+        .select('id, name, price, description, image_url')
         .eq('id', id)
         .eq('business_id', biz.id)
         .eq('type', 'car')
@@ -66,7 +66,7 @@ export default function EditCarListingPage() {
       setName(car.name || '');
       setPrice(car.price?.toString() || '');
       setDescription(car.description || '');
-      setCurrentImage(car.images?.[0] || null);
+      setCurrentImage(car.image_url || null);
 
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Load Error', description: e.message });
@@ -95,14 +95,14 @@ export default function EditCarListingPage() {
 
     setSubmitting(true);
     try {
-      let finalImages = currentImage ? [currentImage] : [];
+      let finalImageUrl = currentImage;
 
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const filePath = `cars/${business.id}/${Date.now()}.${fileExt}`;
         await supabase.storage.from('business-assets').upload(filePath, imageFile);
         const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
-        finalImages = [publicUrl];
+        finalImageUrl = publicUrl;
       }
 
       const { error } = await supabase
@@ -111,7 +111,7 @@ export default function EditCarListingPage() {
           name: name.trim(),
           price: parseFloat(price),
           description: description.trim(),
-          images: finalImages,
+          image_url: finalImageUrl,
           updated_at: new Date().toISOString()
         })
         .eq('id', id)

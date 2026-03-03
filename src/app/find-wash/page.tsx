@@ -34,7 +34,7 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses
+      // 1. STAGE 1: Fetch Verified Businesses
       const { data: bizData } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status, category')
@@ -49,16 +49,17 @@ function MarketplaceContent() {
 
       setBusinesses(verifiedPartners);
 
-      // 2. Fetch Listings for Verified partners only
+      // 2. STAGE 2: Fetch Listings for Verified partners only
       if (verifiedIds.length > 0) {
         const { data: listingData, error } = await supabase
           .from('listings')
-          .select('id, business_id, name, description, price, listing_type, image_url, created_at')
+          .select('id, business_id, name, description, price, listing_type, type, image_url, created_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
         
+        // 3. STAGE 3: In-Memory Wiring
         setAllListings((listingData || []).map(l => ({ 
           ...l, 
           verified: true,
@@ -68,7 +69,7 @@ function MarketplaceContent() {
         setAllListings([]);
       }
     } catch (e: any) {
-      console.error('Marketplace discovery failure:', e.message);
+      console.error('Marketplace discovery failure:', e.message || e);
     } finally {
       setLoading(false);
     }
@@ -100,7 +101,7 @@ function MarketplaceContent() {
       const lName = (l.name || '').toLowerCase();
       const lDesc = (l.description || '').toLowerCase();
       const matchesSearch = lName.includes(sTerm) || lDesc.includes(sTerm);
-      const matchesCategory = category === 'all' || l.listing_type === category;
+      const matchesCategory = category === 'all' || l.listing_type === category || l.type === category;
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
@@ -202,7 +203,7 @@ function MarketplaceContent() {
                   />
                   <div className="absolute top-2 left-2">
                     <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
-                      {item.itemType === 'business' ? (item.category || 'Provider') : (item.listing_type || 'Listing').replace('_', ' ')}
+                      {item.itemType === 'business' ? (item.category || 'Provider') : (item.listing_type || item.type || 'Listing').replace('_', ' ')}
                     </Badge>
                   </div>
                   <div className="absolute top-2 right-2">
@@ -232,7 +233,7 @@ function MarketplaceContent() {
                 </CardContent>
                 <CardFooter className="mt-auto flex flex-col gap-2">
                   <Button asChild className="w-full font-black h-11 shadow-sm uppercase tracking-tighter">
-                    <Link href={item.itemType === 'business' || item.listing_type === 'wash_service' ? `/find-wash/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                    <Link href={item.itemType === 'business' || item.listing_type === 'wash_service' || item.type === 'wash_service' ? `/find-wash/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' || item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                       {item.itemType === 'business' ? 'View Profile' : 'View Details'}
                     </Link>
                   </Button>

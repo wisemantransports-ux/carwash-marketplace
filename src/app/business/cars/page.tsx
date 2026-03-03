@@ -5,15 +5,11 @@ import { supabase } from '@/lib/supabase';
 import { Business } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, CarFront, MoreHorizontal, Trash2, Edit, ExternalLink, AlertCircle, ShieldAlert, History } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Loader2, Plus, CarFront, Trash2, Edit, ShieldAlert } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function BusinessCarsPage() {
   const [listings, setListings] = useState<any[]>([]);
@@ -37,7 +33,7 @@ export default function BusinessCarsPage() {
         setBusiness(biz as Business);
         const { data: cars } = await supabase
           .from('listings')
-          .select('*')
+          .select('id, name, price, image_url, created_at')
           .eq('business_id', biz.id)
           .eq('type', 'car')
           .order('created_at', { ascending: false });
@@ -118,7 +114,7 @@ export default function BusinessCarsPage() {
             <Card key={car.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all group">
               <div className="relative aspect-video bg-muted">
                 <Image 
-                  src={car.images?.[0] || 'https://picsum.photos/seed/car/600/400'} 
+                  src={car.image_url || `https://picsum.photos/seed/car-${car.id}/600/400`} 
                   alt={car.name} 
                   fill 
                   className="object-cover"

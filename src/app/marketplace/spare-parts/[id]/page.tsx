@@ -6,29 +6,9 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Loader2, MapPin, Package, ShieldCheck, Store, Info, Banknote, Tags, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Package, ShieldCheck, Store, Info, Tags, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
-import Link from 'next/link';
-import { cn } from '@/lib/utils';
 import { LeadModal } from '@/components/app/lead-modal';
-
-/**
- * Robust image parsing for Postgres array columns
- */
-function getDisplayImage(images: any, fallback: string): string {
-  if (!images) return fallback;
-  if (Array.isArray(images) && images.length > 0) return images[0];
-  if (typeof images === 'string') {
-    try {
-      const parsed = JSON.parse(images);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-    } catch {
-      const cleaned = images.replace(/[{}]/g, '').split(',');
-      if (cleaned.length > 0 && cleaned[0]) return cleaned[0].replace(/"/g, '');
-    }
-  }
-  return fallback;
-}
 
 export default function SparePartDetailPage() {
   const params = useParams();
@@ -45,7 +25,7 @@ export default function SparePartDetailPage() {
       try {
         const { data: listing, error: listingError } = await supabase
           .from('listings')
-          .select('*')
+          .select('id, business_id, name, description, price, type, image_url')
           .eq('id', id)
           .eq('type', 'spare_part')
           .single();
@@ -82,7 +62,7 @@ export default function SparePartDetailPage() {
     </div>
   );
 
-  const mainImage = getDisplayImage(part.images, 'https://picsum.photos/seed/part/800/600');
+  const mainImage = part.image_url || `https://picsum.photos/seed/part-${part.id}/800/600`;
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20">
@@ -97,7 +77,7 @@ export default function SparePartDetailPage() {
             </h1>
           </div>
           <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase">
-            {part.category || 'Spare Part'}
+            SPARE PART
           </Badge>
         </div>
       </header>
@@ -114,7 +94,7 @@ export default function SparePartDetailPage() {
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <Tags className="h-5 w-5 text-primary opacity-60" />
                 <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">Condition</span>
-                <span className="font-bold text-sm capitalize">{part.condition || 'New'}</span>
+                <span className="font-bold text-sm capitalize">New</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col items-center gap-1.5">
                 <Package className="h-5 w-5 text-primary opacity-60" />

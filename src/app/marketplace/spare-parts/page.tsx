@@ -12,10 +12,9 @@ import { Search, Loader2, ArrowRight, ShieldCheck, ShoppingCart, ArrowLeft, Pack
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 
 export function SparePartCard({ part }: { part: any }) {
-  const displayImage = `https://picsum.photos/seed/${part.id}/400/300`;
+  const displayImage = part.image_url || `https://picsum.photos/seed/part-${part.id}/400/300`;
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-primary/50 bg-card border-2 rounded-2xl group">
@@ -80,7 +79,7 @@ export default function SparePartsMarketplacePage() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses
+      // 1. STAGE 1: Fetch Verified Businesses
       const { data: verifiedBiz } = await supabase
         .from('businesses')
         .select('id, name, city')
@@ -92,16 +91,18 @@ export default function SparePartsMarketplacePage() {
         return acc;
       }, {});
       
-      // 2. Fetch Spare Part Listings for Verified IDs
+      // 2. STAGE 2: Fetch Spare Part Listings for Verified IDs
       if (verifiedIds.length > 0) {
         const { data, error } = await supabase
           .from('listings')
-          .select('id, business_id, name, description, price, created_at, listing_type')
-          .eq('listing_type', 'spare_part')
+          .select('id, business_id, name, description, price, created_at, listing_type, type, image_url')
+          .or('listing_type.eq.spare_part,type.eq.spare_part')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
+        
+        // 3. STAGE 3: In-Memory Wiring
         setParts((data || []).map(p => ({ 
           ...p, 
           verified: true,
@@ -111,7 +112,7 @@ export default function SparePartsMarketplacePage() {
         setParts([]);
       }
     } catch (e: any) {
-      console.error("Spare Parts discovery failure:", e.message);
+      console.error("Spare Parts discovery failure:", e.message || e);
     } finally {
       setLoading(false);
     }

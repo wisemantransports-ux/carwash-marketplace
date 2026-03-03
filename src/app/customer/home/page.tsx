@@ -6,30 +6,12 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, MapPin, Search, ShieldCheck, Store, Tags, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, Clock, History, Package } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, Store, Filter, Droplets, ShoppingCart, Car as CarIcon } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-
-function getDisplayImage(images: any, fallback: string): string {
-  if (!images) return fallback;
-  if (Array.isArray(images) && images.length > 0) return images[0];
-  if (typeof images === 'string') {
-    try {
-      if (images.startsWith('[') || images.startsWith('{')) {
-        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
-        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-      }
-      const parts = images.replace(/[{}]/g, '').split(',');
-      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '').trim();
-    } catch { return images; }
-  }
-  return fallback;
-}
 
 const CATEGORIES = [
   { id: 'all', label: 'All Partners', icon: Filter },
@@ -50,13 +32,15 @@ function MarketplaceContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch All Businesses
+      // 1. STAGE 1: Fetch Verified Businesses
       const { data: bizData } = await supabase
           .from('businesses')
-          .select('*')
+          .select('id, name, city, logo_url, verification_status, category, address')
+          .eq('verification_status', 'verified')
           .order('name', { ascending: true });
       
       const partnerBusinesses = bizData || [];
+      const verifiedIds = partnerBusinesses.map(b => b.id);
       const bizMap = partnerBusinesses.reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
@@ -64,18 +48,27 @@ function MarketplaceContent() {
 
       setBusinesses(partnerBusinesses);
 
-      // 2. Fetch All Listings from unified table
-      const { data: listingData } = await supabase
-        .from('listings')
-        .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at')
-        .order('created_at', { ascending: false });
+      // 2. STAGE 2: Fetch Listings for Verified Partners Only
+      if (verifiedIds.length > 0) {
+        const { data: listingData, error: lError } = await supabase
+          .from('listings')
+          .select('id, business_id, type, listing_type, name, description, price, image_url, created_at')
+          .in('business_id', verifiedIds)
+          .order('created_at', { ascending: false });
 
-      setAllListings((listingData || []).map(l => ({ 
-        ...l, 
-        business: bizMap[l.business_id] || { name: 'Marketplace Partner', city: 'Botswana' }
-      })));
+        if (lError) throw lError;
+
+        // 3. STAGE 3: In-Memory Wiring
+        setAllListings((listingData || []).map(l => ({ 
+          ...l, 
+          verified: true,
+          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+        })));
+      } else {
+        setAllListings([]);
+      }
     } catch (e: any) {
-      console.error('Customer discovery failure:', e);
+      console.error('Marketplace discovery failure:', e.message || e);
     } finally {
       setLoading(false);
     }
@@ -87,22 +80,28 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
+    const sTerm = search.toLowerCase();
+
+    // Interleave business profiles and individual listings
     const bizItems = businesses.filter(b => {
-      const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
-                           (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
+      const bName = (b.name || '').toLowerCase();
+      const bCity = (b.city || '').toLowerCase();
+      const bCat = (b.category || '').toLowerCase();
+      const matchesSearch = bName.includes(sTerm) || bCity.includes(sTerm);
       
       const bizCategoryMatch = category === 'all' || 
-                              (category === 'wash_service' && b.category === 'Wash') ||
-                              (category === 'car' && b.category === 'Cars') ||
-                              (category === 'spare_part' && b.category === 'Spare');
+                              (category === 'wash_service' && bCat === 'wash') ||
+                              (category === 'car' && bCat === 'cars') ||
+                              (category === 'spare_part' && bCat === 'spare');
       return matchesSearch && bizCategoryMatch;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
     const productItems = allListings.filter(l => {
-      const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
-                           (l.description && l.description.toLowerCase().includes(search.toLowerCase()));
+      const lName = (l.name || '').toLowerCase();
+      const lDesc = (l.description || '').toLowerCase();
+      const matchesSearch = lName.includes(sTerm) || lDesc.includes(sTerm);
       
-      const matchesCategory = category === 'all' || l.type === category;
+      const matchesCategory = category === 'all' || l.listing_type === category || l.type === category;
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
@@ -172,38 +171,44 @@ function MarketplaceContent() {
             <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
               <div className="relative h-48 bg-muted overflow-hidden">
                 <Image 
-                  src={item.itemType === 'business' ? (item.logo_url || 'https://picsum.photos/seed/biz/600/400') : getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} 
+                  src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/biz-${item.id}/600/400`) : (item.image_url || `https://picsum.photos/seed/list-${item.id}/600/400`)} 
                   alt={item.name} 
                   fill 
                   className="object-cover transition-transform duration-500 group-hover:scale-110" 
                 />
                 <div className="absolute top-2 left-2">
                   <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
-                    {item.itemType === 'business' ? (item.category || 'Operator') : item.type.replace('_', ' ')}
+                    {item.itemType === 'business' ? (item.category || 'Operator') : (item.listing_type || item.type).replace('_', ' ')}
                   </Badge>
                 </div>
-                <div className="absolute bottom-2 right-2">
-                  {item.price && (
+                <div className="absolute top-2 right-2">
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
+                    <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
+                  </Badge>
+                </div>
+                {item.price && (
+                  <div className="absolute bottom-2 right-2">
                     <Badge className="bg-primary text-white font-black px-3 py-1 shadow-lg">
                       P{Number(item.price).toLocaleString()}
                     </Badge>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
               <CardHeader className="pb-2">
                 <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground font-bold uppercase tracking-wider">
-                  <MapPin className="h-3.5 w-3.5" /> <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Botswana'}</span>
+                  <MapPin className="h-3.5 w-3.5 text-primary opacity-60" /> 
+                  <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Botswana'}</span>
                 </div>
               </CardHeader>
               <CardContent className="flex-grow">
-                <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed italic">
                   {item.description || item.address || "Automotive component or service from our trusted partner network."}
                 </p>
               </CardContent>
               <CardFooter className="mt-auto flex flex-col gap-2">
-                <Button asChild className="w-full font-bold h-11 shadow-sm">
-                  <Link href={item.itemType === 'business' || item.type === 'wash_service' ? `/customer/book/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                <Button asChild className="w-full font-black h-11 shadow-sm uppercase">
+                  <Link href={item.itemType === 'business' || item.listing_type === 'wash_service' || item.type === 'wash_service' ? `/customer/book/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' || item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                     {item.itemType === 'business' ? 'View Profile' : 'View Details'}
                   </Link>
                 </Button>

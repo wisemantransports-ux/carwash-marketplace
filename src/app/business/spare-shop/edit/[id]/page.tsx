@@ -51,7 +51,7 @@ export default function EditSparePartPage() {
 
       const { data: part, error } = await supabase
         .from('listings')
-        .select('*')
+        .select('id, name, price, description, image_url')
         .eq('id', id)
         .eq('business_id', biz.id)
         .eq('type', 'spare_part')
@@ -62,10 +62,10 @@ export default function EditSparePartPage() {
         return router.push('/business/spare-shop');
       }
 
-      setName(part.name);
+      setName(part.name || '');
       setPrice(part.price?.toString() || '');
       setDescription(part.description || '');
-      setCurrentImage(part.images?.[0] || null);
+      setCurrentImage(part.image_url || null);
 
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Load Error', description: e.message });
@@ -94,13 +94,13 @@ export default function EditSparePartPage() {
 
     setSubmitting(true);
     try {
-      let finalImages = currentImage ? [currentImage] : [];
+      let finalImageUrl = currentImage;
 
       if (imageFile) {
         const filePath = `parts/${business.id}/${Date.now()}.${imageFile.name.split('.').pop()}`;
         await supabase.storage.from('business-assets').upload(filePath, imageFile);
         const { data: { publicUrl } } = supabase.storage.from('business-assets').getPublicUrl(filePath);
-        finalImages = [publicUrl];
+        finalImageUrl = publicUrl;
       }
 
       const { error } = await supabase
@@ -109,7 +109,7 @@ export default function EditSparePartPage() {
           name: name.trim(),
           price: parseFloat(price),
           description: description.trim(),
-          images: finalImages,
+          image_url: finalImageUrl,
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
