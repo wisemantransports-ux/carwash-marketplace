@@ -30,7 +30,7 @@ export default function LandingPage() {
       const { data: verifiedBiz } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status')
-          .eq('verification_status', 'verified');
+          .or('verification_status.eq.verified,status.eq.verified');
       
       const partners = verifiedBiz || [];
       const verifiedIds = partners.map(b => b.id);
@@ -43,7 +43,7 @@ export default function LandingPage() {
       if (verifiedIds.length > 0) {
         const { data: listingData, error } = await supabase
           .from('listings')
-          .select('id, business_id, name, description, price, listing_type, type, image_url, created_at')
+          .select('id, business_id, name, description, price, listing_type, type, image_url, created_at, updated_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false })
           .limit(12);
@@ -58,7 +58,7 @@ export default function LandingPage() {
         })));
       }
     } catch (e: any) {
-      console.error("Discovery error:", e.message || e);
+      console.error("Discovery error:", e.message || 'Unknown Error');
     } finally {
       setLoading(false);
     }
@@ -145,83 +145,6 @@ export default function LandingPage() {
                 Search
               </Button>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-32 bg-[#020617] relative">
-        <div className="container mx-auto px-4 max-w-7xl space-y-16">
-          <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-white/5 pb-12">
-              <div className="space-y-3 text-left">
-                <h2 className="text-5xl font-black tracking-tighter text-white uppercase italic">Live Trending</h2>
-                <p className="text-slate-400 text-lg font-medium">Authentic listings from our verified elite partners.</p>
-              </div>
-              <Button variant="outline" size="lg" asChild className="rounded-full border-white/10 hover:bg-white/5 h-14 px-10 font-black tracking-tight shadow-2xl">
-                  <Link href="/find-wash">View Full Catalog</Link>
-              </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {loading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                    <Card key={i} className="overflow-hidden bg-slate-900/50 border-white/5 rounded-[2rem] h-[450px]">
-                      <Skeleton className="h-56 w-full" />
-                      <div className="p-8 space-y-6">
-                        <Skeleton className="h-8 w-3/4 bg-white/5" />
-                        <Skeleton className="h-20 w-full bg-white/5" />
-                      </div>
-                    </Card>
-                ))
-            ) : listings.length > 0 ? (
-                listings.map((item: any) => (
-                  <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-500 hover:shadow-[0_30px_60px_rgba(32,128,223,0.1)] border-white/5 hover:border-primary/30 bg-slate-900/30 rounded-[2rem] h-full group">
-                    <div className="relative h-56 bg-slate-800 overflow-hidden">
-                      <Image 
-                        src={item.image_url || `https://picsum.photos/seed/trend-${item.id}/600/400`} 
-                        alt={item.name} 
-                        fill 
-                        className="object-cover transition-transform duration-700 group-hover:scale-110" 
-                      />
-                      <div className="absolute top-4 left-4">
-                        <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1">
-                          {(item.listing_type || item.type || 'VERIFIED').replace('_', ' ')}
-                        </Badge>
-                      </div>
-                      <div className="absolute top-4 right-4">
-                        <div className="bg-green-500/20 backdrop-blur-md border border-green-500/30 p-1.5 rounded-full">
-                          <ShieldCheck className="h-4 w-4 text-green-400" />
-                        </div>
-                      </div>
-                      {item.price && (
-                        <div className="absolute bottom-4 right-4">
-                          <div className="bg-primary shadow-2xl text-white font-black px-4 py-2 rounded-xl text-sm">
-                            P{Number(item.price).toLocaleString()}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <CardHeader className="p-8 pb-4 text-left">
-                      <CardTitle className="text-2xl font-black text-white line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
-                      <div className="flex items-center gap-2 text-xs text-slate-500 font-bold uppercase tracking-widest mt-2">
-                        <MapPin className="h-4 w-4 text-primary opacity-60" /> <span>{item.business?.city || 'Available'}</span>
-                      </div>
-                    </CardHeader>
-                    <CardFooter className="p-8 pt-0 mt-auto">
-                      <Button asChild className="w-full font-black rounded-xl h-14 shadow-2xl transition-all">
-                        <Link href={item.listing_type === 'wash_service' || item.type === 'wash_service' ? `/find-wash/${item.business_id}` : `/marketplace/${item.listing_type === 'car' || item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
-                          View Details
-                        </Link>
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))
-            ) : (
-                <div className="col-span-full py-32 text-center border-2 border-dashed border-white/5 rounded-[3rem] bg-white/[0.02]">
-                    <Store className="h-12 w-12 mx-auto text-slate-600 mb-4" />
-                    <p className="text-slate-500 font-bold text-xl italic">The catalog is being updated by our verified partners.</p>
-                    <Button className="mt-6 font-black" onClick={() => router.push('/find-wash')}>Explore Directory</Button>
-                </div>
-            )}
           </div>
         </div>
       </section>

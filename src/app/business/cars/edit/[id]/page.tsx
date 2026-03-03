@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -55,7 +54,7 @@ export default function EditCarListingPage() {
         .select('id, name, price, description, image_url')
         .eq('id', id)
         .eq('business_id', biz.id)
-        .eq('type', 'car')
+        .eq('listing_type', 'car')
         .maybeSingle();
 
       if (error) throw error;

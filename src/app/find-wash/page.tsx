@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -35,31 +34,31 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. STAGE 1: Fetch Verified Businesses (Inclusive OR check)
+      // 1. STAGE 1: Fetch Verified Businesses
       const { data: bizData } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status, category, address')
           .or('verification_status.eq.verified,status.eq.verified');
       
-      const verifiedPartners = bizData || [];
-      const verifiedIds = verifiedPartners.map(b => b.id);
-      const bizMap = verifiedPartners.reduce((acc: any, b: any) => {
+      const partnerBusinesses = bizData || [];
+      const verifiedIds = partnerBusinesses.map(b => b.id);
+      const bizMap = partnerBusinesses.reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
       }, {});
 
-      setBusinesses(verifiedPartners);
+      setBusinesses(partnerBusinesses);
 
-      // 2. STAGE 2: Fetch Listings for Verified Partners Only
+      // 2. STAGE 2: Fetch Listings for Verified Partners
       if (verifiedIds.length > 0) {
-        const { data: listingData, error } = await supabase
+        const { data: listingData, error: lError } = await supabase
           .from('listings')
-          .select('id, business_id, name, description, price, listing_type, type, image_url, created_at')
+          .select('id, business_id, name, description, price, listing_type, type, image_url, created_at, updated_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
-        if (error) throw error;
-        
+        if (lError) throw lError;
+
         // 3. STAGE 3: In-Memory Wiring
         setAllListings((listingData || []).map(l => ({ 
           ...l, 
@@ -70,7 +69,7 @@ function MarketplaceContent() {
         setAllListings([]);
       }
     } catch (e: any) {
-      console.error('Marketplace discovery failure:', e.message || e);
+      console.error('Marketplace discovery failure:', e.message || 'Unknown Error');
     } finally {
       setLoading(false);
     }
@@ -84,7 +83,7 @@ function MarketplaceContent() {
   const filteredItems = useMemo(() => {
     const sTerm = search.toLowerCase();
 
-    // 1. Business Entries
+    // Interleave business profiles and individual listings
     const bizItems = businesses.filter(b => {
       const bName = (b.name || '').toLowerCase();
       const bCity = (b.city || '').toLowerCase();
@@ -98,7 +97,6 @@ function MarketplaceContent() {
       return matchesSearch && bizCategoryMatch;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
-    // 2. Product Entries
     const productItems = allListings.filter(l => {
       const lName = (l.name || '').toLowerCase();
       const lDesc = (l.description || '').toLowerCase();
@@ -108,12 +106,13 @@ function MarketplaceContent() {
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
-    // 3. Interleave and Sort
-    return [...bizItems, ...productItems].sort((a, b) => {
+    const combined = [...bizItems, ...productItems].sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
     });
+
+    return combined;
   }, [businesses, allListings, search, category]);
 
   if (!mounted) return null;
