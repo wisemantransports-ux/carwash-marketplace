@@ -27,14 +27,14 @@ function getDisplayImage(images: any, fallback: string): string {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
       }
       const parts = images.replace(/[{}]/g, '').split(',');
-      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
+      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '').trim();
     } catch { return images; }
   }
   return fallback;
 }
 
 const CATEGORIES = [
-  { id: 'all', label: 'All Listings', icon: Filter },
+  { id: 'all', label: 'All Partners', icon: Filter },
   { id: 'wash_service', label: 'Car Wash', icon: Droplets },
   { id: 'spare_part', label: 'Spare Parts', icon: ShoppingCart },
   { id: 'car', label: 'Car Sales', icon: CarIcon },
@@ -54,7 +54,7 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses
+      // 1. Fetch Verified Businesses (Source of Truth)
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*')
@@ -72,8 +72,8 @@ function MarketplaceContent() {
 
       setBusinesses(verifiedBusinesses);
 
+      // 2. Fetch All Listings from unified table for those verified businesses
       if (verifiedIds.length > 0) {
-        // 2. Fetch All Listings from unified table
         const { data: listingData, error: listError } = await supabase
           .from('listings')
           .select('*')
@@ -86,6 +86,8 @@ function MarketplaceContent() {
           ...l, 
           business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
         })));
+      } else {
+        setAllListings([]);
       }
     } catch (e: any) {
       console.error('Marketplace discovery failure:', e);
@@ -100,23 +102,35 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
-    const items = allListings.filter(l => {
-      const matchesSearch = l.name?.toLowerCase().includes(search.toLowerCase()) || 
+    // Interleave Businesses and Listings
+    const bizItems = businesses.filter(b => {
+      const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
+                           (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
+      const bizCategoryMatch = category === 'all' || 
+                              (category === 'wash_service' && b.category === 'Wash') ||
+                              (category === 'car' && b.category === 'Cars') ||
+                              (category === 'spare_part' && b.category === 'Spare');
+      return matchesSearch && bizCategoryMatch;
+    }).map(b => ({ ...b, itemType: 'business' as const, type: 'business' }));
+
+    const productItems = allListings.filter(l => {
+      const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
                            (l.description && l.description.toLowerCase().includes(search.toLowerCase())) ||
                            (l.business?.city && l.business.city.toLowerCase().includes(search.toLowerCase()));
-      
       const matchesCategory = category === 'all' || l.type === category;
       return matchesSearch && matchesCategory;
-    });
+    }).map(l => ({ ...l, itemType: 'product' as const }));
 
-    return items.sort((a, b) => {
+    const combined = [...bizItems, ...productItems].sort((a, b) => {
       if (sortOrder === 'price-low') return (Number(a.price) || 0) - (Number(b.price) || 0);
       if (sortOrder === 'price-high') return (Number(b.price) || 0) - (Number(a.price) || 0);
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
     });
-  }, [allListings, search, category, sortOrder]);
+
+    return combined;
+  }, [businesses, allListings, search, category, sortOrder]);
 
   if (!mounted) return null;
 
@@ -214,9 +228,11 @@ function MarketplaceContent() {
             filteredItems.map((item: any) => (
               <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
                 <div className="relative h-48 bg-muted overflow-hidden">
-                  <Image src={getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <Image src={item.itemType === 'business' ? (item.logo_url || 'https://picsum.photos/seed/biz/600/400') : getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
                   <div className="absolute top-2 left-2">
-                    <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">{item.type.replace('_', ' ')}</Badge>
+                    <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
+                      {item.itemType === 'business' ? (item.category || 'Operator') : item.type.replace('_', ' ')}
+                    </Badge>
                   </div>
                   <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
@@ -234,18 +250,18 @@ function MarketplaceContent() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground font-bold uppercase tracking-wider">
-                    <MapPin className="h-3.5 w-3.5" /> <span>{item.business?.city || 'Available'}</span>
+                    <MapPin className="h-3.5 w-3.5" /> <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Available'}</span>
                   </div>
                 </CardHeader>
                 <CardContent className="flex-grow">
                   <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                    {item.description || "Verified automotive listing from our trusted partner network."}
+                    {item.description || item.address || "Verified automotive listing from our trusted partner network."}
                   </p>
                 </CardContent>
                 <CardFooter className="mt-auto flex flex-col gap-2">
                   <Button asChild className="w-full font-bold h-11 shadow-sm">
-                    <Link href={item.type === 'wash_service' ? `/find-wash/${item.business_id}` : `/marketplace/${item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
-                      View Details
+                    <Link href={item.itemType === 'business' || item.type === 'wash_service' ? `/find-wash/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                      {item.itemType === 'business' ? 'View Profile' : 'View Details'}
                     </Link>
                   </Button>
                   <Button variant="outline" size="sm" className="w-full h-10 font-bold border-green-600/20 hover:bg-green-600 hover:text-white transition-all group">
@@ -255,7 +271,7 @@ function MarketplaceContent() {
               </Card>
             ))
           ) : (
-            <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
+            <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/10">
               <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
               <p className="text-muted-foreground font-bold text-lg">No verified listings found matching your search.</p>
               <Button variant="link" className="mt-2 font-bold" onClick={() => { setSearch(''); setCategory('all'); }}>

@@ -49,7 +49,6 @@ const PLANS = [
 export default function LandingPage() {
   const router = useRouter();
   const [listings, setListings] = useState<any[]>([]);
-  const [businesses, setBusinesses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,8 +76,6 @@ export default function LandingPage() {
           return acc;
         }, {});
 
-        setBusinesses(verifiedBusinesses);
-
         if (verifiedIds.length > 0) {
           // 2. Fetch Trending Listings from unified table
           const { data: listingData } = await supabase
@@ -93,6 +90,8 @@ export default function LandingPage() {
             ...l, 
             business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
           })));
+        } else {
+          setListings([]);
         }
       } catch (e: any) {
         console.error("Landing discovery failure:", e);
@@ -330,7 +329,7 @@ export default function LandingPage() {
                 </CardContent>
                 <CardFooter className="p-10 pt-0">
                   <Button className={cn(
-                    "w-full h-16 font-black text-lg rounded-2xl shadow-2xl transition-all",
+                    "w-full h-16 font-black rounded-2xl shadow-2xl transition-all",
                     !plan.popular && "bg-white/5 hover:bg-white/10 text-white"
                   )} asChild>
                     <Link href="/signup">Join Elite Network</Link>
