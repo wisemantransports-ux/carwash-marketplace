@@ -1,9 +1,10 @@
+
 'use client';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, Zap, ArrowRight, Loader2, Store, Check, Filter, Star, Globe, Shield } from "lucide-react";
+import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, Zap, ArrowRight, Loader2, Store, Check, Filter, Star, Globe, Shield, MessageCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -114,15 +115,10 @@ export default function LandingPage() {
     );
   }, [businesses, cars, spareParts]);
 
-  const scrollToMarketplace = () => {
-    document.getElementById('trending')?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   if (!mounted) return null;
 
   return (
     <div className="flex flex-col min-h-screen bg-[#020617] text-white selection:bg-primary/30">
-      {/* PREMIUM HEADER */}
       <header className="fixed top-0 w-full z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/5">
         <div className="container mx-auto px-4 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -141,9 +137,8 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* HERO SECTION - MESH GRADIENT DARK */}
+      {/* REVISED HERO SECTION */}
       <section className="relative pt-40 pb-24 md:pt-56 md:pb-40 overflow-hidden">
-        {/* Ambient Glows */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none overflow-hidden">
             <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/20 blur-[120px] rounded-full opacity-50" />
             <div className="absolute bottom-[10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[100px] rounded-full opacity-30" />
@@ -151,27 +146,36 @@ export default function LandingPage() {
 
         <div className="container relative mx-auto px-4 text-center space-y-12">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl animate-in fade-in slide-in-from-top-4 duration-700">
-            <Zap className="h-4 w-4 text-primary fill-primary" />
-            <span className="text-xs font-black uppercase tracking-widest text-primary">The Future of African Auto Commerce</span>
+            <Sparkles className="h-4 w-4 text-primary fill-primary" />
+            <span className="text-xs font-black uppercase tracking-widest text-primary">Africa's Elite Automotive Network</span>
           </div>
           
           <div className="space-y-6 max-w-5xl mx-auto">
             <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.95] text-white animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-              Connect with Trusted <br />
-              <span className="bg-gradient-to-r from-primary via-blue-400 to-white bg-clip-text text-transparent">Auto Services</span> Across Africa
+              Drive with Confidence. <br />
+              <span className="bg-gradient-to-r from-primary via-blue-400 to-white bg-clip-text text-transparent">Find Everything You Need.</span>
             </h1>
             <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto leading-relaxed font-medium animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
-              A premium, verified ecosystem for Cars, Spare Parts, and Elite Detailers. <br className="hidden md:block" /> Find exactly what your vehicle needs, instantly.
+              Connect with verified local businesses for premium car sales, genuine parts, and elite detailing. 
+              Powered by AI for instant WhatsApp coordination and guaranteed trust.
             </p>
           </div>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
-            <Button size="lg" className="h-16 px-12 text-lg font-black rounded-2xl shadow-2xl hover:scale-[1.03] active:scale-95 transition-all group" onClick={scrollToMarketplace}>
-              Explore Marketplace
-              <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
+            <Button size="lg" className="h-16 px-8 text-md font-black rounded-2xl shadow-2xl hover:scale-[1.03] transition-all bg-green-600 hover:bg-green-700" asChild>
+              <Link href="/find-wash?category=Cars">
+                <CarIcon className="mr-2 h-5 w-5" /> Search Cars
+              </Link>
             </Button>
-            <Button size="lg" variant="outline" className="h-16 px-12 text-lg font-black rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 backdrop-blur-sm transition-all" asChild>
-              <Link href="/signup">Partner with Us</Link>
+            <Button size="lg" className="h-16 px-8 text-md font-black rounded-2xl shadow-2xl hover:scale-[1.03] transition-all bg-orange-600 hover:bg-orange-700" asChild>
+              <Link href="/find-wash?category=Spare">
+                <ShoppingCart className="mr-2 h-5 w-5" /> Find Spare Parts
+              </Link>
+            </Button>
+            <Button size="lg" className="h-16 px-8 text-md font-black rounded-2xl shadow-2xl hover:scale-[1.03] transition-all bg-blue-600 hover:bg-blue-700" asChild>
+              <Link href="/find-wash?category=Wash">
+                <Droplets className="mr-2 h-5 w-5" /> Book Carwash
+              </Link>
             </Button>
           </div>
 
@@ -180,7 +184,7 @@ export default function LandingPage() {
               <div className="flex-1 relative group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within:text-primary transition-colors" />
                 <Input 
-                  placeholder="Search parts, cars, or workshops..." 
+                  placeholder="Search by car model, spare part, or service location…" 
                   className="pl-12 h-14 border-none bg-transparent shadow-none focus-visible:ring-0 text-lg placeholder:text-slate-600 font-medium"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -194,7 +198,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CATEGORIES - DARK PREMIUM CARDS */}
       <section id="categories" className="py-24 bg-slate-950 border-y border-white/5">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
@@ -223,7 +226,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* TRENDING - GRID ON DARK */}
       <section id="trending" className="py-32 bg-[#020617] relative">
         <div className="container mx-auto px-4 max-w-7xl space-y-16">
           <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-white/5 pb-12">
@@ -276,11 +278,14 @@ export default function LandingPage() {
                         <MapPin className="h-4 w-4 text-primary" /> <span>{item.city || 'Available Nationwide'}</span>
                       </div>
                     </CardHeader>
-                    <CardFooter className="p-8 pt-0 mt-auto">
+                    <CardFooter className="p-8 pt-0 mt-auto flex flex-col gap-3">
                       <Button asChild className="w-full font-black rounded-xl h-14 shadow-2xl transition-all hover:scale-[1.02]">
                         <Link href={item.itemType === 'business' ? `/find-wash/${item.id}` : `/marketplace/${item.itemType === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                           View Particulars
                         </Link>
+                      </Button>
+                      <Button variant="outline" size="sm" className="w-full h-10 font-bold border-white/10 hover:bg-green-600/10 hover:text-green-400">
+                        <MessageCircle className="h-4 w-4 mr-2" /> AI Help → WhatsApp
                       </Button>
                     </CardFooter>
                   </Card>
@@ -297,7 +302,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* PRICING - PLATINUM STYLE */}
       <section id="pricing" className="py-32 bg-slate-950 border-t border-white/5">
         <div className="container mx-auto px-4 max-w-6xl space-y-20">
           <div className="text-center space-y-6 max-w-3xl mx-auto">
@@ -347,7 +351,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* FOOTER - DARK */}
       <footer className="py-24 border-t border-white/5 bg-slate-950 relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
         <div className="container mx-auto px-4 text-center space-y-10">

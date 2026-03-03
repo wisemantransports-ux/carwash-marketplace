@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -6,7 +7,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, History } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, History, MessageCircle, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -54,7 +55,6 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses (Source of Truth)
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*')
@@ -73,7 +73,6 @@ function MarketplaceContent() {
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
-        // 2. Fetch Cars linked to verified accounts
         const { data: carData } = await supabase
           .from('car_listing')
           .select('*')
@@ -82,7 +81,6 @@ function MarketplaceContent() {
 
         setCars((carData || []).map(c => ({ ...c, business: bizMap[c.business_id] })));
 
-        // 3. Fetch Parts linked to verified accounts
         const { data: partData } = await supabase
           .from('spare_parts')
           .select('*')
@@ -104,7 +102,6 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
-    // BUSINESS FILTERING
     const bizList = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
@@ -113,7 +110,6 @@ function MarketplaceContent() {
       return matchesSearch && matchesCategory;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
-    // CAR FILTERING
     const carList = cars.filter(c => {
       const matchesSearch = (c.title?.toLowerCase().includes(search.toLowerCase())) || 
                            (c.make?.toLowerCase().includes(search.toLowerCase())) ||
@@ -122,7 +118,6 @@ function MarketplaceContent() {
       return matchesSearch && matchesCategory;
     }).map(c => ({ ...c, itemType: 'car' as const }));
 
-    // PART FILTERING
     const partList = spareParts.filter(p => {
       const matchesSearch = (p.name?.toLowerCase().includes(search.toLowerCase())) || 
                            (p.category?.toLowerCase().includes(search.toLowerCase()));
@@ -132,14 +127,12 @@ function MarketplaceContent() {
 
     const combined = [...bizList, ...carList, ...partList];
 
-    // SORTING LOGIC
     return combined.sort((a, b) => {
       if (sortOrder === 'price-low') return (Number(a.price) || 0) - (Number(b.price) || 0);
       if (sortOrder === 'price-high') return (Number(b.price) || 0) - (Number(a.price) || 0);
-      
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
-      return dateB - dateA; // Newest First
+      return dateB - dateA;
     });
   }, [businesses, cars, spareParts, search, category, sortOrder]);
 
@@ -154,7 +147,7 @@ function MarketplaceContent() {
             <span className="hidden sm:inline">Back to Home</span>
           </Link>
           <div className="flex items-center gap-2">
-             <div className="bg-primary text-primary-foreground font-bold p-1 rounded text-xs">ALM</div>
+             <div className="bg-primary text-primary-foreground font-black p-1 rounded text-xs">ALM</div>
             <span className="text-sm font-bold text-primary tracking-tight">AutoLink Directory</span>
           </div>
           <div className="flex items-center gap-2">
@@ -170,20 +163,19 @@ function MarketplaceContent() {
             <ShieldCheck className="h-3 w-3" />
             <span>Verified Marketplace Partners</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tight text-slate-900">Partner Directory</h1>
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">Find Cars, Spare Parts, or Carwash Services Near You</h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Find verified car wash services, quality spare parts, and premium vehicle listings across Botswana.
+            Discover verified automotive solutions across Botswana. Genuine parts, elite detailing, and high-quality vehicles.
           </p>
         </div>
 
-        {/* SEARCH & FILTER ENGINE */}
         <div className="flex flex-col lg:flex-row gap-6 items-end justify-between bg-white/50 backdrop-blur-sm p-6 rounded-3xl border-2 shadow-sm">
           <div className="flex-1 w-full space-y-2">
-            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Universal Search</Label>
+            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Marketplace Discovery</Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input 
-                placeholder="Search for cars, spare parts, or services…" 
+                placeholder="Search by car model, spare part, or service location…" 
                 className="pl-10 h-14 bg-white border-2 rounded-2xl shadow-sm text-lg"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -244,9 +236,12 @@ function MarketplaceContent() {
                   <div className="absolute top-2 left-2">
                     <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">{item.itemType}</Badge>
                   </div>
-                  <div className="absolute top-2 right-2">
+                  <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
                       <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
+                    </Badge>
+                    <Badge className="bg-primary/90 text-white text-[8px] font-bold animate-pulse">
+                      <Sparkles className="h-2 w-2 mr-1" /> AI Status Active
                     </Badge>
                   </div>
                   {item.price && (
@@ -265,14 +260,17 @@ function MarketplaceContent() {
                 </CardHeader>
                 <CardContent className="flex-grow">
                   <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                    {item.description || "Authentic verified automotive listing from our trusted professional partners."}
+                    {item.description || "Verified automotive listing. Quality and authenticity guaranteed through our partner network."}
                   </p>
                 </CardContent>
-                <CardFooter className="mt-auto">
+                <CardFooter className="mt-auto flex flex-col gap-2">
                   <Button asChild className="w-full font-bold h-11 shadow-sm">
                     <Link href={item.itemType === 'business' ? `/find-wash/${item.id}` : `/marketplace/${item.itemType === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                       View Details
                     </Link>
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full h-10 font-bold border-green-600/20 hover:bg-green-600 hover:text-white transition-all group">
+                    <MessageCircle className="h-4 w-4 mr-2 text-green-600 group-hover:text-white" /> AI Help → WhatsApp
                   </Button>
                 </CardFooter>
               </Card>
