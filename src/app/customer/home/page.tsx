@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { CarListing, SparePart } from '@/lib/types';
 
 /**
- * Robust image parsing for Postgres array columns
+ * Robust image parsing for Postgres array columns to prevent hydration issues
  */
 function getDisplayImage(images: any, fallback: string): string {
   if (!images) return fallback;
@@ -29,7 +29,7 @@ function getDisplayImage(images: any, fallback: string): string {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
       }
       const parts = images.replace(/[{}]/g, '').split(',');
-      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '');
+      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '').trim();
     } catch {
       return images;
     }
@@ -103,7 +103,7 @@ function BusinessCard({ business }: { business: any }) {
         </div>
 
         <div className="flex items-center gap-1.5 pt-2 border-t border-dashed shrink-0">
-          <div className="flex text-yellow-400" aria-label={`Rating: ${rating} stars`}>
+          <div className="flex text-yellow-400">
             {[1, 2, 3, 4, 5].map((s) => (
               <Star 
                 key={s} 
@@ -235,29 +235,24 @@ function CustomerHomeContent() {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [cars, setCars] = useState<CarListing[]>([]);
   const [spareParts, setSpareParts] = useState<SparePart[]>([]);
-  const [search, setSearch] = useState(searchParams.get('q') || '');
+  const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const q = searchParams.get('q');
-    const cat = searchParams.get('category');
+    setMounted(true);
+    const q = searchParams.get('q') || '';
+    const cat = searchParams.get('category') || 'all';
+    setSearch(q);
     
-    if (q !== null) setSearch(q);
-    
-    if (cat !== null) {
-      const match = CATEGORIES.find(c => c.id.toLowerCase() === cat.toLowerCase());
-      setCategory(match ? match.id : 'all');
-    } else {
-      setCategory('all');
-    }
+    const match = CATEGORIES.find(c => c.id.toLowerCase() === cat.toLowerCase());
+    setCategory(match ? match.id : 'all');
   }, [searchParams]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch Verified Businesses (Mapping Context)
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*, services(*)')
@@ -276,61 +271,45 @@ function CustomerHomeContent() {
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
-        // 2. Fetch Cars using explicit manual wiring (Proven reliability)
-        const { data: carData, error: carError } = await supabase
+        const { data: carData } = await supabase
           .from('car_listing')
           .select('*')
           .in('status', ['active', 'available'])
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
-        if (carError) throw carError;
-
-        const wiredCars = (carData || []).map(c => ({
+        setCars((carData || []).map(c => ({
           ...c,
           business: bizMap[c.business_id] || { name: 'Verified Partner', city: 'Botswana' }
-        }));
-        setCars(wiredCars as any[]);
+        })) as any[]);
 
-        // 3. Fetch Spare Parts using explicit manual wiring (SAME pattern as cars)
-        const { data: partData, error: partError } = await supabase
+        const { data: partData } = await supabase
           .from('spare_parts')
           .select('*')
           .in('status', ['active', 'available'])
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
         
-        if (partError) throw partError;
-
-        const wiredParts = (partData || []).map(p => ({
+        setSpareParts((partData || []).map(p => ({
           ...p,
           business: bizMap[p.business_id] || { name: 'Verified Retailer', city: 'Botswana' }
-        }));
-        setSpareParts(wiredParts as any[]);
-
-      } else {
-        setCars([]);
-        setSpareParts([]);
+        })) as any[]);
       }
-
     } catch (e: any) {
-      console.error('Customer Discovery Error:', {
-        message: e.message,
-        details: e.details,
-        code: e.code
-      });
+      console.error('Customer Discovery Error:', e.message);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    setMounted(true);
-    loadData();
-  }, [loadData]);
+    if (mounted) {
+      loadData();
+    }
+  }, [loadData, mounted]);
 
   const unifiedList = useMemo(() => {
-    const bizList = businesses.filter(b => {
+    const bizItems = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
       const bizCategory = b.category || 'Wash';
@@ -338,7 +317,7 @@ function CustomerHomeContent() {
       return matchesSearch && matchesCategory;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
-    const carList = cars.filter(c => {
+    const carItems = cars.filter(c => {
       const matchesSearch = (c.title?.toLowerCase().includes(search.toLowerCase())) || 
                            (c.make?.toLowerCase().includes(search.toLowerCase())) ||
                            (c.model?.toLowerCase().includes(search.toLowerCase()));
@@ -346,14 +325,14 @@ function CustomerHomeContent() {
       return matchesSearch && matchesCategory;
     }).map(c => ({ ...c, itemType: 'car' as const }));
 
-    const partList = spareParts.filter(p => {
+    const partItems = spareParts.filter(p => {
       const matchesSearch = (p.name?.toLowerCase().includes(search.toLowerCase())) || 
                            (p.category?.toLowerCase().includes(search.toLowerCase()));
       const matchesCategory = category === 'all' || category.toLowerCase() === 'spare';
       return matchesSearch && matchesCategory;
     }).map(p => ({ ...p, itemType: 'part' as const }));
 
-    return [...bizList, ...carList, ...partList].sort((a, b) => {
+    return [...bizItems, ...carItems, ...partItems].sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
@@ -434,7 +413,16 @@ function CustomerHomeContent() {
 
 export default function CustomerHomePage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <Skeleton className="h-10 w-64 rounded-full" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
+          <Skeleton className="h-96 rounded-2xl" />
+          <Skeleton className="h-96 rounded-2xl" />
+          <Skeleton className="h-96 rounded-2xl" />
+        </div>
+      </div>
+    }>
       <CustomerHomeContent />
     </Suspense>
   );
