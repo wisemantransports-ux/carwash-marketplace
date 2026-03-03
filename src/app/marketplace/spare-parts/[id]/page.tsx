@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 /**
  * @fileOverview Spare Part Detail Page (Public)
  * Full specification view for individual automotive components.
+ * Uses the Manual Wiring Pattern for maximum data resilience.
  */
 
 function getDisplayImage(images: any, fallback: string): string {
@@ -45,30 +46,39 @@ export default function SparePartDetailPage({ params }: { params: Promise<{ id: 
       if (!id) return;
       setLoading(true);
       try {
-        // Query restricted to public fields and active status.
-        // Removed !inner to avoid strict join failures and handle missing business data gracefully.
-        const { data, error } = await supabase
+        // STAGE 1: Fetch the core part data (Following Manual Wiring Pattern)
+        const { data: partData, error: partError } = await supabase
           .from('spare_parts')
-          .select(`
-            *,
-            business:business_id ( name, city, logo_url, verification_status, whatsapp_number )
-          `)
+          .select('*')
           .eq('id', id)
           .eq('status', 'active')
           .maybeSingle();
         
-        if (error) {
-          console.error("Database Error Details:", {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
-          });
-          throw error;
+        if (partError) {
+          console.error("Spare Part Fetch Error:", JSON.stringify(partError, null, 2));
+          throw partError;
         }
-        setPart(data);
+
+        if (partData) {
+          // STAGE 2: Fetch the associated business data in parallel (Manual Wiring)
+          const { data: bizData, error: bizError } = await supabase
+            .from('businesses')
+            .select('name, city, logo_url, verification_status, whatsapp_number')
+            .eq('id', partData.business_id)
+            .maybeSingle();
+
+          if (bizError) {
+            console.warn("Wired Business Fetch Error (Graceful Fallback):", JSON.stringify(bizError, null, 2));
+          }
+
+          // STAGE 3: Combine in memory
+          setPart({
+            ...partData,
+            business: bizData || { name: 'Verified Partner', city: 'Botswana' }
+          });
+        }
       } catch (e: any) {
-        console.error("Detail Fetch Error:", e.message || e);
+        console.error("Detail Fetch Error Trace:", e.message || e);
       } finally {
         setLoading(false);
       }
