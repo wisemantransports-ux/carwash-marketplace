@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -34,11 +35,11 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // 1. STAGE 1: Fetch Verified Businesses
+      // 1. STAGE 1: Fetch Verified Businesses (Inclusive OR check)
       const { data: bizData } = await supabase
           .from('businesses')
-          .select('id, name, city, logo_url, verification_status, category')
-          .eq('verification_status', 'verified');
+          .select('id, name, city, logo_url, verification_status, category, address')
+          .or('verification_status.eq.verified,status.eq.verified');
       
       const verifiedPartners = bizData || [];
       const verifiedIds = verifiedPartners.map(b => b.id);
@@ -49,7 +50,7 @@ function MarketplaceContent() {
 
       setBusinesses(verifiedPartners);
 
-      // 2. STAGE 2: Fetch Listings for Verified partners only
+      // 2. STAGE 2: Fetch Listings for Verified Partners Only
       if (verifiedIds.length > 0) {
         const { data: listingData, error } = await supabase
           .from('listings')
@@ -89,6 +90,7 @@ function MarketplaceContent() {
       const bCity = (b.city || '').toLowerCase();
       const bCat = (b.category || '').toLowerCase();
       const matchesSearch = bName.includes(sTerm) || bCity.includes(sTerm);
+      
       const bizCategoryMatch = category === 'all' || 
                               (category === 'wash_service' && bCat === 'wash') ||
                               (category === 'car' && bCat === 'cars') ||
@@ -101,6 +103,7 @@ function MarketplaceContent() {
       const lName = (l.name || '').toLowerCase();
       const lDesc = (l.description || '').toLowerCase();
       const matchesSearch = lName.includes(sTerm) || lDesc.includes(sTerm);
+      
       const matchesCategory = category === 'all' || l.listing_type === category || l.type === category;
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));

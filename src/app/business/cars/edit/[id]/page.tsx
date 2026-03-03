@@ -168,7 +168,7 @@ export default function EditCarListingPage() {
         <div className="space-y-6">
           <Card className="border-2 shadow-lg overflow-hidden">
             <CardHeader className="bg-muted/10 border-b">
-              <CardTitle>Photo</CardTitleExternal>
+              <CardTitle>Photo</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               <div 

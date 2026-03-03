@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -32,11 +33,11 @@ function MarketplaceContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. STAGE 1: Fetch Verified Businesses
+      // 1. STAGE 1: Fetch Verified Businesses (Inclusive check)
       const { data: bizData } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status, category, address')
-          .eq('verification_status', 'verified')
+          .or('verification_status.eq.verified,status.eq.verified')
           .order('name', { ascending: true });
       
       const partnerBusinesses = bizData || [];
@@ -52,7 +53,7 @@ function MarketplaceContent() {
       if (verifiedIds.length > 0) {
         const { data: listingData, error: lError } = await supabase
           .from('listings')
-          .select('id, business_id, type, listing_type, name, description, price, image_url, created_at')
+          .select('id, business_id, name, description, price, listing_type, type, image_url, created_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
