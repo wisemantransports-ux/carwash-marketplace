@@ -253,6 +253,7 @@ function CustomerHomeContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      // EXACT QUERY: Gating by verification status
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*, services(*)')
@@ -271,6 +272,7 @@ function CustomerHomeContent() {
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
+        // EXACT QUERY: Manual wiring for Cars
         const { data: carData } = await supabase
           .from('car_listing')
           .select('*')
@@ -283,6 +285,7 @@ function CustomerHomeContent() {
           business: bizMap[c.business_id] || { name: 'Verified Partner', city: 'Botswana' }
         })) as any[]);
 
+        // EXACT QUERY: Manual wiring for Parts
         const { data: partData } = await supabase
           .from('spare_parts')
           .select('*')

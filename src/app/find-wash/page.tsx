@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -55,6 +54,7 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
+      // EXACT QUERY: Verified Businesses First
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*')
@@ -73,6 +73,7 @@ function MarketplaceContent() {
       setBusinesses(verifiedBusinesses);
 
       if (verifiedIds.length > 0) {
+        // EXACT QUERY: Cars wired to verified owners
         const { data: carData } = await supabase
           .from('car_listing')
           .select('*')
@@ -81,6 +82,7 @@ function MarketplaceContent() {
 
         setCars((carData || []).map(c => ({ ...c, business: bizMap[c.business_id] })));
 
+        // EXACT QUERY: Parts wired to verified owners
         const { data: partData } = await supabase
           .from('spare_parts')
           .select('*')
