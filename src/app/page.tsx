@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, ArrowRight, Loader2, Store, Check, Star, MessageCircle, Sparkles } from "lucide-react";
+import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, ArrowRight, Loader2, Store, Check, MessageCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -12,26 +12,6 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-
-/**
- * Robust image parsing for Postgres array columns
- */
-function getDisplayImage(images: any, fallback: string): string {
-  if (!images) return fallback;
-  if (Array.isArray(images) && images.length > 0) return images[0];
-  if (typeof images === 'string') {
-    try {
-      if (images.startsWith('[') || images.startsWith('{')) {
-        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
-        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-      }
-      const parts = images.replace(/[{}]/g, '').split(',');
-      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '').trim();
-    } catch { return images; }
-  }
-  return fallback;
-}
 
 const CATEGORIES = [
   { id: 'Wash', label: 'Car Wash', icon: Droplets, desc: 'Premium wash & detailing services.', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', href: '/find-wash?category=wash_service' },
@@ -79,7 +59,7 @@ export default function LandingPage() {
         if (verifiedIds.length > 0) {
           const { data: listingData, error: listingError } = await supabase
             .from('listings')
-            .select('id, business_id, type, listing_type, name, description, price, created_at')
+            .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at')
             .in('business_id', verifiedIds)
             .order('created_at', { ascending: false })
             .limit(12);
@@ -96,7 +76,7 @@ export default function LandingPage() {
 
         setListings(wiredListings);
       } catch (e: any) {
-        console.error("Landing discovery failure:", e?.message || e);
+        console.error("Landing discovery failure:", e.message || e);
       } finally {
         setLoading(false);
       }
@@ -242,7 +222,7 @@ export default function LandingPage() {
                 listings.map((item: any) => (
                   <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-500 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)] border-white/5 hover:border-primary/30 bg-slate-900/30 rounded-[2rem] h-full group">
                     <div className="relative h-56 bg-slate-800 overflow-hidden">
-                      <Image src={getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} alt={item.name} fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
+                      <Image src={`https://picsum.photos/seed/${item.id}/600/400`} alt={item.name} fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-60" />
                       <div className="absolute top-4 left-4">
                         <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1 shadow-2xl">

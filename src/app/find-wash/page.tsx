@@ -6,30 +6,13 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, History, MessageCircle } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, History, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-
-function getDisplayImage(images: any, fallback: string): string {
-  if (!images) return fallback;
-  if (Array.isArray(images) && images.length > 0) return images[0];
-  if (typeof images === 'string') {
-    try {
-      if (images.startsWith('[') || images.startsWith('{')) {
-        const cleaned = images.replace(/[{}]/g, '[').replace(/[}]/g, ']');
-        const parsed = JSON.parse(cleaned.includes('[') ? cleaned : `["${images}"]`);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-      }
-      const parts = images.replace(/[{}]/g, '').split(',');
-      if (parts.length > 0 && parts[0]) return parts[0].replace(/"/g, '').trim();
-    } catch { return images; }
-  }
-  return fallback;
-}
 
 const CATEGORIES = [
   { id: 'all', label: 'All Partners', icon: Filter },
@@ -66,14 +49,14 @@ function MarketplaceContent() {
         return acc;
       }, {});
 
-      setBusinesses(partnerBusinesses);
+      setBusinesses(partnerBusinesses.map(b => ({ ...b, verified: true })));
 
       // Stage 2: Parallel Product Fetching (Only from Verified IDs)
       let listingData: any[] = [];
       if (verifiedIds.length > 0) {
         const { data, error: listingError } = await supabase
           .from('listings')
-          .select('id, business_id, type, listing_type, name, description, price, created_at')
+          .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
@@ -88,7 +71,7 @@ function MarketplaceContent() {
         business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
       })));
     } catch (e: any) {
-      console.error('Marketplace discovery failure:', e?.message || e);
+      console.error('Marketplace discovery failure:', e.message || e);
     } finally {
       setLoading(false);
     }
@@ -100,7 +83,6 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
-    // Interleave business profiles and individual listings
     const bizItems = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
@@ -110,7 +92,7 @@ function MarketplaceContent() {
                               (category === 'car' && b.category === 'Cars') ||
                               (category === 'spare_part' && b.category === 'Spare');
       return matchesSearch && bizCategoryMatch;
-    }).map(b => ({ ...b, itemType: 'business' as const, verified: true }));
+    }).map(b => ({ ...b, itemType: 'business' as const }));
 
     const productItems = allListings.filter(l => {
       const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
@@ -212,7 +194,7 @@ function MarketplaceContent() {
               <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
                 <div className="relative h-48 bg-muted overflow-hidden">
                   <Image 
-                    src={item.itemType === 'business' ? (item.logo_url || 'https://picsum.photos/seed/biz/600/400') : getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} 
+                    src={item.itemType === 'business' ? (item.logo_url || 'https://picsum.photos/seed/biz/600/400') : `https://picsum.photos/seed/${item.id}/600/400`} 
                     alt={item.name} 
                     fill 
                     className="object-cover transition-transform duration-500 group-hover:scale-110" 
