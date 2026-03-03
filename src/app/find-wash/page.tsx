@@ -34,44 +34,43 @@ function MarketplaceContent() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
-      // Stage 1: The Source of Truth (Verified Businesses Only)
-      const { data: verifiedBiz, error: bizError } = await supabase
+      // 1. Fetch Verified Businesses (Source of Truth)
+      const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('id, name, city, logo_url, verification_status, category')
           .eq('verification_status', 'verified');
       
       if (bizError) throw bizError;
 
-      const partnerBusinesses = verifiedBiz || [];
+      const partnerBusinesses = bizData || [];
       const verifiedIds = partnerBusinesses.map(b => b.id);
       const bizMap = partnerBusinesses.reduce((acc: any, b: any) => {
         acc[b.id] = b;
         return acc;
       }, {});
 
-      setBusinesses(partnerBusinesses.map(b => ({ ...b, verified: true })));
+      setBusinesses(partnerBusinesses);
 
-      // Stage 2: Parallel Product Fetching (Only from Verified IDs)
-      let listingData: any[] = [];
+      // 2. Fetch Listings for Verified Partners only
       if (verifiedIds.length > 0) {
-        const { data, error: listingError } = await supabase
+        const { data: listingData, error: listingError } = await supabase
           .from('listings')
-          .select('id, business_id, listing_type, name, description, price, created_at')
+          .select('id, business_id, type, listing_type, name, description, price, created_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
         if (listingError) throw listingError;
-        listingData = data || [];
+        
+        setAllListings((listingData || []).map(l => ({ 
+          ...l, 
+          verified: true,
+          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+        })));
+      } else {
+        setAllListings([]);
       }
-
-      // Stage 3: In-Memory Wiring & Verified Flag Injection
-      setAllListings(listingData.map(l => ({ 
-        ...l, 
-        verified: true,
-        business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
-      })));
     } catch (e: any) {
-      console.error('Marketplace discovery failure:', e.message);
+      console.error('Marketplace discovery failure:', e.message || e);
     } finally {
       setLoading(false);
     }
@@ -83,32 +82,39 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
+    // Standardize category matching
     const bizItems = businesses.filter(b => {
-      const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
-                           (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
+      const bName = (b.name || '').toLowerCase();
+      const bCity = (b.city || '').toLowerCase();
+      const bCat = (b.category || '').toLowerCase();
+      const sTerm = search.toLowerCase();
+
+      const matchesSearch = bName.includes(sTerm) || bCity.includes(sTerm);
       
       const bizCategoryMatch = category === 'all' || 
-                              (category === 'wash_service' && b.category === 'Wash') ||
-                              (category === 'car' && b.category === 'Cars') ||
-                              (category === 'spare_part' && b.category === 'Spare');
+                              (category === 'wash_service' && bCat === 'wash') ||
+                              (category === 'car' && bCat === 'cars') ||
+                              (category === 'spare_part' && bCat === 'spare');
+      
       return matchesSearch && bizCategoryMatch;
     }).map(b => ({ ...b, itemType: 'business' as const }));
 
     const productItems = allListings.filter(l => {
-      const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
-                           (l.description && l.description.toLowerCase().includes(search.toLowerCase()));
+      const lName = (l.name || '').toLowerCase();
+      const lDesc = (l.description || '').toLowerCase();
+      const sTerm = search.toLowerCase();
+
+      const matchesSearch = lName.includes(sTerm) || lDesc.includes(sTerm);
+      const matchesCategory = category === 'all' || l.listing_type === category || l.type === category;
       
-      const matchesCategory = category === 'all' || l.listing_type === category;
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
-    const combined = [...bizItems, ...productItems].sort((a, b) => {
+    return [...bizItems, ...productItems].sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
     });
-
-    return combined;
   }, [businesses, allListings, search, category]);
 
   if (!mounted) return null;
@@ -138,19 +144,19 @@ function MarketplaceContent() {
             <ShieldCheck className="h-3 w-3" />
             <span>Premium Marketplace Partners</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tight text-slate-900">Find Cars, Spare Parts, or Carwash Services</h1>
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">Discover Botswana's Best Automotive Solutions</h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Discover verified automotive solutions across Botswana. Genuine parts, elite detailing, and high-quality vehicles.
+            Search genuine parts, elite detailing, and verified vehicles from trusted local businesses.
           </p>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6 items-end justify-between bg-white/50 backdrop-blur-sm p-6 rounded-3xl border-2 shadow-sm">
           <div className="flex-1 w-full space-y-2">
-            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Marketplace Discovery</Label>
+            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Live Search</Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input 
-                placeholder="Search by model, part, or location…" 
+                placeholder="Search model, service, or city..." 
                 className="pl-10 h-14 bg-white border-2 rounded-2xl shadow-sm text-lg"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -160,7 +166,7 @@ function MarketplaceContent() {
           
           <div className="flex flex-wrap gap-4 w-full lg:w-auto">
             <div className="space-y-2 flex-1 lg:w-64">
-              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Category</Label>
+              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Marketplace Flow</Label>
               <div className="flex bg-muted/50 p-1 rounded-xl border">
                 {CATEGORIES.map(cat => (
                   <Button 
@@ -181,7 +187,7 @@ function MarketplaceContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
           {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
-                  <Card key={i} className="overflow-hidden bg-card rounded-2xl h-[500px]">
+                  <Card key={i} className="overflow-hidden bg-card rounded-2xl h-[400px]">
                     <Skeleton className="h-48 w-full" />
                     <div className="p-4 space-y-4">
                       <Skeleton className="h-6 w-3/4" />
@@ -194,22 +200,21 @@ function MarketplaceContent() {
               <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
                 <div className="relative h-48 bg-muted overflow-hidden">
                   <Image 
-                    src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/${item.id}/600/400`) : `https://picsum.photos/seed/${item.id}/600/400`} 
+                    src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/biz-${item.id}/600/400`) : `https://picsum.photos/seed/list-${item.id}/600/400`} 
                     alt={item.name} 
                     fill 
                     className="object-cover transition-transform duration-500 group-hover:scale-110" 
+                    data-ai-hint="automotive business"
                   />
                   <div className="absolute top-2 left-2">
                     <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
-                      {item.itemType === 'business' ? (item.category || 'Operator') : (item.listing_type || 'Listing').replace('_', ' ')}
+                      {item.itemType === 'business' ? (item.category || 'Verified Partner') : (item.listing_type || item.type || 'Listing').replace('_', ' ')}
                     </Badge>
                   </div>
-                  <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
-                    {item.verified && (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
-                        <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
-                      </Badge>
-                    )}
+                  <div className="absolute top-2 right-2">
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
+                      <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
+                    </Badge>
                   </div>
                   {item.price && (
                     <div className="absolute bottom-2 right-2">
@@ -222,7 +227,8 @@ function MarketplaceContent() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground font-bold uppercase tracking-wider">
-                    <MapPin className="h-3.5 w-3.5" /> <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Botswana'}</span>
+                    <MapPin className="h-3.5 w-3.5 text-primary opacity-60" /> 
+                    <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Botswana'}</span>
                   </div>
                 </CardHeader>
                 <CardContent className="flex-grow">
@@ -232,8 +238,8 @@ function MarketplaceContent() {
                 </CardContent>
                 <CardFooter className="mt-auto flex flex-col gap-2">
                   <Button asChild className="w-full font-bold h-11 shadow-sm">
-                    <Link href={item.itemType === 'business' || item.listing_type === 'wash_service' ? `/find-wash/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
-                      {item.itemType === 'business' ? 'View Profile' : 'View Details'}
+                    <Link href={item.itemType === 'business' || item.listing_type === 'wash_service' || item.type === 'wash_service' ? `/find-wash/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${(item.listing_type || item.type) === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                      {item.itemType === 'business' ? 'View Profile' : 'View Particulars'}
                     </Link>
                   </Button>
                 </CardFooter>
@@ -242,9 +248,9 @@ function MarketplaceContent() {
           ) : (
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
               <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-muted-foreground font-bold text-lg">No verified listings found matching your search.</p>
+              <p className="text-muted-foreground font-bold text-lg">No verified results found for your selection.</p>
               <Button variant="link" className="mt-2 font-bold" onClick={() => { setSearch(''); setCategory('all'); }}>
-                Clear all filters
+                Reset all filters
               </Button>
             </div>
           )}
