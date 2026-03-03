@@ -1,10 +1,9 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, Zap, ArrowRight, Loader2, Store, Check, Filter, Star, Globe, Shield, MessageCircle, Sparkles } from "lucide-react";
+import { MapPin, ShieldCheck, Search, ShoppingCart, Car as CarIcon, Droplets, ArrowRight, Loader2, Store, Check, Star, MessageCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +62,7 @@ export default function LandingPage() {
       setLoading(true);
       try {
         // 1. Fetch Verified Businesses (Source of Truth)
+        // We look for any business verified via verification_status OR status
         const { data: bizData } = await supabase
             .from('businesses')
             .select('*')
@@ -241,7 +241,7 @@ export default function LandingPage() {
                 listings.map((item: any) => (
                   <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-500 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)] border-white/5 hover:border-primary/30 bg-slate-900/30 rounded-[2rem] h-full group">
                     <div className="relative h-56 bg-slate-800 overflow-hidden">
-                      <Image src={getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
+                      <Image src={getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} alt={item.name} fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-60" />
                       <div className="absolute top-4 left-4">
                         <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1 shadow-2xl">

@@ -1,13 +1,12 @@
-
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, History, MessageCircle, Sparkles } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, ArrowRight, History, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -55,6 +54,7 @@ function MarketplaceContent() {
     setLoading(true);
     try {
       // 1. Fetch Verified Businesses (Source of Truth)
+      // We check both verification_status and status for maximum compatibility
       const { data: bizData, error: bizError } = await supabase
           .from('businesses')
           .select('*')
@@ -102,10 +102,12 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
-    // Interleave Businesses and Listings
+    // Interleave Businesses and Listings based on Category
     const bizItems = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
+      
+      // If a specific product category is selected, we only show businesses of that category
       const bizCategoryMatch = category === 'all' || 
                               (category === 'wash_service' && b.category === 'Wash') ||
                               (category === 'car' && b.category === 'Cars') ||
@@ -117,10 +119,13 @@ function MarketplaceContent() {
       const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
                            (l.description && l.description.toLowerCase().includes(search.toLowerCase())) ||
                            (l.business?.city && l.business.city.toLowerCase().includes(search.toLowerCase()));
+      
+      // Match against the listing type
       const matchesCategory = category === 'all' || l.type === category;
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
+    // Merge and sort
     const combined = [...bizItems, ...productItems].sort((a, b) => {
       if (sortOrder === 'price-low') return (Number(a.price) || 0) - (Number(b.price) || 0);
       if (sortOrder === 'price-high') return (Number(b.price) || 0) - (Number(a.price) || 0);
@@ -228,7 +233,12 @@ function MarketplaceContent() {
             filteredItems.map((item: any) => (
               <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
                 <div className="relative h-48 bg-muted overflow-hidden">
-                  <Image src={item.itemType === 'business' ? (item.logo_url || 'https://picsum.photos/seed/biz/600/400') : getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} alt="Item" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <Image 
+                    src={item.itemType === 'business' ? (item.logo_url || 'https://picsum.photos/seed/biz/600/400') : getDisplayImage(item.images, 'https://picsum.photos/seed/auto/600/400')} 
+                    alt={item.name} 
+                    fill 
+                    className="object-cover transition-transform duration-500 group-hover:scale-110" 
+                  />
                   <div className="absolute top-2 left-2">
                     <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
                       {item.itemType === 'business' ? (item.category || 'Operator') : item.type.replace('_', ' ')}
