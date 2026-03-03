@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Search, ShieldCheck, Store, Filter, Droplets, ShoppingCart, Car as CarIcon } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, Store, Filter, Droplets, ShoppingCart, Car as CarIcon, Building2, UserCheck } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,11 +33,11 @@ function MarketplaceContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. STAGE 1: Fetch Verified Businesses (Inclusive check)
+      // 1. STAGE 1: Fetch Verified Businesses (Including business_type for badges)
       const { data: bizData } = await supabase
           .from('businesses')
-          .select('id, name, city, logo_url, verification_status, category, address')
-          .or('verification_status.eq.verified,status.eq.verified')
+          .select('id, name, city, logo_url, verification_status, category, address, business_type, special_tag')
+          .eq('verification_status', 'verified')
           .order('name', { ascending: true });
       
       const partnerBusinesses = bizData || [];
@@ -63,7 +63,7 @@ function MarketplaceContent() {
         setAllListings((listingData || []).map(l => ({ 
           ...l, 
           verified: true,
-          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana' }
+          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana', business_type: 'individual' }
         })));
       } else {
         setAllListings([]);
@@ -168,54 +168,61 @@ function MarketplaceContent() {
             </Card>
           ))
         ) : filteredItems.length > 0 ? (
-          filteredItems.map((item: any) => (
-            <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
-              <div className="relative h-48 bg-muted overflow-hidden">
-                <Image 
-                  src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/biz-${item.id}/600/400`) : (item.image_url || `https://picsum.photos/seed/list-${item.id}/600/400`)} 
-                  alt={item.name} 
-                  fill 
-                  className="object-cover transition-transform duration-500 group-hover:scale-110" 
-                />
-                <div className="absolute top-2 left-2">
-                  <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
-                    {item.itemType === 'business' ? (item.category || 'Operator') : (item.listing_type || item.type).replace('_', ' ')}
-                  </Badge>
-                </div>
-                <div className="absolute top-2 right-2">
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[9px] font-black uppercase shadow-sm">
-                    <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Verified
-                  </Badge>
-                </div>
-                {item.price && (
-                  <div className="absolute bottom-2 right-2">
-                    <Badge className="bg-primary text-white font-black px-3 py-1 shadow-lg">
-                      P{Number(item.price).toLocaleString()}
+          filteredItems.map((item: any) => {
+            const bizType = item.itemType === 'business' ? item.business_type : item.business?.business_type;
+            const isRegistered = bizType === 'registered';
+
+            return (
+              <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
+                <div className="relative h-48 bg-muted overflow-hidden">
+                  <Image 
+                    src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/biz-${item.id}/600/400`) : (item.image_url || `https://picsum.photos/seed/list-${item.id}/600/400`)} 
+                    alt={item.name} 
+                    fill 
+                    className="object-cover transition-transform duration-500 group-hover:scale-110" 
+                  />
+                  <div className="absolute top-2 left-2 flex flex-col gap-1.5">
+                    <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm w-fit">
+                      {item.itemType === 'business' ? (item.category || 'Operator') : (item.listing_type || item.type).replace('_', ' ')}
+                    </Badge>
+                    <Badge variant="outline" className={cn(
+                      "text-[8px] font-black uppercase shadow-sm w-fit border-none",
+                      isRegistered ? "bg-blue-600 text-white" : "bg-green-600 text-white"
+                    )}>
+                      {isRegistered ? <Building2 className="h-2 w-2 mr-1" /> : <UserCheck className="h-2 w-2 mr-1" />}
+                      {isRegistered ? "CIPA Verified" : "Micro Business"}
                     </Badge>
                   </div>
-                )}
-              </div>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground font-bold uppercase tracking-wider">
-                  <MapPin className="h-3.5 w-3.5 text-primary opacity-60" /> 
-                  <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Botswana'}</span>
+                  {item.price && (
+                    <div className="absolute bottom-2 right-2">
+                      <Badge className="bg-primary text-white font-black px-3 py-1 shadow-lg">
+                        P{Number(item.price).toLocaleString()}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
-              </CardHeader>
-              <CardContent className="flex-grow">
-                <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed italic">
-                  {item.description || item.address || "Automotive component or service from our trusted partner network."}
-                </p>
-              </CardContent>
-              <CardFooter className="mt-auto flex flex-col gap-2">
-                <Button asChild className="w-full font-black h-11 shadow-sm uppercase">
-                  <Link href={item.itemType === 'business' || item.listing_type === 'wash_service' || item.type === 'wash_service' ? `/customer/book/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' || item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
-                    {item.itemType === 'business' ? 'View Profile' : 'View Details'}
-                  </Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          ))
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground font-bold uppercase tracking-wider">
+                    <MapPin className="h-3.5 w-3.5 text-primary opacity-60" /> 
+                    <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Botswana'}</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-grow">
+                  <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed italic">
+                    {item.description || item.address || "Automotive component or service from our trusted partner network."}
+                  </p>
+                </CardContent>
+                <CardFooter className="mt-auto flex flex-col gap-2">
+                  <Button asChild className="w-full font-black h-11 shadow-sm uppercase">
+                    <Link href={item.itemType === 'business' || item.listing_type === 'wash_service' || item.type === 'wash_service' ? `/customer/book/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' || item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                      {item.itemType === 'business' ? 'View Profile' : 'View Details'}
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })
         ) : (
           <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
             <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />

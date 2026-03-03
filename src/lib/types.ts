@@ -75,6 +75,7 @@ export type Business = {
   selfie_url?: string;
   certificate_url?: string;
   sub_end_date?: string;
+  special_tag?: string; // e.g. "CIPA Verified"
 };
 
 export type Employee = {
