@@ -75,7 +75,7 @@ export default function LandingPage() {
         // 2. Fetch Latest Listings from unified table
         const { data: listingData } = await supabase
           .from('listings')
-          .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at')
+          .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
           .order('created_at', { ascending: false })
           .limit(12);
         
@@ -238,7 +238,7 @@ export default function LandingPage() {
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-60" />
                       <div className="absolute top-4 left-4">
                         <Badge className="bg-slate-950/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-3 py-1 shadow-2xl">
-                          {item.type.replace('_', ' ')}
+                          {item.listing_type.replace('_', ' ')}
                         </Badge>
                       </div>
                       <div className="absolute top-4 right-4">

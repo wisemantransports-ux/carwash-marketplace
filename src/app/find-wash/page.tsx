@@ -45,7 +45,6 @@ function MarketplaceContent() {
   const [allListings, setAllListings] = useState<any[]>([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState(searchParams.get('category') || 'all');
-  const [sortOrder, setSortOrder] = useState('newest');
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -56,8 +55,7 @@ function MarketplaceContent() {
       // 1. Fetch All Businesses
       const { data: bizData } = await supabase
           .from('businesses')
-          .select('*')
-          .order('name', { ascending: true });
+          .select('id, name, city, logo_url, verification_status, category');
       
       const partnerBusinesses = bizData || [];
       const bizMap = partnerBusinesses.reduce((acc: any, b: any) => {
@@ -67,10 +65,10 @@ function MarketplaceContent() {
 
       setBusinesses(partnerBusinesses);
 
-      // 2. Fetch All Listings from unified table
+      // 2. Fetch All Listings (RESTORED: No non-existent filters)
       const { data: listingData } = await supabase
         .from('listings')
-        .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at')
+        .select('id, business_id, type, listing_type, name, description, price, created_at, updated_at, images')
         .order('created_at', { ascending: false });
 
       setAllListings((listingData || []).map(l => ({ 
@@ -90,6 +88,7 @@ function MarketplaceContent() {
   }, [loadData]);
 
   const filteredItems = useMemo(() => {
+    // Correctly bridge UI categories to DB types
     const bizItems = businesses.filter(b => {
       const matchesSearch = b.name?.toLowerCase().includes(search.toLowerCase()) || 
                            (b.city && b.city.toLowerCase().includes(search.toLowerCase()));
@@ -105,7 +104,7 @@ function MarketplaceContent() {
       const matchesSearch = (l.name?.toLowerCase().includes(search.toLowerCase())) || 
                            (l.description && l.description.toLowerCase().includes(search.toLowerCase()));
       
-      const matchesCategory = category === 'all' || l.type === category;
+      const matchesCategory = category === 'all' || l.listing_type === category || l.type === category;
       return matchesSearch && matchesCategory;
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
@@ -208,7 +207,7 @@ function MarketplaceContent() {
                   />
                   <div className="absolute top-2 left-2">
                     <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
-                      {item.itemType === 'business' ? (item.category || 'Operator') : item.type.replace('_', ' ')}
+                      {item.itemType === 'business' ? (item.category || 'Operator') : (item.listing_type || item.type).replace('_', ' ')}
                     </Badge>
                   </div>
                   <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
@@ -239,7 +238,7 @@ function MarketplaceContent() {
                 </CardContent>
                 <CardFooter className="mt-auto flex flex-col gap-2">
                   <Button asChild className="w-full font-bold h-11 shadow-sm">
-                    <Link href={item.itemType === 'business' || item.type === 'wash_service' ? `/find-wash/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                    <Link href={item.itemType === 'business' || item.type === 'wash_service' || item.listing_type === 'wash_service' ? `/find-wash/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' || item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                       {item.itemType === 'business' ? 'View Profile' : 'View Details'}
                     </Link>
                   </Button>
@@ -250,7 +249,7 @@ function MarketplaceContent() {
               </Card>
             ))
           ) : (
-            <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/10">
+            <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
               <History className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
               <p className="text-muted-foreground font-bold text-lg">No listings found matching your search.</p>
               <Button variant="link" className="mt-2 font-bold" onClick={() => { setSearch(''); setCategory('all'); }}>
@@ -266,7 +265,7 @@ function MarketplaceContent() {
 
 export default function PublicFindWashPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>}>
+    <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>}>
       <MarketplaceContent />
     </Suspense>
   );
