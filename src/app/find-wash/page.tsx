@@ -53,11 +53,11 @@ function MarketplaceContent() {
         return acc;
       }, {});
 
-      // STAGE 2: Fetch Verified Listings
+      // STAGE 2: Fetch Listings for Verified Business IDs
+      // Removed overly restrictive listing-level verified flag to ensure all active listings show
       const { data: listingData } = await supabase
         .from('listings')
-        .select('id, business_id, name, description, price, listing_type, type, image_url, service_image_url, verified, created_at')
-        .eq('verified', true)
+        .select('id, business_id, name, description, price, listing_type, type, image_url, service_image_url, created_at')
         .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
 
@@ -89,14 +89,15 @@ function MarketplaceContent() {
     const s = search.toLowerCase();
     return listings.filter(l => {
       const matchesSearch = l.name.toLowerCase().includes(s) || (l.business?.city || '').toLowerCase().includes(s);
-      const matchesCategory = category === 'all' || l.listing_type === category || l.type === category;
+      const type = l.listing_type || l.type || 'wash_service';
+      const matchesCategory = category === 'all' || type === category;
       return matchesSearch && matchesCategory;
     }).sort((a, b) => b.performanceScore - a.performanceScore);
   }, [listings, search, category]);
 
   const handleAction = (listing: any) => {
     setSelectedListing(listing);
-    const type = listing.listing_type || listing.type;
+    const type = listing.listing_type || listing.type || 'wash_service';
     if (type === 'wash_service') {
       setBookingModalOpen(true);
     } else {
@@ -176,7 +177,7 @@ function MarketplaceContent() {
             ))
           ) : filtered.length > 0 ? (
             filtered.map((item) => {
-              const type = item.listing_type || item.type;
+              const type = item.listing_type || item.type || 'wash_service';
               const displayImage = item.service_image_url || item.image_url || item.business?.logo_url || `https://picsum.photos/seed/${item.id}/600/400`;
 
               return (
@@ -223,6 +224,7 @@ function MarketplaceContent() {
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
               <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
               <p className="text-xl font-bold">No verified listings found.</p>
+              <p className="text-sm text-muted-foreground mt-2">Try adjusting your search filters or check back later.</p>
             </div>
           )}
         </div>
