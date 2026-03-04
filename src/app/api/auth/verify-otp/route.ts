@@ -1,8 +1,10 @@
+
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
 /**
  * @fileOverview API Route to verify a WhatsApp OTP and manage user identity.
+ * Handles "Progressive Identity" by finding or creating a customer record.
  */
 
 export async function POST(req: Request) {
@@ -29,17 +31,16 @@ export async function POST(req: Request) {
     await supabaseAdmin.from('phone_otps').update({ verified: true }).eq('phone', cleanPhone);
 
     // 3. Progressive Identity: Check if Supabase Auth user exists
-    // We use listUsers to check by phone metadata
     const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
     if (listError) throw listError;
 
     let authUser = users.find(u => u.phone === cleanPhone || u.user_metadata?.whatsapp === cleanPhone);
 
     if (!authUser) {
-      // Create new Auth User
+      // Create new Auth User with pre-confirmed phone to allow session generation
       const { data: { user: newUser }, error: createError } = await supabaseAdmin.auth.admin.createUser({
         phone: cleanPhone,
-        phone_confirm: true, // Crucial for immediate session generation
+        phone_confirm: true,
         user_metadata: { 
           name: name.trim(), 
           role: 'customer', 
@@ -55,7 +56,8 @@ export async function POST(req: Request) {
       id: authUser!.id,
       name: name.trim(),
       whatsapp_number: cleanPhone,
-      role: 'customer'
+      role: 'customer',
+      trial_expiry: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
     });
 
     if (syncError) throw syncError;

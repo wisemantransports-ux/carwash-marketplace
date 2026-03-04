@@ -3,9 +3,9 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, CheckCircle2, LayoutDashboard, Clock, MoreHorizontal, UserCheck, Phone, MapPin, ExternalLink, ShieldCheck, User } from "lucide-react";
+import { Loader2, RefreshCw, LayoutDashboard, Phone, MapPin, ShieldCheck, UserCheck, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,7 +38,7 @@ export default function BusinessDashboardPage() {
             // 2. Fetch Operational Data
             const { data: bData } = await supabase
                 .from('wash_bookings')
-                .select(`*, user:user_id ( name ), employee:employee_id ( name, image_url )`)
+                .select(`*, user:user_id ( name ), employee:employee_id ( name, phone, image_url )`)
                 .eq('wash_business_id', biz.id)
                 .order('created_at', { ascending: false });
             setBookings((bData as any) || []);
@@ -64,17 +64,18 @@ export default function BusinessDashboardPage() {
     useEffect(() => {
         fetchData();
         
-        // Supabase Realtime for Ops
+        // Supabase Realtime for instant operations oversight
         const channel = supabase
-            .channel('dashboard-ops')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(silent = true))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => fetchData(silent = true))
+            .channel('business-ops-feed')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => fetchData(true))
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
     }, [fetchData]);
 
     const handleAssignEmployee = async (bookingId: string, employeeId: string) => {
+        if (!employeeId) return;
         try {
             const { error } = await supabase.from('wash_bookings').update({ 
                 employee_id: employeeId,
@@ -91,7 +92,7 @@ export default function BusinessDashboardPage() {
         try {
             const { error } = await supabase.from('wash_bookings').update({ status: 'confirmed' }).eq('id', bookingId);
             if (error) throw error;
-            toast({ title: "Booking Confirmed! ✅" });
+            toast({ title: "Booking Confirmed! ✅", description: "Customer contact is now visible." });
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Error', description: e.message });
         }
@@ -107,7 +108,7 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    // Number Masking Logic: Hide WhatsApp until confirmed
+    // Masking logic: Hide until confirmed
     const formatPhone = (phone: string, status: string) => {
         if (!phone) return '---';
         if (['pending_assignment', 'assigned'].includes(status)) {
@@ -144,7 +145,7 @@ export default function BusinessDashboardPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
-                                    <TableHead className="font-bold py-4 pl-6">Customer & Vehicle</TableHead>
+                                    <TableHead className="font-bold py-4 pl-6">Customer & Schedule</TableHead>
                                     <TableHead className="font-bold">Contact (Secure)</TableHead>
                                     <TableHead className="font-bold">Staff Assignment</TableHead>
                                     <TableHead className="font-bold">Location</TableHead>
@@ -183,7 +184,7 @@ export default function BusinessDashboardPage() {
                                                 className="h-8 w-full rounded-md border bg-background px-2 text-[11px] font-black uppercase cursor-pointer outline-none focus:ring-1 focus:ring-primary"
                                                 value={booking.employee_id || ""}
                                                 onChange={(e) => handleAssignEmployee(booking.id, e.target.value)}
-                                                disabled={['completed', 'cancelled'].includes(booking.status)}
+                                                disabled={['completed', 'cancelled', 'rejected'].includes(booking.status)}
                                             >
                                                 <option value="">Select Detailer</option>
                                                 {employees.map(e => <option key={e.id} value={e.id}>{e.name.toUpperCase()}</option>)}
@@ -196,14 +197,15 @@ export default function BusinessDashboardPage() {
                                                         <MapPin className="h-3 w-3 mr-1" /> View Map
                                                     </a>
                                                 </Button>
-                                            ) : <span className="text-[10px] text-muted-foreground italic">Station</span>}
+                                            ) : <span className="text-[10px] text-muted-foreground italic">On-Site</span>}
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant="outline" className={cn(
                                                 "uppercase text-[9px] font-black px-2 py-0.5",
                                                 booking.status === 'confirmed' && "bg-blue-50 text-blue-700 border-blue-200",
                                                 booking.status === 'completed' && "bg-green-50 text-green-700 border-green-200",
-                                                booking.status === 'assigned' && "bg-orange-50 text-orange-700 border-orange-200"
+                                                booking.status === 'assigned' && "bg-orange-50 text-orange-700 border-orange-200",
+                                                booking.status === 'pending_assignment' && "bg-slate-50 text-slate-700 border-slate-200"
                                             )}>
                                                 {booking.status.replace('_', ' ')}
                                             </Badge>
@@ -230,9 +232,9 @@ export default function BusinessDashboardPage() {
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
                                     <TableHead className="font-bold py-4 pl-6">Prospect</TableHead>
-                                    <TableHead className="font-bold">Listing</TableHead>
-                                    <TableHead className="font-bold">Captured</TableHead>
-                                    <TableHead className="text-right font-bold pr-6">Action</TableHead>
+                                    <TableHead className="font-bold">Listing Category</TableHead>
+                                    <TableHead className="font-bold">Captured At</TableHead>
+                                    <TableHead className="text-right font-bold pr-6">Coordination</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

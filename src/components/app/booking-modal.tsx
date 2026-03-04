@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -6,12 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar as CalendarIcon, Clock, Loader2, Sparkles, User, Smartphone, Droplets, MapPin, AlertCircle, ShieldCheck, MessageCircle } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Loader2, Sparkles, User, Smartphone, Droplets, MapPin, AlertCircle, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -88,7 +88,7 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
         if (data.error) throw new Error(data.error);
 
         setStep('otp');
-        toast({ title: "Verification Sent", description: "Enter the code sent to your WhatsApp." });
+        toast({ title: "Verification Sent", description: "Enter the 6-digit code sent to your WhatsApp." });
       } catch (err: any) {
         toast({ variant: 'destructive', title: 'Auth Error', description: err.message });
       } finally {
@@ -106,7 +106,7 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
 
     setLoading(true);
     try {
-      // 1. Verify via API
+      // 1. Verify via Backend API
       const verifyRes = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -115,13 +115,11 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
       const verifyData = await verifyRes.json();
       if (verifyData.error) throw new Error(verifyData.error);
 
-      // 2. Generate Real Supabase Session (The Trick)
-      // signInWithOtp followed immediately by verifyOtp works if phone_confirm is true
+      // 2. Generate Supabase JWT Session
+      // We sign in via OTP internally. Since phone_confirm was set true in the API, this issues a JWT.
       const { error: signError } = await supabase.auth.signInWithOtp({
         phone: whatsapp.trim().replace(/\D/g, '')
       });
-      // We ignore error here because we expect it might fail if provider is not configured for actual SMS,
-      // but verifyOtp will work with our custom token if configured or if using the "sms" type.
       
       const { error: authError } = await supabase.auth.verifyOtp({
         phone: whatsapp.trim().replace(/\D/g, ''),
@@ -141,26 +139,39 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
   };
 
   const completeBooking = async () => {
+    setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Authentication failed. Please try again.");
 
-      const cleanWa = whatsapp.trim().replace(/\D/g, '');
+      const cleanWa = whatsapp.trim().replace(/\D/g, '') || user.phone || '';
 
-      // 1. Log Lead
+      // Check if user already has an active booking
+      const { count, error: countError } = await supabase
+        .from('wash_bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .not('status', 'in', '("completed","cancelled","rejected")');
+      
+      if (countError) throw countError;
+      if (count && count > 0) {
+        throw new Error("You already have an active booking request.");
+      }
+
+      // 1. Create Lead for sales tracking
       const { error: leadError } = await supabase.from('leads').insert({
         seller_id: businessId,
         user_id: user.id,
         listing_id: listingId,
         lead_type: 'wash_service',
-        customer_name: name.trim(),
+        customer_name: name.trim() || user.user_metadata?.name || 'Customer',
         customer_whatsapp: cleanWa,
         status: 'new'
       });
 
       if (leadError) throw leadError;
 
-      // 2. Create Booking
+      // 2. Create the Wash Booking
       const { error: bookingError } = await supabase.from('wash_bookings').insert({
         user_id: user.id,
         whatsapp_number: cleanWa,
@@ -174,11 +185,19 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
 
       if (bookingError) throw bookingError;
 
-      toast({ title: "Booking Successful! ✨", description: "Redirecting to your dashboard..." });
+      toast({ title: "Booking Successful! ✨", description: "Your elite wash request has been sent." });
       onClose();
       router.push('/customer/bookings');
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Booking Failed', description: err.message });
+      console.error("Booking Error Detail:", err);
+      const errorMessage = err?.message || err?.error_description || "Action failed. Please try again.";
+      toast({ 
+        variant: 'destructive', 
+        title: 'Booking Failed', 
+        description: errorMessage 
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -192,7 +211,7 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
           </DialogTitle>
           <DialogDescription className="text-slate-400">
             {step === 'details' 
-              ? `Secure your elite detailing slot at ${businessName}.`
+              ? `Coordinate your service at ${businessName}.`
               : `Enter the 6-digit code sent to ${whatsapp}.`}
           </DialogDescription>
         </DialogHeader>
@@ -215,14 +234,26 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
                 <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Your Name *</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <Input placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                  <Input 
+                    placeholder="e.g. Kagiso M." 
+                    value={name} 
+                    onChange={e => setName(e.target.value)} 
+                    required 
+                    className="pl-10 bg-white/5 border-white/10 h-12" 
+                  />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">WhatsApp No. *</Label>
+                <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">WhatsApp Number *</Label>
                 <div className="relative">
                   <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                  <Input 
+                    placeholder="26777123456" 
+                    value={whatsapp} 
+                    onChange={e => setWhatsapp(e.target.value)} 
+                    required 
+                    className="pl-10 bg-white/5 border-white/10 h-12" 
+                  />
                 </div>
               </div>
             </div>
@@ -267,8 +298,8 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
 
             <DialogFooter className="pt-4">
               <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter" disabled={loading}>
-                {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
-                Confirm Details
+                {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <Sparkles className="mr-2 h-5 w-5" />}
+                Confirm Request
               </Button>
             </DialogFooter>
           </form>

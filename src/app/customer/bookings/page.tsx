@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, MapPin, Loader2, Car as CarIcon, XCircle, UserCheck, Phone, CheckCircle2, ShieldCheck, RefreshCw, Droplets, ExternalLink } from "lucide-react";
+import { Calendar, Clock, MapPin, Loader2, XCircle, UserCheck, Phone, ShieldCheck, RefreshCw, Droplets, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
@@ -41,7 +41,7 @@ export default function CustomerBookingsPage() {
             if (error) throw error;
             setBookings(data || []);
         } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Fetch Error', description: 'Could not load your bookings.' });
+            toast({ variant: 'destructive', title: 'Fetch Error', description: 'Could not load your service history.' });
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -52,17 +52,26 @@ export default function CustomerBookingsPage() {
         setMounted(true);
         fetchBookings();
 
-        // Real-time subscription for customer
+        // Real-time subscription for service updates
         const channel = supabase
-            .channel('customer-ops')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchBookings(true))
+            .channel('customer-ops-tracking')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, (payload) => {
+                fetchBookings(true);
+                if (payload.eventType === 'UPDATE') {
+                    const newStatus = payload.new.status;
+                    toast({ 
+                        title: "Service Update 🧼", 
+                        description: `Your wash is now: ${newStatus.replace('_', ' ').toUpperCase()}` 
+                    });
+                }
+            })
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
     }, [fetchBookings]);
 
     const handleCancel = async (id: string) => {
-        if (!confirm('Are you sure you want to cancel this booking?')) return;
+        if (!confirm('Are you sure you want to cancel this request?')) return;
         try {
             const { error } = await supabase.from('wash_bookings').update({ status: 'cancelled' }).eq('id', id);
             if (error) throw error;
@@ -75,8 +84,8 @@ export default function CustomerBookingsPage() {
 
     if (!mounted || (loading && !refreshing)) return <div className="flex justify-center py-24"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
 
-    const activeBookings = bookings.filter(b => !['completed', 'cancelled'].includes(b.status));
-    const pastBookings = bookings.filter(b => ['completed', 'cancelled'].includes(b.status));
+    const activeBookings = bookings.filter(b => !['completed', 'cancelled', 'rejected'].includes(b.status));
+    const pastBookings = bookings.filter(b => ['completed', 'cancelled', 'rejected'].includes(b.status));
 
     return (
         <div className="space-y-8 max-w-6xl mx-auto pb-12 animate-in fade-in duration-500">
@@ -117,7 +126,8 @@ export default function CustomerBookingsPage() {
                                             </div>
                                             <Badge className={cn(
                                                 "uppercase text-[10px] font-black px-3 py-1",
-                                                booking.status === 'confirmed' ? "bg-blue-600 text-white" : "bg-slate-800 text-white"
+                                                booking.status === 'confirmed' ? "bg-blue-600 text-white" : 
+                                                booking.status === 'assigned' ? "bg-orange-600 text-white" : "bg-slate-800 text-white"
                                             )}>
                                                 {booking.status.replace('_', ' ')}
                                             </Badge>
@@ -193,7 +203,7 @@ export default function CustomerBookingsPage() {
                                 <p className="text-muted-foreground max-w-sm mx-auto font-medium">Ready for a fresh shine? Find a verified partner nearby.</p>
                             </div>
                             <Button asChild className="h-14 px-10 text-lg font-black shadow-2xl rounded-2xl uppercase tracking-tighter" size="lg">
-                                <Link href="/customer/home">Book a Wash Now</Link>
+                                <Link href="/find-wash">Book a Wash Now</Link>
                             </Button>
                         </div>
                     )}
@@ -222,8 +232,13 @@ export default function CustomerBookingsPage() {
                                         )}>
                                             {booking.status}
                                         </Badge>
+                                        {booking.status === 'completed' && (
+                                            <Button variant="outline" size="sm" className="h-9 px-4 font-bold border-primary/20" asChild>
+                                                <Link href={`/customer/rate/${booking.id}`}><Star className="mr-2 h-3 w-3" /> Rate</Link>
+                                            </Button>
+                                        )}
                                         <Button variant="outline" size="sm" className="h-9 px-4 font-bold border-primary/20" asChild>
-                                            <Link href={`/customer/book/${booking.wash_business_id}`}>Rebook</Link>
+                                            <Link href={`/find-wash/${booking.wash_business_id}`}>Rebook</Link>
                                         </Button>
                                     </div>
                                 </CardContent>

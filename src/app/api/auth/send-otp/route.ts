@@ -1,8 +1,10 @@
+
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
 /**
  * @fileOverview API Route to generate and store a WhatsApp OTP.
+ * This is used for frictionless customer onboarding.
  */
 
 export async function POST(req: Request) {
@@ -16,8 +18,8 @@ export async function POST(req: Request) {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-    // Store OTP in the phone_otps table
-    // Assuming table schema: phone (text, pk), otp (text), expires_at (timestamptz), verified (boolean)
+    // Store/Update OTP in the phone_otps table
+    // Table Schema: phone (text, pk), otp (text), expires_at (timestamptz), verified (boolean)
     const { error } = await supabaseAdmin
       .from('phone_otps')
       .upsert({ 
@@ -29,8 +31,9 @@ export async function POST(req: Request) {
 
     if (error) throw error;
 
-    // IN PRODUCTION: This is where you would call a WhatsApp API provider
-    console.log(`[ALM-AUTH] Custom WhatsApp OTP for ${cleanPhone}: ${otp}`);
+    // IN PRODUCTION: This is where you would call a WhatsApp API provider (e.g. Meta, Twilio, etc.)
+    // For now, we log it to the console for testing.
+    console.log(`[ALM-AUTH] WhatsApp OTP for ${cleanPhone}: ${otp}`);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
