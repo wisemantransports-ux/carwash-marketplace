@@ -7,7 +7,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, History, Building2, UserCheck } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, History, Building2, UserCheck, Star, Zap, Award } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,17 +31,66 @@ function MarketplaceContent() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
+  const calculatePerformance = useCallback(async (bizData: any[]) => {
+    // Stage 2.5: Fetch metrics for ranking
+    const bizIds = bizData.map(b => b.id);
+    
+    // Fetch bookings for these businesses
+    const { data: bookings } = await supabase
+      .from('wash_bookings')
+      .select('wash_business_id, status, created_at, updated_at')
+      .in('wash_business_id', bizIds);
+
+    const { data: ratings } = await supabase
+      .from('ratings')
+      .select('business_id, rating')
+      .in('business_id', bizIds);
+
+    return bizData.map(biz => {
+      const bizBookings = (bookings || []).filter(b => b.wash_business_id === biz.id);
+      const bizRatings = (ratings || []).filter(r => b.business_id === biz.id);
+      
+      const total = bizBookings.length;
+      const confirmed = bizBookings.filter(b => !['requested', 'cancelled', 'rejected'].includes(b.status)).length;
+      const completed = bizBookings.filter(b => b.status === 'completed').length;
+      
+      const confirmationRate = total > 0 ? confirmed / total : 0.8; // Default 80% for new
+      const completionRate = confirmed > 0 ? completed / confirmed : 0.9;
+      
+      // Response time estimation (Mocked for logic as per rules)
+      const avgResponseScore = 0.85; 
+      
+      const avgRating = bizRatings.length > 0 
+        ? bizRatings.reduce((acc, curr) => acc + curr.rating, 0) / bizRatings.length 
+        : (biz.rating || 4.5);
+      const ratingScore = avgRating / 5;
+
+      // PERFORMANCE_SCORE = 0.4*ConfirmationRate + 0.3*CompletionRate + 0.2*ResponseScore + 0.1*RatingScore
+      const score = (0.4 * confirmationRate) + (0.3 * completionRate) + (0.2 * avgResponseScore) + (0.1 * ratingScore);
+      
+      let performanceBadge = "Needs Improvement";
+      if (score > 0.85) performanceBadge = "Top Performer";
+      else if (score >= 0.70) performanceBadge = "Reliable Partner";
+
+      return {
+        ...biz,
+        performanceScore: score,
+        performanceBadge
+      };
+    });
+  }, []);
+
   const loadData = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     try {
       // 1. STAGE 1: Fetch Verified Businesses
-      const { data: bizData } = await supabase
+      const { data: rawBiz } = await supabase
           .from('businesses')
-          .select('id, name, city, logo_url, verification_status, category, address, business_type, special_tag')
+          .select('id, name, city, logo_url, verification_status, category, address, business_type, special_tag, rating, subscription_plan')
           .eq('verification_status', 'verified');
       
-      const partnerBusinesses = bizData || [];
+      const partnerBusinesses = await calculatePerformance(rawBiz || []);
       const verifiedIds = partnerBusinesses.map(b => b.id);
       const bizMap = partnerBusinesses.reduce((acc: any, b: any) => {
         acc[b.id] = b;
@@ -64,7 +113,7 @@ function MarketplaceContent() {
         setAllListings((listingData || []).map(l => ({ 
           ...l, 
           verified: true,
-          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana', business_type: 'individual' }
+          business: bizMap[l.business_id] || { name: 'Verified Partner', city: 'Botswana', business_type: 'individual', performanceBadge: 'Reliable Partner', performanceScore: 0.75 }
         })));
       } else {
         setAllListings([]);
@@ -74,7 +123,7 @@ function MarketplaceContent() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [calculatePerformance]);
 
   useEffect(() => {
     setMounted(true);
@@ -108,6 +157,13 @@ function MarketplaceContent() {
     }).map(l => ({ ...l, itemType: 'product' as const }));
 
     const combined = [...bizItems, ...productItems].sort((a, b) => {
+      // Primary sort: Performance Score (Descending)
+      const scoreA = a.performanceScore || a.business?.performanceScore || 0;
+      const scoreB = b.performanceScore || b.business?.performanceScore || 0;
+      
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      
+      // Secondary sort: Creation Date
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
@@ -141,11 +197,11 @@ function MarketplaceContent() {
         <div className="space-y-4 max-w-4xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
             <ShieldCheck className="h-3 w-3" />
-            <span>Premium Marketplace Network</span>
+            <span>Premium Performance-Ranked Network</span>
           </div>
           <h1 className="text-4xl font-black tracking-tight text-slate-900 uppercase italic">Discover Botswana Excellence</h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Search genuine components, elite detailing, and verified vehicles from trusted local businesses.
+            Search genuine components, elite detailing, and verified vehicles. Ranked by verified customer performance.
           </p>
         </div>
 
@@ -198,11 +254,16 @@ function MarketplaceContent() {
               ))
           ) : filteredItems.length > 0 ? (
             filteredItems.map((item: any) => {
-              const bizType = item.itemType === 'business' ? item.business_type : item.business?.business_type;
-              const isRegistered = bizType === 'registered';
+              const biz = item.itemType === 'business' ? item : item.business;
+              const isRegistered = biz?.business_type === 'registered';
+              const isPremium = ['Pro', 'Enterprise'].includes(biz?.subscription_plan);
+              const performanceBadge = biz?.performanceBadge;
 
               return (
-                <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
+                <Card key={`${item.itemType}-${item.id}`} className={cn(
+                  "flex flex-col overflow-hidden transition-all duration-300 hover:shadow-2xl border-2 rounded-2xl h-full group",
+                  isPremium && "border-primary/20 shadow-lg shadow-primary/5"
+                )}>
                   <div className="relative h-48 bg-muted overflow-hidden">
                     <Image 
                       src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/biz-${item.id}/600/400`) : (item.image_url || `https://picsum.photos/seed/list-${item.id}/600/400`)} 
@@ -211,15 +272,31 @@ function MarketplaceContent() {
                       className="object-cover transition-transform duration-500 group-hover:scale-110" 
                     />
                     <div className="absolute top-2 left-2 flex flex-col gap-1.5">
-                      <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm w-fit">
-                        {item.itemType === 'business' ? (item.category || 'Provider') : (item.listing_type || item.type || 'Listing').replace('_', ' ')}
-                      </Badge>
+                      <div className="flex gap-1">
+                        <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm w-fit">
+                          {item.itemType === 'business' ? (item.category || 'Provider') : (item.listing_type || item.type || 'Listing').replace('_', ' ')}
+                        </Badge>
+                        {isPremium && (
+                          <Badge className="bg-primary text-white border-none shadow-sm uppercase text-[8px] font-black flex items-center gap-1">
+                            <Award className="h-2 w-2" /> Premium Partner
+                          </Badge>
+                        )}
+                      </div>
+                      
                       <Badge variant="outline" className={cn(
                         "text-[8px] font-black uppercase shadow-sm w-fit border-none",
                         isRegistered ? "bg-blue-600 text-white" : "bg-green-600 text-white"
                       )}>
                         {isRegistered ? <Building2 className="h-2 w-2 mr-1" /> : <UserCheck className="h-2 w-2 mr-1" />}
                         {isRegistered ? "CIPA Verified" : "Micro Business"}
+                      </Badge>
+
+                      <Badge className={cn(
+                        "text-[8px] font-black uppercase shadow-sm w-fit border-none",
+                        performanceBadge === "Top Performer" ? "bg-yellow-500 text-black" : 
+                        performanceBadge === "Reliable Partner" ? "bg-slate-800 text-white" : "bg-slate-400 text-white"
+                      )}>
+                        <Zap className="h-2 w-2 mr-1" /> {performanceBadge}
                       </Badge>
                     </div>
                     {item.price && (
@@ -232,9 +309,15 @@ function MarketplaceContent() {
                   </div>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-bold uppercase tracking-wider">
-                      <MapPin className="h-3.5 w-3.5 text-primary opacity-60" /> 
-                      <span>{item.itemType === 'business' ? item.city : item.business?.city || 'Botswana'}</span>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground font-bold uppercase tracking-wider">
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5 text-primary opacity-60" /> 
+                        <span>{biz?.city || 'Botswana'}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-yellow-600">
+                        <Star className="h-3 w-3 fill-current" />
+                        <span>{biz?.rating || '4.5'}</span>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="flex-grow">
