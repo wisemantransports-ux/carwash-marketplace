@@ -84,8 +84,10 @@ export type WashBooking = {
   service_type: string;
   booking_date: string;
   booking_time: string;
+  location_pin?: string;
   status: 'pending_assignment' | 'assigned' | 'confirmed' | 'completed' | 'cancelled';
   price?: number;
   user?: { name: string };
   employee?: { name: string; image_url: string };
+  created_at: string;
 };

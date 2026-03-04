@@ -1,11 +1,11 @@
 
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, CheckCircle2, LayoutDashboard, Package, Clock, MoreHorizontal, UserCheck, Phone, ShieldCheck } from "lucide-react";
+import { Loader2, RefreshCw, CheckCircle2, LayoutDashboard, Clock, MoreHorizontal, UserCheck, Phone, MapPin, ExternalLink, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -98,6 +98,16 @@ export default function BusinessDashboardPage() {
         }
     };
 
+    const handleCompleteBooking = async (bookingId: string) => {
+        try {
+            const { error } = await supabase.from('wash_bookings').update({ status: 'completed' }).eq('id', bookingId);
+            if (error) throw error;
+            toast({ title: "Wash Completed! ✨" });
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
+        }
+    };
+
     // Number Masking Logic: Hide WhatsApp until confirmed
     const formatPhone = (phone: string, status: string) => {
         if (['pending_assignment', 'assigned'].includes(status)) {
@@ -114,12 +124,12 @@ export default function BusinessDashboardPage() {
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary flex items-center gap-3">
                         <LayoutDashboard className="h-10 w-10" />
-                        {business?.name} Dashboard
+                        Operational Command
                     </h1>
-                    <p className="text-muted-foreground font-medium">Ops center for {business?.category} services.</p>
+                    <p className="text-muted-foreground font-medium">Real-time management for {business?.name}.</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-4">
-                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh
+                <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-4 border-primary/20">
+                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Feed
                 </Button>
             </div>
 
@@ -130,64 +140,96 @@ export default function BusinessDashboardPage() {
                 </TabsList>
                 
                 <TabsContent value="ops">
-                    <Card className="shadow-xl overflow-hidden border-2 rounded-2xl">
+                    <Card className="shadow-2xl overflow-hidden border-2 rounded-2xl">
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
-                                    <TableHead className="font-bold py-4 pl-6">Customer</TableHead>
-                                    <TableHead className="font-bold">Contact</TableHead>
-                                    <TableHead className="font-bold">Assign Staff</TableHead>
+                                    <TableHead className="font-bold py-4 pl-6">Customer & Vehicle</TableHead>
+                                    <TableHead className="font-bold">Contact (Secure)</TableHead>
+                                    <TableHead className="font-bold">Staff Assignment</TableHead>
+                                    <TableHead className="font-bold">Location</TableHead>
                                     <TableHead className="font-bold">Status</TableHead>
                                     <TableHead className="text-right font-bold pr-6">Action</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {bookings.map((booking) => (
-                                    <TableRow key={booking.id} className="hover:bg-muted/10 border-b">
+                                    <TableRow key={booking.id} className="hover:bg-muted/10 border-b transition-colors">
                                         <TableCell className="pl-6">
                                             <div className="flex flex-col">
-                                                <span className="font-bold text-sm">{booking.user?.name || 'Anonymous'}</span>
-                                                <span className="text-[10px] text-muted-foreground font-medium uppercase">{new Date(booking.booking_date).toLocaleDateString()}</span>
+                                                <span className="font-bold text-sm text-primary">{booking.user?.name || 'Customer'}</span>
+                                                <span className="text-[10px] text-muted-foreground font-black uppercase tracking-tighter">
+                                                    {new Date(booking.booking_date).toLocaleDateString()} @ {booking.booking_time}
+                                                </span>
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <span className="font-mono text-xs font-bold">{formatPhone(booking.whatsapp_number, booking.status)}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={cn(
+                                                    "font-mono text-xs font-bold",
+                                                    booking.status === 'confirmed' ? "text-green-600" : "text-muted-foreground"
+                                                )}>
+                                                    {formatPhone(booking.whatsapp_number, booking.status)}
+                                                </span>
+                                                {booking.status === 'confirmed' && (
+                                                    <a href={`https://wa.me/${booking.whatsapp_number}`} target="_blank" className="text-primary">
+                                                        <Phone className="h-3 w-3" />
+                                                    </a>
+                                                )}
+                                            </div>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="min-w-[180px]">
                                             <select 
-                                                className="h-8 w-full rounded-md border bg-background px-2 text-[11px] font-bold"
+                                                className="h-8 w-full rounded-md border bg-background px-2 text-[11px] font-black uppercase cursor-pointer"
                                                 value={booking.employee_id || ""}
                                                 onChange={(e) => handleAssignEmployee(booking.id, e.target.value)}
                                                 disabled={['completed', 'cancelled'].includes(booking.status)}
                                             >
-                                                <option value="">Select Professional</option>
-                                                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                                <option value="">Select Detailer</option>
+                                                {employees.map(e => <option key={e.id} value={e.id}>{e.name.toUpperCase()}</option>)}
                                             </select>
                                         </TableCell>
                                         <TableCell>
-                                            <Badge variant="outline" className="uppercase text-[9px] font-black">{booking.status.replace('_', ' ')}</Badge>
+                                            {booking.location_pin ? (
+                                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold text-primary" asChild>
+                                                    <a href={booking.location_pin} target="_blank">
+                                                        <MapPin className="h-3 w-3 mr-1" /> View Map
+                                                    </a>
+                                                </Button>
+                                            ) : <span className="text-[10px] text-muted-foreground italic">Station</span>}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className={cn(
+                                                "uppercase text-[9px] font-black px-2 py-0.5",
+                                                booking.status === 'confirmed' && "bg-blue-50 text-blue-700 border-blue-200",
+                                                booking.status === 'completed' && "bg-green-50 text-green-700 border-green-200"
+                                            )}>
+                                                {booking.status.replace('_', ' ')}
+                                            </Badge>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
                                             {booking.status === 'assigned' && (
-                                                <Button size="sm" onClick={() => handleConfirmBooking(booking.id)} className="h-8 text-[10px] font-black uppercase">Confirm</Button>
+                                                <Button size="sm" onClick={() => handleConfirmBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-primary hover:bg-primary/90">Confirm</Button>
+                                            )}
+                                            {booking.status === 'confirmed' && (
+                                                <Button size="sm" onClick={() => handleCompleteBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-green-600 hover:bg-green-700">Finish</Button>
                                             )}
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {bookings.length === 0 && <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic">No active operations.</TableCell></TableRow>}
+                                {bookings.length === 0 && <TableRow><TableCell colSpan={6} className="h-48 text-center text-muted-foreground italic">No active car wash operations.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </Card>
                 </TabsContent>
 
                 <TabsContent value="leads">
-                    <Card className="shadow-xl overflow-hidden border-2 rounded-2xl">
+                    <Card className="shadow-2xl overflow-hidden border-2 rounded-2xl">
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
                                     <TableHead className="font-bold py-4 pl-6">Prospect</TableHead>
-                                    <TableHead className="font-bold">Contact (Hidden)</TableHead>
-                                    <TableHead className="font-bold">Lead Type</TableHead>
+                                    <TableHead className="font-bold">Listing</TableHead>
                                     <TableHead className="font-bold">Captured</TableHead>
                                     <TableHead className="text-right font-bold pr-6">Action</TableHead>
                                 </TableRow>
@@ -196,17 +238,18 @@ export default function BusinessDashboardPage() {
                                 {leads.map((lead) => (
                                     <TableRow key={lead.id} className="hover:bg-muted/10 border-b">
                                         <TableCell className="pl-6 font-bold text-sm">{lead.customer_name}</TableCell>
-                                        <TableCell className="font-mono text-xs text-muted-foreground">••••••••••</TableCell>
                                         <TableCell><Badge variant="secondary" className="uppercase text-[9px] font-black">{lead.lead_type.replace('_', ' ')}</Badge></TableCell>
-                                        <TableCell className="text-[10px] font-medium">{new Date(lead.created_at).toLocaleDateString()}</TableCell>
+                                        <TableCell className="text-[10px] font-bold text-muted-foreground">{new Date(lead.created_at).toLocaleDateString()}</TableCell>
                                         <TableCell className="text-right pr-6">
-                                            <Button size="sm" variant="outline" className="h-8 text-[10px] font-black uppercase" asChild>
-                                                <a href={`https://wa.me/${lead.customer_whatsapp}`} target="_blank">Contact</a>
+                                            <Button size="sm" variant="outline" className="h-8 text-[10px] font-black uppercase rounded-full border-primary/20" asChild>
+                                                <a href={`https://wa.me/${lead.customer_whatsapp}`} target="_blank">
+                                                    <Phone className="h-3 w-3 mr-1.5" /> Start Chat
+                                                </a>
                                             </Button>
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {leads.length === 0 && <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic">No sales leads captured.</TableCell></TableRow>}
+                                {leads.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic">No sales leads captured yet.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </Card>
