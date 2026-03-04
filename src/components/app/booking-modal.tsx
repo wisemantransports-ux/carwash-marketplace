@@ -106,7 +106,11 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
         setStep('otp');
         toast({ title: "Verification Sent", description: "Enter the 6-digit code sent to your WhatsApp." });
       } catch (err: any) {
-        toast({ variant: 'destructive', title: 'Auth Error', description: err.message });
+        toast({ 
+          variant: 'destructive', 
+          title: 'Auth Error', 
+          description: err.message || "Could not send verification code." 
+        });
       } finally {
         setLoading(false);
       }
@@ -148,7 +152,11 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
       // 3. Proceed to creation now that we have a session
       await completeBooking();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Verification Failed', description: err.message });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Verification Failed', 
+        description: err.message || "Invalid verification code." 
+      });
     } finally {
       setLoading(false);
     }
@@ -157,7 +165,8 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
   const completeBooking = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
       if (!user) throw new Error("Authentication failed. Please sign in.");
 
       const cleanWa = whatsapp.trim().replace(/\D/g, '') || user.phone || '';
@@ -204,10 +213,23 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
       router.push('/customer/bookings');
     } catch (err: any) {
       console.error("Booking Error Detail:", err);
+      
+      // Robust error message extraction
+      let errorMessage = "An unexpected error occurred.";
+      if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      } else if (err?.error_description) {
+        errorMessage = err.error_description;
+      } else if (err?.details) {
+        errorMessage = err.details;
+      }
+
       toast({ 
         variant: 'destructive', 
         title: 'Booking Failed', 
-        description: err.message || "An unexpected error occurred." 
+        description: errorMessage 
       });
     } finally {
       setLoading(false);

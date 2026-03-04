@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -94,7 +95,18 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       onClose();
     } catch (err: any) {
       console.error("Lead Error Detail:", err);
-      const errorMessage = err?.message || err?.error_description || "Communication error. Please try again or sign in.";
+      
+      let errorMessage = "Communication error. Please try again or sign in.";
+      if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      } else if (err?.error_description) {
+        errorMessage = err.error_description;
+      } else if (err?.details) {
+        errorMessage = err.details;
+      }
+
       toast({ 
         variant: 'destructive', 
         title: 'Inquiry Failed', 
