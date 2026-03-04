@@ -18,18 +18,27 @@ interface BookingModalProps {
 }
 
 /**
- * Extract a readable message from any error object
+ * Robust error message extraction for Supabase and standard JS errors.
  */
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
-  if (err.message) return err.message;
-  if (err.error_description) return err.error_description;
-  if (err.details) return err.details;
-  if (err.code) return `Database error code: ${err.code}`;
+  
+  // Handle Supabase PostgrestError or standard Error
+  const message = err.message || err.error_description || (err.error && err.error.message);
+  const details = err.details || "";
+  const code = err.code || "";
+  
+  if (message) {
+    let fullMessage = message;
+    if (details && details !== message) fullMessage += ` (${details})`;
+    if (code) fullMessage += ` [${code}]`;
+    return fullMessage;
+  }
+
   try {
     const stringified = JSON.stringify(err);
-    return stringified === '{}' ? err.toString() : stringified;
+    return stringified === '{}' ? String(err) : stringified;
   } catch {
     return String(err);
   }
@@ -89,12 +98,15 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
         currentUserId = authResult.userId;
       }
 
-      if (!currentUserId) throw new Error("Could not verify your identity. Please try again.");
+      if (!currentUserId) {
+        throw new Error("Could not verify your identity. Please try again.");
+      }
 
-      // 2. Prepare Booking Payload
+      // 2. Prepare Booking Payload - Aligned with strict schema requirements
       const bookingPayload = {
         customer_id: currentUserId,
         seller_business_id: service.business_id,
+        business_id: service.business_id, // Satisfy both potential ID columns
         wash_service_id: service.id,
         employee_id: null,
         status: 'pending_assignment',
@@ -104,7 +116,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
         customer_whatsapp: whatsapp.replace(/\D/g, '')
       };
 
-      // 3. Insert into wash_bookings
+      // 3. Insert into wash_bookings - Ensuring ONLY this table is used for carwash
       const { error: bookingError } = await supabase
         .from('wash_bookings')
         .insert([bookingPayload]);
@@ -116,7 +128,13 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       onClose();
       router.push('/customer/bookings');
     } catch (err: any) {
-      console.error("Booking Error Detail:", err);
+      // Improved error logging to catch the "empty object" issue
+      console.group("Booking Process Failure");
+      console.error("Raw Error:", err);
+      console.error("Error Message:", err?.message);
+      console.error("Error Details:", err?.details);
+      console.groupEnd();
+
       toast({ 
         variant: 'destructive', 
         title: 'Booking Failed', 

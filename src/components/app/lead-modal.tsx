@@ -18,17 +18,26 @@ interface LeadModalProps {
 }
 
 /**
- * Extract a readable message from any error object
+ * Robust error message extraction for Supabase and standard JS errors.
  */
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
-  if (err.message) return err.message;
-  if (err.error_description) return err.error_description;
-  if (err.details) return err.details;
+  
+  const message = err.message || err.error_description || (err.error && err.error.message);
+  const details = err.details || "";
+  const code = err.code || "";
+  
+  if (message) {
+    let fullMessage = message;
+    if (details && details !== message) fullMessage += ` (${details})`;
+    if (code) fullMessage += ` [${code}]`;
+    return fullMessage;
+  }
+
   try {
     const stringified = JSON.stringify(err);
-    return stringified === '{}' ? err.toString() : stringified;
+    return stringified === '{}' ? String(err) : stringified;
   } catch {
     return String(err);
   }
