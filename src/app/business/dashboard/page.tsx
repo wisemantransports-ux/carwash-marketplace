@@ -5,13 +5,12 @@ import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, CheckCircle2, LayoutDashboard, Clock, MoreHorizontal, UserCheck, Phone, MapPin, ExternalLink, ShieldCheck } from "lucide-react";
+import { Loader2, RefreshCw, CheckCircle2, LayoutDashboard, Clock, MoreHorizontal, UserCheck, Phone, MapPin, ExternalLink, ShieldCheck, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Business, Lead, WashBooking, Employee } from "@/lib/types";
 
@@ -68,8 +67,8 @@ export default function BusinessDashboardPage() {
         // Supabase Realtime for Ops
         const channel = supabase
             .channel('dashboard-ops')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => fetchData(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(silent = true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => fetchData(silent = true))
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
@@ -110,6 +109,7 @@ export default function BusinessDashboardPage() {
 
     // Number Masking Logic: Hide WhatsApp until confirmed
     const formatPhone = (phone: string, status: string) => {
+        if (!phone) return '---';
         if (['pending_assignment', 'assigned'].includes(status)) {
             return phone.slice(0, 3) + '••••' + phone.slice(-2);
         }
@@ -172,15 +172,15 @@ export default function BusinessDashboardPage() {
                                                     {formatPhone(booking.whatsapp_number, booking.status)}
                                                 </span>
                                                 {booking.status === 'confirmed' && (
-                                                    <a href={`https://wa.me/${booking.whatsapp_number}`} target="_blank" className="text-primary">
-                                                        <Phone className="h-3 w-3" />
+                                                    <a href={`https://wa.me/${booking.whatsapp_number}`} target="_blank" className="text-primary hover:scale-110 transition-transform">
+                                                        <Phone className="h-3.5 w-3.5" />
                                                     </a>
                                                 )}
                                             </div>
                                         </TableCell>
                                         <TableCell className="min-w-[180px]">
                                             <select 
-                                                className="h-8 w-full rounded-md border bg-background px-2 text-[11px] font-black uppercase cursor-pointer"
+                                                className="h-8 w-full rounded-md border bg-background px-2 text-[11px] font-black uppercase cursor-pointer outline-none focus:ring-1 focus:ring-primary"
                                                 value={booking.employee_id || ""}
                                                 onChange={(e) => handleAssignEmployee(booking.id, e.target.value)}
                                                 disabled={['completed', 'cancelled'].includes(booking.status)}
@@ -191,7 +191,7 @@ export default function BusinessDashboardPage() {
                                         </TableCell>
                                         <TableCell>
                                             {booking.location_pin ? (
-                                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold text-primary" asChild>
+                                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold text-primary px-2" asChild>
                                                     <a href={booking.location_pin} target="_blank">
                                                         <MapPin className="h-3 w-3 mr-1" /> View Map
                                                     </a>
@@ -202,17 +202,18 @@ export default function BusinessDashboardPage() {
                                             <Badge variant="outline" className={cn(
                                                 "uppercase text-[9px] font-black px-2 py-0.5",
                                                 booking.status === 'confirmed' && "bg-blue-50 text-blue-700 border-blue-200",
-                                                booking.status === 'completed' && "bg-green-50 text-green-700 border-green-200"
+                                                booking.status === 'completed' && "bg-green-50 text-green-700 border-green-200",
+                                                booking.status === 'assigned' && "bg-orange-50 text-orange-700 border-orange-200"
                                             )}>
                                                 {booking.status.replace('_', ' ')}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
                                             {booking.status === 'assigned' && (
-                                                <Button size="sm" onClick={() => handleConfirmBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-primary hover:bg-primary/90">Confirm</Button>
+                                                <Button size="sm" onClick={() => handleConfirmBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-primary hover:bg-primary/90 shadow-md">Confirm</Button>
                                             )}
                                             {booking.status === 'confirmed' && (
-                                                <Button size="sm" onClick={() => handleCompleteBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-green-600 hover:bg-green-700">Finish</Button>
+                                                <Button size="sm" onClick={() => handleCompleteBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-green-600 hover:bg-green-700 shadow-md">Finish</Button>
                                             )}
                                         </TableCell>
                                     </TableRow>
