@@ -24,94 +24,52 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanWa = whatsapp.trim().replace(/\D/g, '');
-    if (!name || !cleanWa) return;
+    if (!name || !whatsapp) return;
 
     setLoading(true);
     try {
-      // 1. Fetch Listing & Business
-      const { data: listing, error: listingError } = await supabase
+      // 1. Frictionless Identity Resolution
+      const res = await fetch('/api/auth/frictionless', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ whatsapp, name })
+      });
+      const authResult = await res.json();
+      if (authResult.error) throw new Error(authResult.error);
+
+      // 2. Fetch Listing & Business Context
+      const { data: listing } = await supabase
         .from('listings')
-        .select('business_id, listing_type')
+        .select('business_id, listing_type, business:business_id(whatsapp_number)')
         .eq('id', listingId)
         .single();
 
-      if (listingError) throw listingError;
-      if (!listing) throw new Error("Listing unavailable or removed.");
+      if (!listing) throw new Error("Listing unavailable.");
 
-      // 2. Progressive Identity: Create/Get User
-      const { data: existingUser, error: findError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('whatsapp_number', cleanWa)
-        .maybeSingle();
-      
-      if (findError) throw findError;
-
-      let user = existingUser;
-      
-      if (!user) {
-        const { data: newUser, error: createError } = await supabase
-          .from('users')
-          .insert({ 
-            whatsapp_number: cleanWa, 
-            name: name.trim(), 
-            role: 'customer' 
-          })
-          .select()
-          .single();
-        
-        if (createError) throw createError;
-        user = newUser;
-      }
+      const cleanWa = whatsapp.replace(/\D/g, '');
+      const currentUserId = authResult.userId;
 
       // 3. Log Lead
-      const { error: leadError } = await supabase.from('leads').insert({
+      const { error: leadErr } = await supabase.from('leads').insert({
         seller_id: listing.business_id,
-        user_id: user?.id,
+        user_id: currentUserId,
         listing_id: listingId,
         lead_type: listing.listing_type,
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         status: 'new'
       });
-
-      if (leadError) throw leadError;
+      if (leadErr) throw leadErr;
 
       // 4. WhatsApp Connect
-      const { data: biz, error: bizError } = await supabase
-        .from('businesses')
-        .select('whatsapp_number')
-        .eq('id', listing.business_id)
-        .single();
-      
-      if (bizError) throw bizError;
-
-      const phone = biz?.whatsapp_number || '26777491261';
-      const url = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! 👋 I'm interested in the *${listingTitle}* listing on AutoLink. My name is ${name}.`)}`;
+      const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
+      const url = `https://wa.me/${bizPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name}.`)}`;
       
       window.open(url, '_blank');
-      toast({ title: "Inquiry Sent! ✅", description: "The seller has been notified." });
+      toast({ title: "Inquiry Logged! ✅", description: "Sellers typically respond in 1-2 hours." });
       onClose();
     } catch (err: any) {
-      console.error("Lead Error Detail:", err);
-      
-      let errorMessage = "Communication error. Please try again or sign in.";
-      if (typeof err === 'string') {
-        errorMessage = err;
-      } else if (err?.message) {
-        errorMessage = err.message;
-      } else if (err?.error_description) {
-        errorMessage = err.error_description;
-      } else if (err?.details) {
-        errorMessage = err.details;
-      }
-
-      toast({ 
-        variant: 'destructive', 
-        title: 'Inquiry Failed', 
-        description: errorMessage 
-      });
+      toast({ variant: 'destructive', title: 'Inquiry Failed', description: err.message });
     } finally {
       setLoading(false);
     }
@@ -126,20 +84,20 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
             Direct Inquiry
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Connect instantly with the verified seller via secure WhatsApp chat.
+            Frictionless connection. Your identity is matched via WhatsApp.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Full Name</Label>
+              <Label className="text-[10px] font-black text-slate-500 uppercase">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="Kagiso M." value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10" />
+                <Input placeholder="Enter your name" value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">WhatsApp Number</Label>
+              <Label className="text-[10px] font-black text-slate-500 uppercase">WhatsApp Number</Label>
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10" />
@@ -149,7 +107,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
           <DialogFooter>
             <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={loading}>
               {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <MessageCircle className="mr-2 h-5 w-5" />}
-              Open WhatsApp Chat
+              Connect on WhatsApp
             </Button>
           </DialogFooter>
         </form>

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar as CalendarIcon, Clock, Loader2, Sparkles, User, Smartphone, Droplets, MapPin, AlertCircle, ShieldCheck } from "lucide-react";
+import { Loader2, Sparkles, User, Smartphone, Droplets, MapPin, AlertCircle, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -21,16 +21,10 @@ interface BookingModalProps {
   services: any[];
 }
 
-/**
- * @fileOverview Refined Booking Modal
- * Implements frictionless progressive identity via custom WhatsApp OTP.
- * Enforces "One Active Booking" rule and subscription gating.
- */
 export function BookingModal({ isOpen, onClose, businessId, businessName, services }: BookingModalProps) {
   const router = useRouter();
   const { user: authUser } = useAuth();
   
-  // Form States
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [listingId, setListingId] = useState('');
@@ -38,25 +32,18 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
   const [time, setTime] = useState('');
   const [locationPin, setLocationPin] = useState('');
   
-  // Auth Flow States
-  const [step, setStep] = useState<'details' | 'otp'>('details');
-  const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [bizStatus, setBizStatus] = useState<{ active: boolean; reason?: string }>({ active: true });
 
   useEffect(() => {
-    if (isOpen && businessId) {
-      setStep('details');
-      setOtpCode('');
-      
+    if (isOpen) {
       if (authUser) {
         setName(authUser.user_metadata?.name || '');
         setWhatsapp(authUser.phone || authUser.user_metadata?.whatsapp || '');
       }
-
-      const checkBizAndUser = async () => {
+      
+      const checkBiz = async () => {
         try {
-          // 1. Check Partner Access
           const { data: biz } = await supabase
             .from('businesses')
             .select('verification_status, subscription_status')
@@ -65,125 +52,72 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
           
           if (biz) {
             if (biz.subscription_status === 'inactive') {
-              setBizStatus({ active: false, reason: "This partner's professional features are currently paused." });
+              setBizStatus({ active: false, reason: "Partner features are currently paused." });
             } else if (biz.verification_status !== 'verified') {
-              setBizStatus({ active: false, reason: "This business is currently under verification review." });
+              setBizStatus({ active: false, reason: "Business is currently under review." });
             } else {
               setBizStatus({ active: true });
             }
           }
         } catch (e) {
-          console.error("Integrity check failed:", e);
+          console.error("Check failed:", e);
         }
       };
-      checkBizAndUser();
+      checkBiz();
     }
   }, [isOpen, businessId, authUser]);
 
-  const handleInitialSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !whatsapp || !listingId || !date || !time) {
-      toast({ variant: 'destructive', title: 'Missing Info', description: 'Please fill in all mandatory fields.' });
+      toast({ variant: 'destructive', title: 'Missing Info', description: 'Please fill in mandatory fields.' });
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Rule: Check for active bookings if already authed
-      if (authUser) {
-        const { count, error } = await supabase
-          .from('wash_bookings')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', authUser.id)
-          .not('status', 'in', '("completed","cancelled","rejected")');
-        
-        if (error) throw error;
-        if (count && count > 0) {
-          throw new Error("You already have an active car wash request. Please wait for completion or cancel it.");
-        }
-      }
-
-      if (!authUser) {
-        // Trigger custom OTP via server-side API
-        const res = await fetch('/api/auth/send-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: whatsapp })
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-
-        setStep('otp');
-        toast({ title: "Verification Sent", description: "Enter the 6-digit code sent to your WhatsApp." });
-      } else {
-        completeBooking();
-      }
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Action Failed', description: err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otpCode.length < 6) return;
-
-    setLoading(true);
-    try {
-      // 1. Verify via Backend API
-      const verifyRes = await fetch('/api/auth/verify-otp', {
+      // 1. Frictionless Identity Resolution
+      const res = await fetch('/api/auth/frictionless', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: whatsapp, otp: otpCode, name })
+        body: JSON.stringify({ whatsapp, name })
       });
-      const verifyData = await verifyRes.json();
-      if (verifyData.error) throw new Error(verifyData.error);
+      const authResult = await res.json();
+      if (authResult.error) throw new Error(authResult.error);
 
-      // 2. Auth Trick: Issue JWT Session
-      const cleanPhone = whatsapp.trim().replace(/\D/g, '');
-      await supabase.auth.signInWithOtp({ phone: cleanPhone });
-      const { error: authError } = await supabase.auth.verifyOtp({
-        phone: cleanPhone,
-        token: otpCode,
-        type: 'sms'
-      });
+      // 2. Ensure RLS Session (Silent anonymous sign-in if not authed)
+      if (!authUser) {
+        await supabase.auth.signInAnonymously({
+          options: { data: { name, role: 'customer', whatsapp: whatsapp.replace(/\D/g, '') } }
+        });
+      }
 
-      if (authError) throw authError;
+      const cleanWa = whatsapp.replace(/\D/g, '');
+      const currentUserId = authResult.userId || (await supabase.auth.getUser()).data.user?.id;
 
-      // 3. Proceed to creation
-      await completeBooking();
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Verification Failed', description: err.message || "Invalid code." });
-    } finally {
-      setLoading(false);
-    }
-  };
+      // 3. Check for active bookings
+      const { count } = await supabase
+        .from('wash_bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', currentUserId)
+        .not('status', 'in', '("completed","cancelled","rejected")');
+      
+      if (count && count > 0) throw new Error("You already have an active request.");
 
-  const completeBooking = async () => {
-    setLoading(true);
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      if (!user) throw new Error("Auth session lost. Please try again.");
-
-      const cleanWa = whatsapp.trim().replace(/\D/g, '') || user.phone || '';
-
-      // 1. Create Lead
-      const { error: leadError } = await supabase.from('leads').insert({
+      // 4. Create Lead & Booking
+      const { error: leadErr } = await supabase.from('leads').insert({
         seller_id: businessId,
-        user_id: user.id,
+        user_id: currentUserId,
         listing_id: listingId,
         lead_type: 'wash_service',
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         status: 'new'
       });
-      if (leadError) throw leadError;
+      if (leadErr) throw leadErr;
 
-      // 2. Create Wash Booking
-      const { error: bookingError } = await supabase.from('wash_bookings').insert({
-        user_id: user.id,
+      const { error: bookingErr } = await supabase.from('wash_bookings').insert({
+        user_id: currentUserId,
         whatsapp_number: cleanWa,
         wash_business_id: businessId,
         service_type: listingId,
@@ -192,17 +126,16 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
         location_pin: locationPin.trim() || null,
         status: 'pending_assignment'
       });
-      if (bookingError) throw bookingError;
+      if (bookingErr) throw bookingErr;
 
-      toast({ title: "Booking Successful! ✨", description: "Redirecting to your dashboard..." });
+      toast({ title: "Booking Successful! ✨", description: "Request sent to the partner." });
       onClose();
       router.push('/customer/bookings');
     } catch (err: any) {
-      console.error("Booking Finalization Error:", err);
       toast({ 
         variant: 'destructive', 
         title: 'Booking Failed', 
-        description: err.message || "Could not complete booking. Please check your connection." 
+        description: err.message || "Failed to process request." 
       });
     } finally {
       setLoading(false);
@@ -215,48 +148,43 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
         <DialogHeader>
           <DialogTitle className="text-2xl font-black text-primary flex items-center gap-2">
             <Droplets className="h-6 w-6" />
-            {step === 'details' ? 'Elite Wash Booking' : 'Security Verification'}
+            Book Your Shine
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            {step === 'details' 
-              ? `Professional service at ${businessName}.`
-              : `Enter the 6-digit code sent via WhatsApp to ${whatsapp}.`}
+            Frictionless booking at {businessName}. No password required.
           </DialogDescription>
         </DialogHeader>
 
         {!bizStatus.active ? (
           <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
             <div className="bg-orange-500/10 p-4 rounded-full"><AlertCircle className="h-10 w-10 text-orange-500" /></div>
-            <div className="space-y-2 max-w-xs">
-              <p className="font-bold text-lg">Partner Restricted</p>
-              <p className="text-xs text-slate-400 leading-relaxed">{bizStatus.reason}</p>
-            </div>
-            <Button variant="outline" className="border-white/10" onClick={onClose}>Return to Marketplace</Button>
+            <p className="font-bold text-lg">{bizStatus.reason}</p>
+            <Button variant="outline" className="border-white/10" onClick={onClose}>Back</Button>
           </div>
-        ) : step === 'details' ? (
-          <form onSubmit={handleInitialSubmit} className="space-y-6 py-4">
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6 py-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Full Name</Label>
+                <Label className="text-[10px] font-black text-slate-500 uppercase">Your Name</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <Input placeholder="Kagiso M." value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                  <Input placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10" />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">WhatsApp Number</Label>
+                <Label className="text-[10px] font-black text-slate-500 uppercase">WhatsApp Number</Label>
                 <div className="relative">
                   <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                  <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10" />
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Wash Package</Label>
+              <Label className="text-[10px] font-black text-slate-500 uppercase">Service Package</Label>
               <Select value={listingId} onValueChange={setListingId} required>
-                <SelectTrigger className="bg-white/5 border-white/10 h-12 text-white">
-                  <SelectValue placeholder="Choose a service" />
+                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                  <SelectValue placeholder="Select a package" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 border-white/10 text-white">
                   {services.map(s => (
@@ -268,53 +196,27 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
 
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Service Date</Label>
-                <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-white/5 border-white/10 h-12" />
+                <Label className="text-[10px] font-black text-slate-500 uppercase">Preferred Date</Label>
+                <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-white/5 border-white/10" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Time</Label>
-                <Input type="time" value={time} onChange={e => setTime(e.target.value)} required className="bg-white/5 border-white/10 h-12" />
+                <Label className="text-[10px] font-black text-slate-500 uppercase">Time</Label>
+                <Input type="time" value={time} onChange={e => setTime(e.target.value)} required className="bg-white/5 border-white/10" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Location pin (for mobile wash)</Label>
+              <Label className="text-[10px] font-black text-slate-500 uppercase">Location Link (Mobile Wash)</Label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="Optional: Google Maps URL" value={locationPin} onChange={e => setLocationPin(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12" />
+                <Input placeholder="Optional Google Maps Pin" value={locationPin} onChange={e => setLocationPin(e.target.value)} className="pl-10 bg-white/5 border-white/10" />
               </div>
             </div>
 
-            <DialogFooter className="pt-4">
-              <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter" disabled={loading}>
-                {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <Sparkles className="mr-2 h-5 w-5" />}
-                Submit Request
-              </Button>
-            </DialogFooter>
-          </form>
-        ) : (
-          <form onSubmit={handleVerifyOtp} className="space-y-8 py-8 text-center">
-            <div className="space-y-2">
-              <Label className="text-xs font-black uppercase text-slate-500 tracking-[0.2em]">6-Digit Code</Label>
-              <Input 
-                value={otpCode} 
-                onChange={e => setOtpCode(e.target.value)} 
-                maxLength={6}
-                placeholder="••••••"
-                className="h-20 text-4xl font-black tracking-[0.5em] text-center bg-white/5 border-white/10 rounded-2xl"
-                autoFocus
-              />
-            </div>
-            
-            <div className="space-y-4">
-              <Button type="submit" className="w-full h-16 text-xl font-black bg-green-600 hover:bg-green-700 shadow-2xl rounded-2xl uppercase tracking-widest" disabled={loading || otpCode.length < 6}>
-                {loading ? <Loader2 className="animate-spin mr-2 h-6 w-6" /> : <ShieldCheck className="mr-2 h-6 w-6" />}
-                Verify & Book
-              </Button>
-              <Button variant="ghost" className="text-slate-500 hover:text-white" onClick={() => setStep('details')} disabled={loading}>
-                Change Details
-              </Button>
-            </div>
+            <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={loading}>
+              {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <Sparkles className="mr-2 h-5 w-5" />}
+              Confirm Booking
+            </Button>
           </form>
         )}
       </DialogContent>

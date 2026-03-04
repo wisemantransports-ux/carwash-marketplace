@@ -53,6 +53,8 @@ export type Lead = {
   customer_whatsapp: string;
   status: LeadStatus;
   created_at: string;
+  listing?: { name: string };
+  business?: { name: string };
 };
 
 export type BusinessType = 'individual' | 'registered';
@@ -103,5 +105,6 @@ export type WashBooking = {
   user?: { name: string };
   employee?: { name: string; phone: string; image_url: string };
   business?: { name: string; city: string; logo_url: string };
+  listing?: { name: string };
   created_at: string;
 };
