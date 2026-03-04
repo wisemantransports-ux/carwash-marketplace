@@ -5,7 +5,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, LayoutDashboard, Phone, MapPin, ShieldCheck, UserCheck, CheckCircle2 } from "lucide-react";
+import { Loader2, RefreshCw, LayoutDashboard, Phone, MapPin, ShieldCheck, UserCheck, CheckCircle2, MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +14,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Business, Lead, WashBooking, Employee } from "@/lib/types";
 
+/**
+ * @fileOverview Business Operational Command
+ * Real-time management of car wash bookings and leads.
+ * Implements WhatsApp masking until confirmation.
+ */
 export default function BusinessDashboardPage() {
     const [business, setBusiness] = useState<Business | null>(null);
     const [leads, setLeads] = useState<Lead[]>([]);
@@ -30,12 +35,12 @@ export default function BusinessDashboardPage() {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
 
-            // 1. Fetch Business
+            // 1. Fetch Business Profile
             const { data: biz } = await supabase.from('businesses').select('*').eq('owner_id', session.user.id).maybeSingle();
             if (!biz) return;
             setBusiness(biz as Business);
 
-            // 2. Fetch Operational Data
+            // 2. Fetch Operational Feed
             const { data: bData } = await supabase
                 .from('wash_bookings')
                 .select(`*, user:user_id ( name ), employee:employee_id ( name, phone, image_url )`)
@@ -50,6 +55,7 @@ export default function BusinessDashboardPage() {
                 .order('created_at', { ascending: false });
             setLeads((lData as any) || []);
 
+            // 3. Fetch Staff for Assignment
             const { data: eData } = await supabase.from('employees').select('*').eq('business_id', biz.id);
             setEmployees(eData || []);
 
@@ -108,7 +114,7 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    // Masking logic: Hide until confirmed
+    // MASKING LOGIC: Hide WhatsApp number until booking is confirmed
     const formatPhone = (phone: string, status: string) => {
         if (!phone) return '---';
         if (['pending_assignment', 'assigned'].includes(status)) {
@@ -125,9 +131,9 @@ export default function BusinessDashboardPage() {
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary flex items-center gap-3">
                         <LayoutDashboard className="h-10 w-10" />
-                        Operational Command
+                        Command Center
                     </h1>
-                    <p className="text-muted-foreground font-medium">Real-time management for {business?.name}.</p>
+                    <p className="text-muted-foreground font-medium">Managing operations for {business?.name}.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-4 border-primary/20">
                     <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Feed
@@ -136,8 +142,8 @@ export default function BusinessDashboardPage() {
 
             <Tabs defaultValue="ops" className="w-full">
                 <TabsList className="mb-8 grid w-full grid-cols-2 max-w-md bg-muted/50 p-1 rounded-xl">
-                    <TabsTrigger value="ops" className="rounded-lg font-bold">Car Wash Ops</TabsTrigger>
-                    <TabsTrigger value="leads" className="rounded-lg font-bold">Sales Leads</TabsTrigger>
+                    <TabsTrigger value="ops" className="rounded-lg font-bold">Wash Queue</TabsTrigger>
+                    <TabsTrigger value="leads" className="rounded-lg font-bold">Sales Interest</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="ops">
@@ -145,12 +151,12 @@ export default function BusinessDashboardPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
-                                    <TableHead className="font-bold py-4 pl-6">Customer & Schedule</TableHead>
-                                    <TableHead className="font-bold">Contact (Secure)</TableHead>
-                                    <TableHead className="font-bold">Staff Assignment</TableHead>
+                                    <TableHead className="font-bold py-4 pl-6">Client & Schedule</TableHead>
+                                    <TableHead className="font-bold">WhatsApp (Secure)</TableHead>
+                                    <TableHead className="font-bold">Assigned Pro</TableHead>
                                     <TableHead className="font-bold">Location</TableHead>
                                     <TableHead className="font-bold">Status</TableHead>
-                                    <TableHead className="text-right font-bold pr-6">Action</TableHead>
+                                    <TableHead className="text-right pr-6 font-bold">Action</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -158,7 +164,7 @@ export default function BusinessDashboardPage() {
                                     <TableRow key={booking.id} className="hover:bg-muted/10 border-b transition-colors">
                                         <TableCell className="pl-6">
                                             <div className="flex flex-col">
-                                                <span className="font-bold text-sm text-primary">{booking.user?.name || 'Customer'}</span>
+                                                <span className="font-bold text-sm text-primary">{booking.user?.name || 'Valued Customer'}</span>
                                                 <span className="text-[10px] text-muted-foreground font-black uppercase tracking-tighter">
                                                     {new Date(booking.booking_date).toLocaleDateString()} @ {booking.booking_time}
                                                 </span>
@@ -186,7 +192,7 @@ export default function BusinessDashboardPage() {
                                                 onChange={(e) => handleAssignEmployee(booking.id, e.target.value)}
                                                 disabled={['completed', 'cancelled', 'rejected'].includes(booking.status)}
                                             >
-                                                <option value="">Select Detailer</option>
+                                                <option value="">Choose Detailer</option>
                                                 {employees.map(e => <option key={e.id} value={e.id}>{e.name.toUpperCase()}</option>)}
                                             </select>
                                         </TableCell>
@@ -194,10 +200,10 @@ export default function BusinessDashboardPage() {
                                             {booking.location_pin ? (
                                                 <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold text-primary px-2" asChild>
                                                     <a href={booking.location_pin} target="_blank">
-                                                        <MapPin className="h-3 w-3 mr-1" /> View Map
+                                                        <MapPin className="h-3 w-3 mr-1" /> View Location
                                                     </a>
                                                 </Button>
-                                            ) : <span className="text-[10px] text-muted-foreground italic">On-Site</span>}
+                                            ) : <span className="text-[10px] text-muted-foreground italic tracking-tight">On-Site</span>}
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant="outline" className={cn(
@@ -212,15 +218,15 @@ export default function BusinessDashboardPage() {
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
                                             {booking.status === 'assigned' && (
-                                                <Button size="sm" onClick={() => handleConfirmBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-primary hover:bg-primary/90 shadow-md">Confirm</Button>
+                                                <Button size="sm" onClick={() => handleConfirmBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-primary shadow-md">Confirm</Button>
                                             )}
                                             {booking.status === 'confirmed' && (
-                                                <Button size="sm" onClick={() => handleCompleteBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-green-600 hover:bg-green-700 shadow-md">Finish</Button>
+                                                <Button size="sm" onClick={() => handleCompleteBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-green-600 shadow-md">Mark Done</Button>
                                             )}
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {bookings.length === 0 && <TableRow><TableCell colSpan={6} className="h-48 text-center text-muted-foreground italic">No active car wash operations.</TableCell></TableRow>}
+                                {bookings.length === 0 && <TableRow><TableCell colSpan={6} className="h-48 text-center text-muted-foreground italic font-medium">No active service requests.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </Card>
@@ -231,10 +237,10 @@ export default function BusinessDashboardPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
-                                    <TableHead className="font-bold py-4 pl-6">Prospect</TableHead>
-                                    <TableHead className="font-bold">Listing Category</TableHead>
-                                    <TableHead className="font-bold">Captured At</TableHead>
-                                    <TableHead className="text-right font-bold pr-6">Coordination</TableHead>
+                                    <TableHead className="font-bold py-4 pl-6">Prospective Client</TableHead>
+                                    <TableHead className="font-bold">Interest Type</TableHead>
+                                    <TableHead className="font-bold">Captured Date</TableHead>
+                                    <TableHead className="text-right pr-6 font-bold">Inquiry Management</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -246,13 +252,13 @@ export default function BusinessDashboardPage() {
                                         <TableCell className="text-right pr-6">
                                             <Button size="sm" variant="outline" className="h-8 text-[10px] font-black uppercase rounded-full border-primary/20" asChild>
                                                 <a href={`https://wa.me/${lead.customer_whatsapp}`} target="_blank">
-                                                    <Phone className="h-3 w-3 mr-1.5" /> Start Chat
+                                                    <Phone className="h-3 w-3 mr-1.5" /> Start Conversation
                                                 </a>
                                             </Button>
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {leads.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic">No sales leads captured yet.</TableCell></TableRow>}
+                                {leads.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic font-medium">No sales inquiries captured yet.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </Card>

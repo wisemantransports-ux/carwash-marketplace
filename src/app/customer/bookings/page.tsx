@@ -14,6 +14,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { WashBooking } from "@/lib/types";
 
+/**
+ * @fileOverview Customer Service Center
+ * Implements real-time service tracking and rebooking logic.
+ */
 export default function CustomerBookingsPage() {
     const [bookings, setBookings] = useState<WashBooking[]>([]);
     const [loading, setLoading] = useState(true);
@@ -52,7 +56,7 @@ export default function CustomerBookingsPage() {
         setMounted(true);
         fetchBookings();
 
-        // Real-time subscription for service updates
+        // REAL-TIME STATUS TRACKING
         const channel = supabase
             .channel('customer-ops-tracking')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, (payload) => {
@@ -60,8 +64,8 @@ export default function CustomerBookingsPage() {
                 if (payload.eventType === 'UPDATE') {
                     const newStatus = payload.new.status;
                     toast({ 
-                        title: "Service Update 🧼", 
-                        description: `Your wash is now: ${newStatus.replace('_', ' ').toUpperCase()}` 
+                        title: "Service Update! 🧼", 
+                        description: `Your wash status changed to: ${newStatus.replace('_', ' ').toUpperCase()}` 
                     });
                 }
             })
@@ -92,7 +96,7 @@ export default function CustomerBookingsPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary">Service Center</h1>
-                    <p className="text-muted-foreground text-lg">Track your active washes and service history in real-time.</p>
+                    <p className="text-muted-foreground text-lg">Real-time status tracking for your active wash requests.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => fetchBookings(true)} className="rounded-full h-10 px-6 border-primary/20 bg-white">
                     <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Status
@@ -102,7 +106,7 @@ export default function CustomerBookingsPage() {
             <Tabs defaultValue="active" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 max-w-md bg-muted/50 p-1 rounded-xl">
                     <TabsTrigger value="active" className="rounded-lg font-bold">Active Requests ({activeBookings.length})</TabsTrigger>
-                    <TabsTrigger value="history" className="rounded-lg font-bold">History ({pastBookings.length})</TabsTrigger>
+                    <TabsTrigger value="history" className="rounded-lg font-bold">Past Services ({pastBookings.length})</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="active" className="mt-8 space-y-6">
@@ -136,13 +140,13 @@ export default function CustomerBookingsPage() {
                                     <CardContent className="pt-6 space-y-6">
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="bg-primary/5 p-3 rounded-2xl border border-primary/10">
-                                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Service Date</p>
+                                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Date</p>
                                                 <div className="flex items-center gap-2 font-bold text-sm">
                                                     <Calendar className="h-4 w-4 text-primary" /> {new Date(booking.booking_date).toLocaleDateString()}
                                                 </div>
                                             </div>
                                             <div className="bg-primary/5 p-3 rounded-2xl border border-primary/10">
-                                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Scheduled Time</p>
+                                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Time</p>
                                                 <div className="flex items-center gap-2 font-bold text-sm">
                                                     <Clock className="h-4 w-4 text-primary" /> {booking.booking_time}
                                                 </div>
@@ -150,7 +154,7 @@ export default function CustomerBookingsPage() {
                                         </div>
 
                                         <div className="pt-4 border-t space-y-4">
-                                            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter">Assigned Professional</p>
+                                            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter">Verified Detailer</p>
                                             {booking.employee ? (
                                                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border-2 border-dashed">
                                                     <Avatar className="h-14 w-14 border-4 border-white shadow-xl">
@@ -177,7 +181,7 @@ export default function CustomerBookingsPage() {
                                             ) : (
                                                 <div className="bg-muted/30 p-6 rounded-2xl border-2 border-dashed text-center space-y-2 opacity-60">
                                                     <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
-                                                    <p className="text-[10px] font-black uppercase tracking-widest">Detailer Assignment Pending</p>
+                                                    <p className="text-[10px] font-black uppercase tracking-widest">Detailer Assignment In Progress</p>
                                                 </div>
                                             )}
                                         </div>
@@ -199,8 +203,8 @@ export default function CustomerBookingsPage() {
                                 <Droplets className="h-16 w-16 text-primary/20" />
                             </div>
                             <div className="space-y-2">
-                                <p className="text-2xl font-black uppercase italic tracking-tight text-slate-400">No Active Washes</p>
-                                <p className="text-muted-foreground max-w-sm mx-auto font-medium">Ready for a fresh shine? Find a verified partner nearby.</p>
+                                <p className="text-2xl font-black uppercase italic tracking-tight text-slate-400">Ready for a shine?</p>
+                                <p className="text-muted-foreground max-w-sm mx-auto font-medium">You don't have any active wash requests at the moment.</p>
                             </div>
                             <Button asChild className="h-14 px-10 text-lg font-black shadow-2xl rounded-2xl uppercase tracking-tighter" size="lg">
                                 <Link href="/find-wash">Book a Wash Now</Link>
@@ -232,11 +236,6 @@ export default function CustomerBookingsPage() {
                                         )}>
                                             {booking.status}
                                         </Badge>
-                                        {booking.status === 'completed' && (
-                                            <Button variant="outline" size="sm" className="h-9 px-4 font-bold border-primary/20" asChild>
-                                                <Link href={`/customer/rate/${booking.id}`}><Star className="mr-2 h-3 w-3" /> Rate</Link>
-                                            </Button>
-                                        )}
                                         <Button variant="outline" size="sm" className="h-9 px-4 font-bold border-primary/20" asChild>
                                             <Link href={`/find-wash/${booking.wash_business_id}`}>Rebook</Link>
                                         </Button>
