@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -36,7 +35,8 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         .eq('id', listingId)
         .single();
 
-      if (listingError || !listing) throw new Error("Listing unavailable or removed.");
+      if (listingError) throw listingError;
+      if (!listing) throw new Error("Listing unavailable or removed.");
 
       // 2. Progressive Identity: Create/Get User
       const { data: existingUser, error: findError } = await supabase
@@ -94,7 +94,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       onClose();
     } catch (err: any) {
       console.error("Lead Error Detail:", err);
-      const errorMessage = err?.message || "Communication error. Please try again or sign in.";
+      const errorMessage = err?.message || err?.error_description || "Communication error. Please try again or sign in.";
       toast({ 
         variant: 'destructive', 
         title: 'Inquiry Failed', 

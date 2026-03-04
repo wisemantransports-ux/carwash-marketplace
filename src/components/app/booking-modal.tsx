@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -30,24 +29,29 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
   const [loading, setLoading] = useState(false);
   const [bizStatus, setBizStatus] = useState<{ active: boolean; reason?: string }>({ active: true });
 
-  // 1. Check Business Status on Open
   useEffect(() => {
     if (isOpen && businessId) {
       const checkBiz = async () => {
-        const { data: biz } = await supabase
-          .from('businesses_view')
-          .select('access_active, verification_status')
-          .eq('id', businessId)
-          .maybeSingle();
-        
-        if (biz) {
-          if (!biz.access_active) {
-            setBizStatus({ active: false, reason: "This partner's professional features are currently paused." });
-          } else if (biz.verification_status !== 'verified') {
-            setBizStatus({ active: false, reason: "This business is currently under verification review." });
-          } else {
-            setBizStatus({ active: true });
+        try {
+          const { data: biz, error } = await supabase
+            .from('businesses_view')
+            .select('access_active, verification_status')
+            .eq('id', businessId)
+            .maybeSingle();
+          
+          if (error) throw error;
+
+          if (biz) {
+            if (!biz.access_active) {
+              setBizStatus({ active: false, reason: "This partner's professional features are currently paused." });
+            } else if (biz.verification_status !== 'verified') {
+              setBizStatus({ active: false, reason: "This business is currently under verification review." });
+            } else {
+              setBizStatus({ active: true });
+            }
           }
+        } catch (e) {
+          console.error("Biz status check failed:", e);
         }
       };
       checkBiz();
@@ -65,13 +69,15 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
 
     setLoading(true);
     try {
-      // 2. Progressive Identity: Check/Create User
-      const { data: existingUser } = await supabase
+      // 1. Progressive Identity: Check/Create User
+      const { data: existingUser, error: findError } = await supabase
         .from('users')
         .select('id, role')
         .eq('whatsapp_number', cleanWa)
         .maybeSingle();
       
+      if (findError) throw findError;
+
       let user = existingUser;
       
       if (!user) {
@@ -89,18 +95,20 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
         user = newUser;
       }
 
-      // 3. One Booking Enforcement
-      const { count: activeBookings } = await supabase
+      // 2. One Booking Enforcement
+      const { count: activeBookings, error: countError } = await supabase
         .from('wash_bookings')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user!.id)
         .in('status', ['pending_assignment', 'assigned', 'confirmed']);
 
+      if (countError) throw countError;
+
       if (activeBookings && activeBookings > 0) {
         throw new Error("You already have an active car wash request. Please complete or cancel it first.");
       }
 
-      // 4. Atomic Lead & Booking Creation
+      // 3. Atomic Lead & Booking Creation
       const { error: leadError } = await supabase.from('leads').insert({
         seller_id: businessId,
         user_id: user?.id,
@@ -132,10 +140,12 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
       });
       onClose();
     } catch (err: any) {
+      console.error("Booking Error Detail:", err);
+      const errorMessage = err?.message || err?.error_description || "Service unavailable. Check your internet or login status.";
       toast({ 
         variant: 'destructive', 
         title: 'Booking Failed', 
-        description: err.message || "Unable to process booking. Check your connection." 
+        description: errorMessage 
       });
     } finally {
       setLoading(false);
