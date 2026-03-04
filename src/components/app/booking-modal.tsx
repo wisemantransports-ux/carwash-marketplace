@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Sparkles, User, Smartphone, Droplets, MapPin, Calendar, Clock, AlertCircle } from "lucide-react";
+import { Loader2, Sparkles, User, Smartphone, Droplets, MapPin, Calendar, Clock, Mail } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -17,32 +17,105 @@ interface BookingModalProps {
   service: any; // Receives the FULL wash service object
 }
 
-/**
- * Robust error message extraction for Supabase and standard JS errors.
- */
-const extractErrorMessage = (err: any): string => {
-  if (!err) return "An unexpected error occurred.";
-  if (typeof err === 'string') return err;
-  
-  // Handle Supabase PostgrestError or standard Error
-  const message = err.message || err.error_description || (err.error && err.error.message);
-  const details = err.details || "";
-  const code = err.code || "";
-  
-  if (message) {
-    let fullMessage = message;
-    if (details && details !== message) fullMessage += ` (${details})`;
-    if (code) fullMessage += ` [${code}]`;
-    return fullMessage;
+async function submitBooking({
+  customerName,
+  whatsappNumber,
+  customerEmail,
+  service,
+  selectedDate,
+  locationText
+}: {
+  customerName: string;
+  whatsappNumber: string;
+  customerEmail?: string;
+  service: any;
+  selectedDate: Date;
+  locationText: string;
+}) {
+  console.group("🚀 Booking Debug Start");
+
+  if (!service?.id || !service?.business_id) {
+    throw new Error("Service missing id or business_id");
   }
 
-  try {
-    const stringified = JSON.stringify(err);
-    return stringified === '{}' ? String(err) : stringified;
-  } catch {
-    return String(err);
+  if (!customerName || !whatsappNumber) {
+    throw new Error("Customer name or WhatsApp missing");
   }
-};
+
+  // 1️⃣ Get logged-in user (important for RLS)
+  const { data: authData } = await supabase.auth.getUser();
+  const authUser = authData?.user;
+
+  if (!authUser) {
+    throw new Error("User not authenticated");
+  }
+
+  // 2️⃣ Auto-create or fetch customer
+  const { data: existingCustomer } = await supabase
+    .from("users")
+    .select("id")
+    .eq("whatsapp_number", whatsappNumber)
+    .maybeSingle();
+
+  let customerId = existingCustomer?.id;
+
+  if (!customerId) {
+    const { data: newCustomer, error: createError } = await supabase
+      .from("users")
+      .insert([
+        {
+          id: authUser.id, // Linking to the auth user
+          name: customerName,
+          whatsapp_number: whatsappNumber,
+          role: 'customer'
+        }
+      ])
+      .select("id")
+      .single();
+
+    if (createError) {
+      console.error("Customer creation failed:", createError);
+      throw createError;
+    }
+
+    customerId = newCustomer.id;
+  }
+
+  // 3️⃣ Prepare booking payload
+  const bookingPayload = {
+    customer_id: customerId,
+    seller_business_id: service.business_id,
+    business_id: service.business_id, // important since column exists
+    wash_service_id: service.id,
+    employee_id: null,
+    assigned_employee_id: null,
+    status: "pending_assignment",
+    booking_date: new Date(selectedDate).toISOString(),
+    requested_time: new Date(selectedDate).toISOString(),
+    location: locationText,
+    customer_name: customerName,
+    customer_whatsapp: whatsappNumber,
+    customer_email: customerEmail || null
+  };
+
+  console.log("📦 Booking Payload:", bookingPayload);
+
+  // 4️⃣ Insert booking
+  const { data, error } = await supabase
+    .from("wash_bookings")
+    .insert([bookingPayload])
+    .select();
+
+  if (error) {
+    console.error("❌ Supabase Insert Error:", error);
+    throw error;
+  }
+
+  console.log("✅ Booking Success:", data);
+  console.groupEnd();
+
+  return data;
+}
 
 export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   const router = useRouter();
@@ -50,6 +123,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [locationText, setLocationText] = useState('');
@@ -60,85 +134,47 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       setName(authUser.user_metadata?.name || '');
       const wa = authUser.phone || authUser.user_metadata?.whatsapp || '';
       setWhatsapp(wa);
+      setEmail(authUser.email || '');
     }
   }, [isOpen, authUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!service?.id || !service?.business_id) {
-      toast({ variant: 'destructive', title: 'Invalid Service', description: 'Missing service or business identifiers.' });
-      return;
-    }
-
-    if (!name.trim() || !whatsapp.trim() || !date || !time) {
-      toast({ variant: 'destructive', title: 'Missing Info', description: 'Please fill in all mandatory fields.' });
-      return;
-    }
-
     setLoading(true);
+
     try {
-      let currentUserId = authUser?.id;
-
-      // 1. Resolve Identity via Frictionless Bridge if not logged in
-      if (!currentUserId) {
-        const res = await fetch('/api/auth/frictionless', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ whatsapp, name })
-        });
-
-        const contentType = res.headers.get("content-type");
-        if (!res.ok || !contentType || !contentType.includes("application/json")) {
-          throw new Error("Identity service unavailable. Please check your connection.");
-        }
-
-        const authResult = await res.json();
-        if (authResult.error) throw new Error(authResult.error);
-        currentUserId = authResult.userId;
+      if (!date || !time) {
+        throw new Error("Please select both a date and time.");
       }
 
-      if (!currentUserId) {
-        throw new Error("Could not verify your identity. Please try again.");
-      }
+      await submitBooking({
+        customerName: name,
+        whatsappNumber: whatsapp,
+        customerEmail: email,
+        service: service,
+        selectedDate: new Date(`${date}T${time}`),
+        locationText: locationText
+      });
 
-      // 2. Prepare Booking Payload - Aligned with strict schema requirements
-      const bookingPayload = {
-        customer_id: currentUserId,
-        seller_business_id: service.business_id,
-        business_id: service.business_id, // Satisfy both potential ID columns
-        wash_service_id: service.id,
-        employee_id: null,
-        status: 'pending_assignment',
-        booking_date: new Date(`${date}T${time}`).toISOString(),
-        location: locationText.trim(),
-        customer_name: name.trim(),
-        customer_whatsapp: whatsapp.replace(/\D/g, '')
-      };
+      toast({
+        title: "Booking Confirmed",
+        description: "Your carwash booking has been submitted."
+      });
 
-      // 3. Insert into wash_bookings - Ensuring ONLY this table is used for carwash
-      const { error: bookingError } = await supabase
-        .from('wash_bookings')
-        .insert([bookingPayload]);
-
-      if (bookingError) throw bookingError;
-
-      // 4. Success Flow
-      toast({ title: "Booking Confirmed! ✨", description: "Your wash request is now live." });
       onClose();
-      router.push('/customer/bookings');
+      router.push("/customer/bookings");
+
     } catch (err: any) {
-      // Improved error logging to catch the "empty object" issue
-      console.group("Booking Process Failure");
+      console.group("❌ Booking Process Failure");
       console.error("Raw Error:", err);
-      console.error("Error Message:", err?.message);
-      console.error("Error Details:", err?.details);
+      console.error("Message:", err?.message);
+      console.error("Details:", err?.details);
       console.groupEnd();
 
-      toast({ 
-        variant: 'destructive', 
-        title: 'Booking Failed', 
-        description: extractErrorMessage(err) 
+      toast({
+        variant: "destructive",
+        title: "Booking Failed",
+        description: err?.message || "Unexpected error occurred"
       });
     } finally {
       setLoading(false);
@@ -175,6 +211,14 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
               </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Email (Optional)</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <Input type="email" placeholder="customer@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12" />
             </div>
           </div>
 
