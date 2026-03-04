@@ -14,8 +14,8 @@ export const isSupabaseConfigured =
   supabaseAnonKey !== '' && 
   !supabaseUrl.includes('placeholder-project-id');
 
-if (!isSupabaseConfigured) {
-  console.warn('Supabase credentials missing. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+if (!isSupabaseConfigured && typeof window !== 'undefined') {
+  console.warn('Supabase credentials missing or using placeholders. Dashboard features and authentication will be limited until NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are provided.');
 }
 
 export const supabase = createClient(

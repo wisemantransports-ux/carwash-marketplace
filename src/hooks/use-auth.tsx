@@ -1,8 +1,7 @@
-
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 
 type AuthContextType = {
@@ -25,12 +24,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // If not configured, don't try to fetch to avoid "Failed to fetch" errors
+    if (!isSupabaseConfigured) {
+      console.log("[AUTH] Supabase not configured, skipping session check.");
+      setLoading(false);
+      return;
+    }
+
     // Check active session on mount
     const checkSession = async () => {
-      const { data: { session: initialSession } } = await supabase.auth.getSession();
-      setSession(initialSession);
-      setUser(initialSession?.user ?? null);
-      setLoading(false);
+      try {
+        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+      } catch (e) {
+        console.error("[AUTH] Initial session check failed:", e);
+      } finally {
+        setLoading(false);
+      }
     };
 
     checkSession();
@@ -46,6 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const signOut = async () => {
+    if (!isSupabaseConfigured) return;
     await supabase.auth.signOut();
   };
 

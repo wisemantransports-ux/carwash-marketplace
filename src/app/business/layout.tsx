@@ -6,7 +6,7 @@ import { Business } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
@@ -16,12 +16,17 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Status Check (Unified view or profiles check)
+      // 1. Status Check
       const { data: profile } = await supabase
         .from('users')
         .select('paid, trial_expiry')

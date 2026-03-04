@@ -9,7 +9,7 @@ import { Home, LogOut, Loader2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 
 type NavItem = {
@@ -37,7 +37,9 @@ function AutoLinkLogo() {
 function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, loading: boolean }) {
     const handleSignOut = async () => {
         try {
-            await supabase.auth.signOut();
+            if (isSupabaseConfigured) {
+                await supabase.auth.signOut();
+            }
             window.location.href = '/login';
         } catch (error) {
             console.error('Error signing out:', error);
@@ -46,22 +48,29 @@ function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, l
     };
 
     if (loading) return <div className="flex justify-center p-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>;
-    if (!userProfile) return null;
+    
+    // Fallback profile for unconfigured dev state
+    const displayProfile = userProfile || { 
+        name: 'Guest User', 
+        email: 'unconfigured@local', 
+        role: 'customer' as UserRole,
+        avatarUrl: ''
+    };
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2 h-auto w-full justify-start p-2 hover:bg-sidebar-accent">
                     <Avatar className="h-8 w-8 border shadow-sm">
-                        <AvatarImage src={userProfile.avatarUrl} alt={userProfile.name} />
-                        <AvatarFallback className="bg-primary/5 text-primary font-bold">{userProfile.name?.charAt(0) || 'U'}</AvatarFallback>
+                        <AvatarImage src={displayProfile.avatarUrl} alt={displayProfile.name} />
+                        <AvatarFallback className="bg-primary/5 text-primary font-bold">{displayProfile.name?.charAt(0) || 'U'}</AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col items-start group-data-[collapsible=icon]:hidden text-left overflow-hidden">
                         <span className="text-sm font-bold truncate w-full flex items-center gap-1.5">
-                            {userProfile.name}
-                            {userProfile.role === 'admin' && <ShieldCheck className="h-3 w-3 text-primary" />}
+                            {displayProfile.name}
+                            {displayProfile.role === 'admin' && <ShieldCheck className="h-3 w-3 text-primary" />}
                         </span>
-                        <span className="text-[10px] text-muted-foreground truncate w-full">{userProfile.email}</span>
+                        <span className="text-[10px] text-muted-foreground truncate w-full">{displayProfile.email}</span>
                     </div>
                 </Button>
             </DropdownMenuTrigger>
@@ -89,9 +98,13 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
     const [loading, setLoading] = useState(true);
 
     const fetchProfile = useCallback(async (userId: string) => {
+        if (!isSupabaseConfigured) {
+            setLoading(false);
+            return;
+        }
         try {
             const { data, error } = await supabase
-                .from('users_with_access')
+                .from('users')
                 .select('*')
                 .eq('id', userId)
                 .maybeSingle();
@@ -99,23 +112,33 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
             if (data) {
                 setUserProfile(data as ProfileUser);
             } else {
-                router.replace('/login');
+                // If user doesn't exist in our table yet but is authed
+                setUserProfile({ id: userId, role: 'customer' } as any);
             }
         } catch (e) {
             console.error("[LAYOUT] Fetch failure:", e);
         } finally {
             setLoading(false);
         }
-    }, [router]);
+    }, []);
 
     useEffect(() => {
         const checkSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user?.id) {
-                router.replace('/login');
+            if (!isSupabaseConfigured) {
+                setLoading(false);
                 return;
             }
-            await fetchProfile(session.user.id);
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user?.id) {
+                    router.replace('/login');
+                    return;
+                }
+                await fetchProfile(session.user.id);
+            } catch (e) {
+                console.error("[LAYOUT] Session check failed:", e);
+                setLoading(false);
+            }
         };
         checkSession();
     }, [router, fetchProfile]);
