@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -6,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, Loader2, Smartphone, User } from "lucide-react";
+import { MessageCircle, Loader2, Smartphone, User, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -18,6 +17,23 @@ interface LeadModalProps {
   listingTitle: string;
 }
 
+/**
+ * Extract a readable message from any error object
+ */
+const extractErrorMessage = (err: any): string => {
+  if (!err) return "An unexpected error occurred.";
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.error_description) return err.error_description;
+  if (err.details) return err.details;
+  try {
+    const stringified = JSON.stringify(err);
+    return stringified === '{}' ? err.toString() : stringified;
+  } catch {
+    return String(err);
+  }
+};
+
 export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModalProps) {
   const { user: authUser } = useAuth();
   const [name, setName] = useState(authUser?.user_metadata?.name || '');
@@ -26,7 +42,10 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !whatsapp) return;
+    if (!name.trim() || !whatsapp.trim()) {
+      toast({ variant: 'destructive', title: 'Details Required', description: 'Name and WhatsApp are mandatory.' });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -42,9 +61,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
         const contentType = res.headers.get("content-type");
         if (!res.ok || !contentType || !contentType.includes("application/json")) {
-          const errorBody = await res.text().catch(() => "Server error");
-          console.error("Lead Auth Error:", errorBody);
-          throw new Error("Authentication service unavailable. Please try again later.");
+          throw new Error("Identity resolution unavailable. Please check your network.");
         }
 
         const authResult = await res.json();
@@ -52,7 +69,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         currentUserId = authResult.userId;
       }
 
-      if (!currentUserId) throw new Error("Could not resolve identity.");
+      if (!currentUserId) throw new Error("Identity resolution failed. Please try again.");
 
       // 2. Fetch Listing & Business Context
       const { data: listing, error: lErr } = await supabase
@@ -61,11 +78,12 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         .eq('id', listingId)
         .single();
 
-      if (lErr || !listing) throw new Error("This listing is no longer available.");
+      if (lErr) throw lErr;
+      if (!listing) throw new Error("This listing is no longer available.");
 
       const cleanWa = whatsapp.replace(/\D/g, '');
 
-      // 3. Log Lead (Schema Alignment)
+      // 3. Log Lead
       const { error: leadErr } = await supabase.from('leads').insert({
         customer_id: currentUserId,
         seller_business_id: listing.business_id,
@@ -75,25 +93,21 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         status: 'new'
       });
       
-      if (leadErr) {
-        console.error("Lead Insertion Error:", leadErr);
-        throw leadErr;
-      }
+      if (leadErr) throw leadErr;
 
       // 4. WhatsApp Connect
       const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
       const url = `https://wa.me/${bizPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name}.`)}`;
       
       window.open(url, '_blank');
-      toast({ title: "Inquiry Sent! ✅", description: "The seller has been notified. Redirecting to WhatsApp..." });
+      toast({ title: "Inquiry Sent! ✅", description: "Connecting you to the seller via WhatsApp..." });
       onClose();
     } catch (err: any) {
-      console.error("Lead Error:", err);
-      const message = err?.message || "Data sync failure. Please try again.";
+      console.error("Lead Inquiry Error Detail:", err);
       toast({ 
         variant: 'destructive', 
         title: 'Inquiry Failed', 
-        description: message 
+        description: extractErrorMessage(err) 
       });
     } finally {
       setLoading(false);

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Sparkles, User, Smartphone, Droplets, MapPin, Calendar, Clock } from "lucide-react";
+import { Loader2, Sparkles, User, Smartphone, Droplets, MapPin, Calendar, Clock, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,24 @@ interface BookingModalProps {
   onClose: () => void;
   service: any; // Receives the FULL wash service object
 }
+
+/**
+ * Extract a readable message from any error object
+ */
+const extractErrorMessage = (err: any): string => {
+  if (!err) return "An unexpected error occurred.";
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.error_description) return err.error_description;
+  if (err.details) return err.details;
+  if (err.code) return `Database error code: ${err.code}`;
+  try {
+    const stringified = JSON.stringify(err);
+    return stringified === '{}' ? err.toString() : stringified;
+  } catch {
+    return String(err);
+  }
+};
 
 export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   const router = useRouter();
@@ -31,50 +49,14 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   useEffect(() => {
     if (isOpen && authUser) {
       setName(authUser.user_metadata?.name || '');
-      setWhatsapp(authUser.phone || authUser.user_metadata?.whatsapp || '');
+      const wa = authUser.phone || authUser.user_metadata?.whatsapp || '';
+      setWhatsapp(wa);
     }
   }, [isOpen, authUser]);
-
-  /**
-   * Customer Auto Creation Function
-   * Resolves or creates user record based on WhatsApp number.
-   */
-  async function getOrCreateCustomer(name: string, whatsapp: string) {
-    const cleanWa = whatsapp.replace(/\D/g, '');
-    
-    // 1. Check if user exists in public.users
-    const { data: existing, error: fetchError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('whatsapp_number', cleanWa)
-      .maybeSingle();
-
-    if (existing) return existing.id;
-
-    // 2. Create new customer record if doesn't exist
-    const { data: newCustomer, error: insertError } = await supabase
-      .from('users')
-      .insert([{ 
-        name: name.trim(), 
-        whatsapp_number: cleanWa,
-        role: 'customer',
-        is_verified: true
-      }])
-      .select('id')
-      .single();
-
-    if (insertError) {
-      console.error("Customer Creation Error:", insertError);
-      throw new Error("Failed to create customer profile.");
-    }
-
-    return newCustomer.id;
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Defensive Guards
     if (!service?.id || !service?.business_id) {
       toast({ variant: 'destructive', title: 'Invalid Service', description: 'Missing service or business identifiers.' });
       return;
@@ -87,15 +69,31 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
 
     setLoading(true);
     try {
-      // 1. Get or Create Customer (Progressive Identity)
-      const customerId = await getOrCreateCustomer(name, whatsapp);
+      let currentUserId = authUser?.id;
 
-      if (!customerId) throw new Error("Identity resolution failed.");
+      // 1. Resolve Identity via Frictionless Bridge if not logged in
+      if (!currentUserId) {
+        const res = await fetch('/api/auth/frictionless', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ whatsapp, name })
+        });
+
+        const contentType = res.headers.get("content-type");
+        if (!res.ok || !contentType || !contentType.includes("application/json")) {
+          throw new Error("Identity service unavailable. Please check your connection.");
+        }
+
+        const authResult = await res.json();
+        if (authResult.error) throw new Error(authResult.error);
+        currentUserId = authResult.userId;
+      }
+
+      if (!currentUserId) throw new Error("Could not verify your identity. Please try again.");
 
       // 2. Prepare Booking Payload
-      // Note: seller_business_id is derived from service.business_id
       const bookingPayload = {
-        customer_id: customerId,
+        customer_id: currentUserId,
         seller_business_id: service.business_id,
         wash_service_id: service.id,
         employee_id: null,
@@ -106,7 +104,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
         customer_whatsapp: whatsapp.replace(/\D/g, '')
       };
 
-      // 3. Insert into wash_bookings ONLY (leads table is for cars/parts)
+      // 3. Insert into wash_bookings
       const { error: bookingError } = await supabase
         .from('wash_bookings')
         .insert([bookingPayload]);
@@ -114,15 +112,15 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       if (bookingError) throw bookingError;
 
       // 4. Success Flow
-      toast({ title: "Booking Confirmed! ✨", description: "Your wash request is now live. Check your dashboard." });
+      toast({ title: "Booking Confirmed! ✨", description: "Your wash request is now live." });
       onClose();
       router.push('/customer/bookings');
     } catch (err: any) {
-      console.error("Booking Logic Failure:", err);
+      console.error("Booking Error Detail:", err);
       toast({ 
         variant: 'destructive', 
         title: 'Booking Failed', 
-        description: err.message || "A database error occurred. Please check your connection." 
+        description: extractErrorMessage(err) 
       });
     } finally {
       setLoading(false);
