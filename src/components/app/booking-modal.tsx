@@ -64,10 +64,8 @@ async function submitBooking({
       .from("users")
       .insert([
         {
-          id: authUser.id, // Linking to the auth user
           name: customerName,
-          whatsapp_number: whatsappNumber,
-          role: 'customer'
+          whatsapp_number: whatsappNumber
         }
       ])
       .select("id")
