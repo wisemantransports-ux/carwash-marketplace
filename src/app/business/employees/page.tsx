@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -7,12 +6,13 @@ import type { Employee } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Upload, Loader2, User, ShieldCheck, Trash2, RefreshCw, Camera } from "lucide-react";
+import { PlusCircle, Upload, Loader2, User, ShieldCheck, Trash2, RefreshCw, Camera, Users } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 
 export default function EmployeeRegistryPage() {
