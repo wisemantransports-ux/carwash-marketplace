@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Sparkles, User, Smartphone, Droplets, MapPin, AlertCircle } from "lucide-react";
+import { Loader2, Sparkles, User, Smartphone, Droplets, MapPin } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -36,20 +36,25 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   }, [isOpen, authUser]);
 
   /**
-   * Auto-creates a customer in the public.users table if they don't exist.
+   * 2️⃣ Customer Auto Creation Function
+   * Checks if customer exists via WhatsApp number, otherwise creates one.
    */
-  async function getOrCreateCustomer(customerName: string, whatsappNumber: string) {
+  async function getOrCreateCustomer(name: string, whatsapp: string) {
     const { data: existing } = await supabase
       .from('users')
       .select('id')
-      .eq('whatsapp_number', whatsappNumber)
+      .eq('whatsapp_number', whatsapp)
       .maybeSingle();
 
     if (existing) return existing.id;
 
     const { data: newCustomer, error } = await supabase
       .from('users')
-      .insert([{ name: customerName, whatsapp_number: whatsappNumber, role: 'customer' }])
+      .insert([{ 
+        name, 
+        whatsapp_number: whatsapp,
+        role: 'customer' 
+      }])
       .select('id')
       .single();
 
@@ -59,17 +64,18 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   }
 
   /**
-   * Main submission logic aligned with specific TASK requirements.
+   * 3️⃣ Booking Submission Logic
+   * Atomic insertion into wash_bookings. NO interaction with leads table.
    */
   async function submitBooking({
     customerName,
     whatsappNumber,
-    serviceData,
+    service,
     selectedDate,
     locationText
   }: any) {
-    // 1. Defensive Guards
-    if (!serviceData?.id || !serviceData?.business_id) {
+    // 5️⃣ Defensive Guards
+    if (!service?.id || !service?.business_id) {
       throw new Error("Service missing required IDs.");
     }
 
@@ -77,25 +83,28 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       throw new Error("Customer details missing.");
     }
 
-    // 2. Resolve Customer Identity
-    const customerId = await getOrCreateCustomer(customerName, whatsappNumber);
+    // Resolve customer identity
+    const customerId = await getOrCreateCustomer(
+      customerName,
+      whatsappNumber
+    );
 
     if (!customerId) {
-      throw new Error("Customer resolution failed.");
+      throw new Error("Customer creation failed.");
     }
 
-    // 3. Prepare Payload (Strict Schema Alignment)
+    // Prepare Payload
     const bookingPayload = {
       customer_id: customerId,
-      seller_business_id: serviceData.business_id, // Derived from service
-      wash_service_id: serviceData.id,
+      seller_business_id: service.business_id, // Derived from wash_services row
+      wash_service_id: service.id,
       employee_id: null,
       status: "pending_assignment",
       booking_date: new Date(selectedDate).toISOString(),
       location: locationText
     };
 
-    // 4. Insert ONLY into wash_bookings (No leads insert)
+    // 4️⃣ Insert ONLY into wash_bookings
     const { data, error } = await supabase
       .from("wash_bookings")
       .insert([bookingPayload])
@@ -123,16 +132,17 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       await submitBooking({
         customerName: name.trim(),
         whatsappNumber: whatsapp.replace(/\D/g, ''),
-        serviceData: service,
+        service: service,
         selectedDate: selectedDateTime,
         locationText: locationText.trim()
       });
 
-      toast({ title: "Booking Confirmed! ✨", description: "Your wash request has been sent." });
+      // 6️⃣ Success Flow
+      toast({ title: "Booking Confirmed! ✨", description: "Your request has been sent to the business." });
       onClose();
       router.push('/customer/bookings');
     } catch (err: any) {
-      console.error("Booking Logic Error:", err);
+      console.error("Booking Error:", err);
       toast({ 
         variant: 'destructive', 
         title: 'Booking Failed', 

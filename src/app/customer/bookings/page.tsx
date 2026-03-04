@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, XCircle, Droplets, ShoppingCart, MapPin, Calendar, Clock } from "lucide-react";
+import { Loader2, RefreshCw, XCircle, Droplets, ShoppingCart, Calendar, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +12,11 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { WashBooking, Lead } from "@/lib/types";
 
+/**
+ * Customer Dashboard
+ * Fetches wash_bookings directly by customer_id.
+ * No interaction with leads for carwash.
+ */
 export default function CustomerDashboardPage() {
     const [bookings, setBookings] = useState<any[]>([]);
     const [leads, setLeads] = useState<Lead[]>([]);
@@ -26,7 +31,7 @@ export default function CustomerDashboardPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            // 1. Fetch Wash Bookings correctly aligned with the wash_bookings schema
+            // 1. Fetch Wash Bookings directly from wash_bookings
             const { data: bData, error: bErr } = await supabase
                 .from('wash_bookings')
                 .select(`
@@ -61,12 +66,17 @@ export default function CustomerDashboardPage() {
 
     useEffect(() => {
         fetchData();
-        const bChannel = supabase.channel('customer-wash').on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true)).subscribe();
-        const lChannel = supabase.channel('customer-leads').on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => fetchData(true)).subscribe();
-        return () => { 
-            supabase.removeChannel(bChannel); 
-            supabase.removeChannel(lChannel); 
-        };
+        // Subscribe to real-time status changes
+        const channel = supabase
+            .channel('customer-wash-status')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'wash_bookings' 
+            }, () => fetchData(true))
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
     }, [fetchData]);
 
     const handleCancel = async (id: string) => {
@@ -194,7 +204,7 @@ export default function CustomerDashboardPage() {
                                         <TableCell className="pl-6 py-4">
                                             <div className="flex items-center gap-2">
                                                 <ShoppingCart className="h-3.5 w-3.5 text-primary" />
-                                                <span className="font-bold text-sm">Lead ID: #{lead.id.slice(-6).toUpperCase()}</span>
+                                                <span className="font-bold text-sm">Inquiry ID: #{lead.id.slice(-6).toUpperCase()}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-xs font-bold text-slate-600">{lead.business?.name}</TableCell>

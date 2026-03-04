@@ -1,11 +1,10 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, LayoutDashboard, Phone, MapPin, CheckCircle2, MoreHorizontal, MessageSquare, ShieldCheck, UserCheck } from "lucide-react";
+import { Loader2, RefreshCw, LayoutDashboard, Phone, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,7 +32,7 @@ export default function BusinessDashboardPage() {
             if (!biz) return;
             setBusiness(biz as Business);
 
-            // Fetch mixed operations data (Schema Aligned)
+            // Fetch Real-time wash operations
             const { data: bData, error: bErr } = await supabase
                 .from('wash_bookings')
                 .select('*, user:customer_id(name), employee:employee_id(name), service:wash_service_id(name)')
@@ -43,6 +42,7 @@ export default function BusinessDashboardPage() {
             if (bErr) throw bErr;
             setBookings(bData as any || []);
 
+            // Fetch Marketplace leads (Cars & Parts only)
             const { data: lData, error: lErr } = await supabase
                 .from('leads')
                 .select('*')
@@ -118,7 +118,7 @@ export default function BusinessDashboardPage() {
                                 <TableRow className="bg-muted/50 border-b-2">
                                     <TableHead className="font-black py-4 pl-6 uppercase text-[10px] tracking-widest">Client & Date</TableHead>
                                     <TableHead className="font-black uppercase text-[10px] tracking-widest">WhatsApp (Secured)</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Staff Registry</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Staff Assignment</TableHead>
                                     <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
                                     <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">Controls</TableHead>
                                 </TableRow>
@@ -144,7 +144,7 @@ export default function BusinessDashboardPage() {
                                                 onChange={(e) => handleUpdateStatus(booking.id, 'assigned', e.target.value)}
                                                 disabled={['completed', 'cancelled', 'rejected'].includes(booking.status)}
                                             >
-                                                <option value="">-- Assign Detailer --</option>
+                                                <option value="">-- Assign Professional --</option>
                                                 {employees.map(e => <option key={e.id} value={e.id}>{e.name.toUpperCase()}</option>)}
                                             </select>
                                         </TableCell>
@@ -185,7 +185,7 @@ export default function BusinessDashboardPage() {
                                 {leads.map((lead) => (
                                     <TableRow key={lead.id} className="hover:bg-primary/5 border-b">
                                         <TableCell className="pl-6 py-4 font-bold text-sm">{lead.customer_name}</TableCell>
-                                        <TableCell><Badge variant="secondary" className="uppercase text-[9px] font-black">ID: #{lead.listing_id.slice(-6).toUpperCase()}</Badge></TableCell>
+                                        <TableCell><Badge variant="secondary" className="uppercase text-[9px] font-black">ID: #{lead.listing_id?.slice(-6).toUpperCase() || '---'}</Badge></TableCell>
                                         <TableCell className="text-[10px] font-black text-muted-foreground uppercase">{new Date(lead.created_at).toLocaleDateString()}</TableCell>
                                         <TableCell className="text-right pr-6">
                                             <Button size="sm" variant="outline" className="h-9 text-[10px] font-black uppercase rounded-full border-primary text-primary hover:bg-primary hover:text-white transition-all shadow-sm" asChild>
