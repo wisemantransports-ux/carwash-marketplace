@@ -120,14 +120,14 @@ function MarketplaceContent() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col lg:flex-row gap-8 items-start">
-        <div className="flex-1 space-y-4">
+        <div className="flex-1 space-y-4 w-full">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
             <ShieldCheck className="h-3 w-3" />
             <span>Verified Marketplace Partners</span>
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-primary">Automotive Partner Directory</h1>
           
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="relative max-w-2xl">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
@@ -138,13 +138,16 @@ function MarketplaceContent() {
               />
             </div>
             
-            <div className="flex flex-wrap gap-2">
+            <div className="bg-muted/30 p-1.5 rounded-2xl border-2 flex flex-wrap gap-1.5 w-fit">
               {CATEGORIES.map(cat => (
                 <Button 
                   key={cat.id} 
-                  variant={category === cat.id ? 'default' : 'outline'} 
+                  variant={category === cat.id ? 'default' : 'ghost'} 
                   size="sm" 
-                  className="rounded-full px-4 font-bold h-9 transition-all shadow-sm"
+                  className={cn(
+                    "rounded-xl px-5 font-bold h-10 transition-all uppercase text-[10px] tracking-wider",
+                    category === cat.id ? "shadow-md" : "hover:bg-white/50"
+                  )}
                   onClick={() => setCategory(cat.id)}
                 >
                   <cat.icon className={cn("h-3.5 w-3.5 mr-2", category === cat.id ? "text-white" : "text-primary")} />

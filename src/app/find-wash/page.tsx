@@ -149,7 +149,7 @@ function MarketplaceContent() {
           </p>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 items-end justify-between bg-white/50 backdrop-blur-sm p-6 rounded-3xl border-2 shadow-sm">
+        <div className="flex flex-col xl:flex-row gap-6 items-end justify-between bg-white/50 backdrop-blur-sm p-6 rounded-3xl border-2 shadow-sm">
           <div className="flex-1 w-full space-y-2">
             <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Search Feed</Label>
             <div className="relative">
@@ -163,22 +163,24 @@ function MarketplaceContent() {
             </div>
           </div>
           
-          <div className="flex flex-wrap gap-4 w-full lg:w-auto">
-            <div className="space-y-2 flex-1 lg:w-64">
-              <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Category Filter</Label>
-              <div className="flex bg-muted/50 p-1 rounded-xl border">
-                {CATEGORIES.map(cat => (
-                  <Button 
-                    key={cat.id} 
-                    variant={category === cat.id ? 'default' : 'ghost'} 
-                    size="sm" 
-                    className="flex-1 rounded-lg font-bold h-9 transition-all text-[10px] uppercase"
-                    onClick={() => setCategory(cat.id)}
-                  >
-                    {cat.label}
-                  </Button>
-                ))}
-              </div>
+          <div className="w-full xl:w-auto space-y-2">
+            <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Category Filter</Label>
+            <div className="flex flex-wrap bg-muted/50 p-1 rounded-xl border gap-1">
+              {CATEGORIES.map(cat => (
+                <Button 
+                  key={cat.id} 
+                  variant={category === cat.id ? 'default' : 'ghost'} 
+                  size="sm" 
+                  className={cn(
+                    "flex-1 md:flex-none rounded-lg font-bold h-10 transition-all text-[10px] uppercase px-4",
+                    category === cat.id ? "shadow-md" : "hover:bg-white/50"
+                  )}
+                  onClick={() => setCategory(cat.id)}
+                >
+                  <cat.icon className="h-3.5 w-3.5 mr-2 hidden sm:inline-block" />
+                  {cat.label}
+                </Button>
+              ))}
             </div>
           </div>
         </div>
