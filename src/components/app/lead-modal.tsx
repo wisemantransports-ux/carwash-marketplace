@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { MessageCircle, Loader2, Smartphone, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 interface LeadModalProps {
   isOpen: boolean;
@@ -18,8 +19,9 @@ interface LeadModalProps {
 }
 
 export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModalProps) {
-  const [name, setName] = useState('');
-  const [whatsapp, setWhatsapp] = useState('');
+  const { user: authUser } = useAuth();
+  const [name, setName] = useState(authUser?.user_metadata?.name || '');
+  const [whatsapp, setWhatsapp] = useState(authUser?.phone || authUser?.user_metadata?.whatsapp || '');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,13 +31,28 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
     setLoading(true);
     try {
       // 1. Frictionless Identity Resolution
-      const res = await fetch('/api/auth/frictionless', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ whatsapp, name })
-      });
-      const authResult = await res.json();
-      if (authResult.error) throw new Error(authResult.error);
+      let currentUserId = authUser?.id;
+
+      if (!currentUserId) {
+        const res = await fetch('/api/auth/frictionless', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ whatsapp, name })
+        });
+
+        const contentType = res.headers.get("content-type");
+        if (!res.ok || !contentType || !contentType.includes("application/json")) {
+          const errorBody = await res.text().catch(() => "Server error");
+          console.error("Lead Auth Error:", errorBody);
+          throw new Error("Authentication service unavailable. Please try again later.");
+        }
+
+        const authResult = await res.json();
+        if (authResult.error) throw new Error(authResult.error);
+        currentUserId = authResult.userId;
+      }
+
+      if (!currentUserId) throw new Error("Could not resolve identity.");
 
       // 2. Fetch Listing & Business Context
       const { data: listing, error: lErr } = await supabase
@@ -44,10 +61,9 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         .eq('id', listingId)
         .single();
 
-      if (lErr || !listing) throw new Error("Listing unavailable.");
+      if (lErr || !listing) throw new Error("This listing is no longer available.");
 
       const cleanWa = whatsapp.replace(/\D/g, '');
-      const currentUserId = authResult.userId;
 
       // 3. Log Lead (Schema Alignment)
       const { error: leadErr } = await supabase.from('leads').insert({
@@ -58,18 +74,27 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         customer_whatsapp: cleanWa,
         status: 'new'
       });
-      if (leadErr) throw leadErr;
+      
+      if (leadErr) {
+        console.error("Lead Insertion Error:", leadErr);
+        throw leadErr;
+      }
 
       // 4. WhatsApp Connect
       const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
       const url = `https://wa.me/${bizPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name}.`)}`;
       
       window.open(url, '_blank');
-      toast({ title: "Inquiry Logged! ✅", description: "Connect with the seller on WhatsApp now." });
+      toast({ title: "Inquiry Sent! ✅", description: "The seller has been notified. Redirecting to WhatsApp..." });
       onClose();
     } catch (err: any) {
       console.error("Lead Error:", err);
-      toast({ variant: 'destructive', title: 'Inquiry Failed', description: err.message || "Data integrity error." });
+      const message = err?.message || "Data sync failure. Please try again.";
+      toast({ 
+        variant: 'destructive', 
+        title: 'Inquiry Failed', 
+        description: message 
+      });
     } finally {
       setLoading(false);
     }
