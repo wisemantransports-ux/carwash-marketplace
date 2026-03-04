@@ -15,11 +15,11 @@ import { BookingModal } from '@/components/app/booking-modal';
 export default function PublicBusinessServicesPage() {
     const params = useParams();
     const businessId = params?.businessId as string;
-    const router = useRouter();
     const [bizRecord, setBizRecord] = useState<Business | null>(null);
     const [services, setServices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [bookingOpen, setBookingOpen] = useState(false);
+    const [selectedService, setSelectedService] = useState<any>(null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -49,6 +49,11 @@ export default function PublicBusinessServicesPage() {
         };
         loadData();
     }, [businessId]);
+
+    const handleQuickBook = (service: any) => {
+        setSelectedService(service);
+        setBookingOpen(true);
+    };
 
     if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
     if (!bizRecord) return <div className="text-center py-20">Business not found.</div>;
@@ -94,9 +99,6 @@ export default function PublicBusinessServicesPage() {
                             <Banknote className="h-6 w-6 text-primary" />
                             Wash Packages
                         </h2>
-                        <Button onClick={() => setBookingOpen(true)} className="h-12 px-8 font-black rounded-full shadow-xl">
-                            <Sparkles className="mr-2 h-4 w-4" /> Quick Book
-                        </Button>
                     </div>
                     <div className="grid gap-4">
                         {services.map(service => (
@@ -105,11 +107,10 @@ export default function PublicBusinessServicesPage() {
                                     <div className="space-y-1">
                                         <CardTitle className="text-2xl font-bold group-hover:text-primary transition-colors">{service.name}</CardTitle>
                                         <div className="flex items-center gap-4 text-[10px] font-black pt-2">
-                                            {service.duration && <span className="flex items-center gap-1.5 bg-muted px-2 py-1 rounded uppercase tracking-widest"><Clock className="h-3 w-3" /> {service.duration} MIN</span>}
                                             <span className="flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-1 rounded uppercase tracking-widest">P{Number(service.price || 0).toFixed(2)}</span>
                                         </div>
                                     </div>
-                                    <Button onClick={() => setBookingOpen(true)} className="shrink-0 rounded-full font-black px-6">Select Package</Button>
+                                    <Button onClick={() => handleQuickBook(service)} className="shrink-0 rounded-full font-black px-6">Select Package</Button>
                                 </CardHeader>
                             </Card>
                         ))}
@@ -120,9 +121,7 @@ export default function PublicBusinessServicesPage() {
             <BookingModal 
                 isOpen={bookingOpen}
                 onClose={() => setBookingOpen(false)}
-                businessId={bizRecord.id}
-                businessName={bizRecord.name}
-                services={services}
+                service={selectedService}
             />
         </div>
     );

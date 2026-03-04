@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, Clock, History, ExternalLink, XCircle, Droplets, ShoppingCart, MessageSquare } from "lucide-react";
+import { Loader2, RefreshCw, XCircle, Droplets, ShoppingCart, MapPin, Calendar, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,7 +13,7 @@ import { cn } from "@/lib/utils";
 import type { WashBooking, Lead } from "@/lib/types";
 
 export default function CustomerDashboardPage() {
-    const [bookings, setBookings] = useState<WashBooking[]>([]);
+    const [bookings, setBookings] = useState<any[]>([]);
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -27,17 +26,21 @@ export default function CustomerDashboardPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            // 1. Fetch Wash Bookings (Schema Aligned)
+            // 1. Fetch Wash Bookings correctly aligned with the wash_bookings schema
             const { data: bData, error: bErr } = await supabase
                 .from('wash_bookings')
-                .select('*, business:seller_business_id(name, city), service:wash_service_id(name)')
+                .select(`
+                    *,
+                    business:seller_business_id ( name, city ),
+                    service:wash_service_id ( name, price )
+                `)
                 .eq('customer_id', user.id)
-                .order('created_at', { ascending: false });
+                .order('booking_date', { ascending: false });
             
             if (bErr) throw bErr;
-            setBookings(bData as any || []);
+            setBookings(bData || []);
 
-            // 2. Fetch Marketplace Leads (Schema Aligned)
+            // 2. Fetch Inquiries (Leads) for Cars & Spare Parts ONLY
             const { data: lData, error: lErr } = await supabase
                 .from('leads')
                 .select('*, business:seller_business_id(name)')
@@ -45,7 +48,7 @@ export default function CustomerDashboardPage() {
                 .order('created_at', { ascending: false });
             
             if (lErr) throw lErr;
-            setLeads(lData as any || []);
+            setLeads(lData || []);
 
         } catch (e: any) {
             console.error("Dashboard Sync Error:", e);
@@ -58,19 +61,42 @@ export default function CustomerDashboardPage() {
 
     useEffect(() => {
         fetchData();
-        const bChannel = supabase.channel('customer-bookings').on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true)).subscribe();
+        const bChannel = supabase.channel('customer-wash').on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true)).subscribe();
         const lChannel = supabase.channel('customer-leads').on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => fetchData(true)).subscribe();
-        return () => { supabase.removeChannel(bChannel); supabase.removeChannel(lChannel); };
+        return () => { 
+            supabase.removeChannel(bChannel); 
+            supabase.removeChannel(lChannel); 
+        };
     }, [fetchData]);
 
     const handleCancel = async (id: string) => {
-        if (!confirm('Cancel this request?')) return;
+        if (!confirm('Cancel this carwash request?')) return;
         try {
-            const { error } = await supabase.from('wash_bookings').update({ status: 'cancelled' }).eq('id', id);
+            const { error } = await supabase
+                .from('wash_bookings')
+                .update({ status: 'cancelled' })
+                .eq('id', id);
+            
             if (error) throw error;
             toast({ title: 'Request Cancelled' });
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Action Failed', description: e.message });
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Delete this completed booking from history?')) return;
+        try {
+            const { error } = await supabase
+                .from('wash_bookings')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
+            setBookings(prev => prev.filter(b => b.id !== id));
+            toast({ title: 'Record Removed' });
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Delete Failed', description: e.message });
         }
     };
 
@@ -81,17 +107,17 @@ export default function CustomerDashboardPage() {
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary uppercase italic">Activity Tracking</h1>
-                    <p className="text-muted-foreground font-medium">History of your service requests and marketplace inquiries.</p>
+                    <p className="text-muted-foreground font-medium">Manage your carwash requests and marketplace inquiries.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-6">
-                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Feed
+                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Hub
                 </Button>
             </div>
 
             <Tabs defaultValue="wash" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 max-w-md bg-muted/50 p-1 rounded-xl">
                     <TabsTrigger value="wash" className="rounded-lg font-bold">Wash Queue</TabsTrigger>
-                    <TabsTrigger value="leads" className="rounded-lg font-bold">Inquiries</TabsTrigger>
+                    <TabsTrigger value="leads" className="rounded-lg font-bold">Marketplace Inquiries</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="wash" className="mt-8">
@@ -100,13 +126,13 @@ export default function CustomerDashboardPage() {
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
                                     <TableHead className="font-black py-4 pl-6 uppercase text-[10px] tracking-widest">Service & Partner</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Scheduled On</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Date & Time</TableHead>
                                     <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
                                     <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">Control</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {bookings.map((booking: any) => (
+                                {bookings.map((booking) => (
                                     <TableRow key={booking.id} className="hover:bg-primary/5 transition-colors border-b">
                                         <TableCell className="pl-6 py-4">
                                             <div className="flex flex-col">
@@ -115,7 +141,10 @@ export default function CustomerDashboardPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-xs font-bold text-slate-600">
-                                            {new Date(booking.booking_date).toLocaleDateString()} @ {new Date(booking.booking_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            <div className="flex flex-col">
+                                                <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(booking.booking_date).toLocaleDateString()}</span>
+                                                <span className="flex items-center gap-1 opacity-60"><Clock className="h-3 w-3" /> {new Date(booking.booking_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant="outline" className={cn(
@@ -127,15 +156,22 @@ export default function CustomerDashboardPage() {
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
-                                            {['pending_assignment', 'assigned'].includes(booking.status) && (
-                                                <Button size="icon" variant="ghost" className="text-destructive h-8 w-8 hover:bg-red-50" onClick={() => handleCancel(booking.id)}>
-                                                    <XCircle className="h-4 w-4" />
-                                                </Button>
-                                            )}
+                                            <div className="flex justify-end gap-2">
+                                                {booking.status === 'pending_assignment' && (
+                                                    <Button size="icon" variant="ghost" className="text-destructive h-8 w-8 hover:bg-red-50" onClick={() => handleCancel(booking.id)}>
+                                                        <XCircle className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                                {booking.status === 'completed' && (
+                                                    <Button size="sm" variant="ghost" className="h-8 text-[10px] font-bold" onClick={() => handleDelete(booking.id)}>
+                                                        Clear
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {bookings.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic font-medium opacity-40">No car wash bookings found.</TableCell></TableRow>}
+                                {bookings.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic font-medium opacity-40">No carwash bookings found.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </Card>
@@ -153,7 +189,7 @@ export default function CustomerDashboardPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {leads.map((lead: any) => (
+                                {leads.map((lead) => (
                                     <TableRow key={lead.id} className="hover:bg-primary/5 border-b">
                                         <TableCell className="pl-6 py-4">
                                             <div className="flex items-center gap-2">
@@ -168,7 +204,7 @@ export default function CustomerDashboardPage() {
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {leads.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic font-medium opacity-40">No marketplace inquiries yet.</TableCell></TableRow>}
+                                {leads.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic font-medium opacity-40">No vehicle or parts inquiries yet.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </Card>

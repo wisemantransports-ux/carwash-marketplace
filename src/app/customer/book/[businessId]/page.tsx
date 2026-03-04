@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -6,37 +5,21 @@ import { supabase } from '@/lib/supabase';
 import { AiRecommender } from '@/components/app/ai-recommender';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from '@/components/ui/badge';
 import type { User as ProfileUser, Business } from '@/lib/types';
-import { Clock, Banknote, Loader2, Store, Calendar as CalendarIcon, MapPin, ShieldCheck, Package } from 'lucide-react';
+import { Clock, Banknote, Loader2, Store, MapPin, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/hooks/use-toast';
-
-const SPARE_SHOP_PREVIEW = [
-  { name: 'Car Shampoo', price: 'P85', hint: 'car shampoo' },
-  { name: 'Air Freshener', price: 'P25', hint: 'air freshener' },
-  { name: 'Dashboard Polish', price: 'P60', hint: 'dashboard polish' },
-  { name: 'Wiper Fluid', price: 'P45', hint: 'wiper fluid' },
-];
+import { BookingModal } from '@/components/app/booking-modal';
 
 export default function BookingPage({ params }: { params: Promise<{ businessId: string }> }) {
     const { businessId } = React.use(params);
-    const [business, setBusiness] = useState<ProfileUser | null>(null);
     const [bizRecord, setBizRecord] = useState<Business | null>(null);
     const [services, setServices] = useState<any[]>([]);
-    const [cars, setCars] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [bookingOpen, setBookingOpen] = useState(false);
     const [selectedService, setSelectedService] = useState<any>(null);
-    const [submitting, setSubmitting] = useState(false);
-    
-    const [selectedCarId, setSelectedCarId] = useState<string>('');
-    const [bookingTime, setBookingTime] = useState<string>('');
 
     const router = useRouter();
 
@@ -44,8 +27,6 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
         async function loadData() {
             setLoading(true);
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                
                 // 1. Resolve Business Record from unified 'businesses' table
                 const { data: bizData } = await supabase
                     .from('businesses')
@@ -57,35 +38,13 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                     const typedBiz = bizData as Business;
                     setBizRecord(typedBiz);
                     
-                    // 2. Fetch User Profile
-                    const { data: userProfile } = await supabase
-                        .from('users')
-                        .select('*')
-                        .eq('id', typedBiz.owner_id)
-                        .maybeSingle();
-
-                    if (userProfile) {
-                      setBusiness({ 
-                        ...userProfile, 
-                        avatarUrl: userProfile.avatar_url,
-                        plan: typedBiz.subscription_plan || 'None'
-                      } as ProfileUser);
-                    }
-
-                    // 3. Fetch Services from UNIFIED 'listings' table
+                    // 2. Fetch Services from UNIFIED 'listings' table
                     const { data: svcs } = await supabase
                         .from('listings')
                         .select('*')
                         .eq('business_id', typedBiz.id)
                         .eq('type', 'wash_service');
                     setServices(svcs || []);
-                }
-
-                // 4. Fetch Customer's Cars
-                if (session) {
-                    const { data: userCars } = await supabase.from('cars').select('*').eq('owner_id', session.user.id);
-                    setCars(userCars || []);
-                    if (userCars && userCars.length > 0) setSelectedCarId(userCars[0].id);
                 }
             } catch (e) {
                 console.error("Load error:", e);
@@ -98,49 +57,8 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
     }, [businessId]);
 
     const handleOpenBooking = (service: any) => {
-        if (cars.length === 0) {
-            toast({ 
-                title: "Register a Car", 
-                description: "Add a vehicle to your profile before booking.",
-                action: <Button size="sm" onClick={() => router.push('/customer/cars')}>Go to Cars</Button>
-            });
-            return;
-        }
         setSelectedService(service);
-        const defaultTime = new Date();
-        defaultTime.setHours(defaultTime.getHours() + 2);
-        defaultTime.setMinutes(0);
-        setBookingTime(defaultTime.toISOString().slice(0, 16));
         setBookingOpen(true);
-    };
-
-    const confirmBooking = async () => {
-        if (!selectedService || !bizRecord) return;
-        setSubmitting(true);
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error('Session expired.');
-
-            const { data: newBooking, error } = await supabase.from('bookings').insert({
-                customer_id: session.user.id,
-                business_id: bizRecord.id,
-                service_id: selectedService.id,
-                car_id: selectedCarId,
-                booking_time: new Date(bookingTime).toISOString(),
-                status: 'pending',
-                price: selectedService.price
-            }).select().single();
-
-            if (error) throw error;
-
-            toast({ title: 'Booking Successful', description: 'Your request has been registered.' });
-            setBookingOpen(false);
-            router.push(`/customer/booking-confirmation/${newBooking.id}`);
-        } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Booking Failed', description: e.message });
-        } finally {
-            setSubmitting(false);
-        }
     };
     
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -186,7 +104,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                                 </CardHeader>
                                 <CardFooter className="flex items-center justify-between border-t pt-4 bg-muted/5">
                                     <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
-                                        <span className="flex items-center gap-1.5"><Clock className="h-3 w-3" />Standard Duration</span>
+                                        <span className="flex items-center gap-1.5"><Clock className="h-3 w-3" />Professional Wash</span>
                                         <span className="flex items-center gap-1.5"><Banknote className="h-3 w-3" />Pula Payments</span>
                                     </div>
                                     <Button size="sm" onClick={() => handleOpenBooking(service)}>Book Service</Button>
@@ -205,36 +123,11 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
                 <AiRecommender />
             </div>
 
-            <Dialog open={bookingOpen} onOpenChange={setBookingOpen}>
-                <DialogContent className="max-w-md">
-                    <DialogHeader><DialogTitle>Finalize Your Booking</DialogTitle></DialogHeader>
-                    <div className="space-y-6 py-6">
-                        <div className="space-y-2">
-                            <Label>Choose Your Vehicle</Label>
-                            <Select value={selectedCarId} onValueChange={setSelectedCarId}>
-                                <SelectTrigger className="w-full bg-white">
-                                    <SelectValue placeholder="Select a car" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {cars.map(car => (
-                                        <SelectItem key={car.id} value={car.id}>{car.make} {car.model}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Select Date & Time</Label>
-                            <Input type="datetime-local" className="h-12 bg-white" value={bookingTime} onChange={e => setBookingTime(e.target.value)} />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button className="w-full h-12 text-lg shadow-xl" disabled={submitting} onClick={confirmBooking}>
-                            {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
-                            Confirm Request
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <BookingModal 
+                isOpen={bookingOpen}
+                onClose={() => setBookingOpen(false)}
+                service={selectedService}
+            />
         </div>
     );
 }

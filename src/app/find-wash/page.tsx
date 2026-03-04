@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
@@ -7,7 +6,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, Star, Zap, Award } from 'lucide-react';
+import { MapPin, Search, ShieldCheck, ArrowLeft, Store, Loader2, Filter, Droplets, ShoppingCart, Car as CarIcon, Star, Zap } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -84,14 +83,6 @@ function MarketplaceContent() {
 
   useEffect(() => {
     loadData();
-    
-    // Auto-refresh subscription
-    const channel = supabase
-      .channel('marketplace-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'listings' }, () => loadData())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, [loadData]);
 
   const filtered = useMemo(() => {
@@ -139,7 +130,7 @@ function MarketplaceContent() {
             <span>Verified Automotive Network</span>
           </div>
           <h1 className="text-4xl font-black tracking-tight text-slate-900 uppercase">Find Excellence</h1>
-          <p className="text-muted-foreground text-lg">Browse genuine parts, elite detailing, and verified vehicles across Botswana.</p>
+          <p className="text-muted-foreground text-lg">Browse genuine parts, detailing, and verified vehicles across Botswana.</p>
         </div>
 
         <div className="flex flex-col xl:flex-row gap-6 items-end justify-between bg-white/50 backdrop-blur-sm p-6 rounded-3xl border-2 shadow-sm">
@@ -186,8 +177,6 @@ function MarketplaceContent() {
           ) : filtered.length > 0 ? (
             filtered.map((item) => {
               const type = item.listing_type || item.type;
-              
-              // Hierarchical Fallback logic
               const displayImage = item.service_image_url || item.image_url || item.business?.logo_url || `https://picsum.photos/seed/${item.id}/600/400`;
 
               return (
@@ -250,9 +239,7 @@ function MarketplaceContent() {
           <BookingModal 
             isOpen={bookingModalOpen} 
             onClose={() => setBookingModalOpen(false)} 
-            businessId={selectedListing.business_id} 
-            businessName={selectedListing.business?.name || 'Partner'} 
-            services={[selectedListing]} 
+            service={selectedListing} 
           />
         </>
       )}
