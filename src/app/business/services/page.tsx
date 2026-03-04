@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Loader2, AlertCircle, Trash2 } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Loader2, AlertCircle, Trash2, Edit } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
 import Link from "next/link";
@@ -68,6 +68,7 @@ export default function ServicesManagementPage() {
     }, [fetchData]);
 
     const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this service?')) return;
         try {
             const { error } = await supabase
                 .from('listings')
@@ -148,7 +149,7 @@ export default function ServicesManagementPage() {
                                         <code className="text-xs font-bold text-muted-foreground">WASH</code>
                                     </TableCell>
                                     <TableCell className="font-mono font-bold text-sm">
-                                        {Number(service.price || 0).toFixed(2)}
+                                        P{Number(service.price || 0).toFixed(2)}
                                     </TableCell>
                                     <TableCell className="text-right pr-6">
                                         <DropdownMenu>
@@ -158,6 +159,11 @@ export default function ServicesManagementPage() {
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="w-48 shadow-xl border-2">
+                                                <DropdownMenuItem asChild>
+                                                  <Link href={`/business/services/edit/${service.id}`} className="cursor-pointer font-bold">
+                                                    <Edit className="h-4 w-4 mr-2" /> Edit Service
+                                                  </Link>
+                                                </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleDelete(service.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer font-bold">
                                                     <Trash2 className="h-4 w-4 mr-2" /> Delete Service
                                                 </DropdownMenuItem>
