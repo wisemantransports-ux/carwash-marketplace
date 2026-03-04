@@ -202,14 +202,14 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                <Input value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">WhatsApp Number</Label>
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
               </div>
             </div>
           </div>
@@ -218,7 +218,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
             <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Email (Optional)</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-              <Input type="email" placeholder="customer@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12" />
+              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12" />
             </div>
           </div>
 
@@ -243,7 +243,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
             <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Service Location / Address</Label>
             <div className="relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-              <Input placeholder="e.g. Plot 1234, G-West, Gaborone" value={locationText} onChange={e => setLocationText(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+              <Input value={locationText} onChange={e => setLocationText(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
             </div>
           </div>
 
