@@ -39,21 +39,33 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
     setLoading(true);
     try {
       // 1. Progressive Identity: Check or Create User
-      let { data: user } = await supabase.from('users').select('id').eq('whatsapp_number', cleanWa).maybeSingle();
+      const { data: existingUser, error: findError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('whatsapp_number', cleanWa)
+        .maybeSingle();
+      
+      if (findError) throw findError;
+
+      let user = existingUser;
       
       if (!user) {
-        const { data: newUser, error: createError } = await supabase.from('users').insert({ 
-          whatsapp_number: cleanWa, 
-          name: name.trim(), 
-          role: 'customer' 
-        }).select().single();
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert({ 
+            whatsapp_number: cleanWa, 
+            name: name.trim(), 
+            role: 'customer' 
+          })
+          .select()
+          .single();
         
         if (createError) throw createError;
         user = newUser;
       }
 
       // 2. Log Lead for overall tracking
-      await supabase.from('leads').insert({
+      const { error: leadError } = await supabase.from('leads').insert({
         seller_id: businessId,
         user_id: user?.id,
         listing_id: listingId,
@@ -62,6 +74,8 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
         customer_whatsapp: cleanWa,
         status: 'new'
       });
+
+      if (leadError) throw leadError;
 
       // 3. Create Operational Booking
       const { error: bookingError } = await supabase.from('wash_bookings').insert({
@@ -82,9 +96,14 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
         description: "Request sent to " + businessName + ". They will confirm assignment shortly." 
       });
       onClose();
-    } catch (e: any) {
-      console.error("Booking Error:", e);
-      toast({ variant: 'destructive', title: 'Booking Failed', description: e.message });
+    } catch (err: any) {
+      console.error("Booking Error Detail:", err);
+      const errorMessage = err?.message || err?.error_description || "Service unavailable. Check your internet or login status.";
+      toast({ 
+        variant: 'destructive', 
+        title: 'Booking Failed', 
+        description: errorMessage 
+      });
     } finally {
       setLoading(false);
     }

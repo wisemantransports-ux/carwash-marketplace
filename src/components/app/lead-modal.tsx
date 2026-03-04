@@ -30,22 +30,37 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
     setLoading(true);
     try {
       // 1. Fetch Listing & Business
-      const { data: listing } = await supabase
+      const { data: listing, error: listingError } = await supabase
         .from('listings')
         .select('business_id, listing_type')
         .eq('id', listingId)
         .single();
 
-      if (!listing) throw new Error("Listing unavailable.");
+      if (listingError || !listing) throw new Error("Listing unavailable or removed.");
 
       // 2. Progressive Identity: Create/Get User
-      let { data: user } = await supabase.from('users').select('id').eq('whatsapp_number', cleanWa).maybeSingle();
+      const { data: existingUser, error: findError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('whatsapp_number', cleanWa)
+        .maybeSingle();
+      
+      if (findError) throw findError;
+
+      let user = existingUser;
+      
       if (!user) {
-        const { data: newUser } = await supabase.from('users').insert({ 
-          whatsapp_number: cleanWa, 
-          name: name.trim(), 
-          role: 'customer' 
-        }).select().single();
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert({ 
+            whatsapp_number: cleanWa, 
+            name: name.trim(), 
+            role: 'customer' 
+          })
+          .select()
+          .single();
+        
+        if (createError) throw createError;
         user = newUser;
       }
 
@@ -63,15 +78,28 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       if (leadError) throw leadError;
 
       // 4. WhatsApp Connect
-      const { data: biz } = await supabase.from('businesses').select('whatsapp_number').eq('id', listing.business_id).single();
+      const { data: biz, error: bizError } = await supabase
+        .from('businesses')
+        .select('whatsapp_number')
+        .eq('id', listing.business_id)
+        .single();
+      
+      if (bizError) throw bizError;
+
       const phone = biz?.whatsapp_number || '26777491261';
       const url = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! 👋 I'm interested in the *${listingTitle}* listing on AutoLink. My name is ${name}.`)}`;
       
       window.open(url, '_blank');
       toast({ title: "Inquiry Sent! ✅", description: "The seller has been notified." });
       onClose();
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Error', description: e.message });
+    } catch (err: any) {
+      console.error("Lead Error Detail:", err);
+      const errorMessage = err?.message || "Communication error. Please try again or sign in.";
+      toast({ 
+        variant: 'destructive', 
+        title: 'Inquiry Failed', 
+        description: errorMessage 
+      });
     } finally {
       setLoading(false);
     }
