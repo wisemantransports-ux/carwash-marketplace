@@ -33,17 +33,30 @@ export default function BusinessDashboardPage() {
             if (!biz) return;
             setBusiness(biz as Business);
 
-            // Fetch mixed operations data
-            const { data: bData } = await supabase.from('wash_bookings').select('*, user:user_id(name), employee:employee_id(name)').eq('wash_business_id', biz.id).order('created_at', { ascending: false });
+            // Fetch mixed operations data (Schema Aligned)
+            const { data: bData, error: bErr } = await supabase
+                .from('wash_bookings')
+                .select('*, user:customer_id(name), employee:employee_id(name), service:wash_service_id(name)')
+                .eq('seller_business_id', biz.id)
+                .order('created_at', { ascending: false });
+            
+            if (bErr) throw bErr;
             setBookings(bData as any || []);
 
-            const { data: lData } = await supabase.from('leads').select('*').eq('seller_id', biz.id).order('created_at', { ascending: false });
+            const { data: lData, error: lErr } = await supabase
+                .from('leads')
+                .select('*')
+                .eq('seller_business_id', biz.id)
+                .order('created_at', { ascending: false });
+            
+            if (lErr) throw lErr;
             setLeads(lData as any || []);
 
             const { data: eData } = await supabase.from('employees').select('*').eq('business_id', biz.id);
             setEmployees(eData || []);
 
         } catch (e: any) {
+            console.error("Biz Dashboard Error:", e);
             toast({ variant: 'destructive', title: 'Sync Error', description: e.message });
         } finally {
             setLoading(false);
@@ -53,8 +66,9 @@ export default function BusinessDashboardPage() {
 
     useEffect(() => {
         fetchData();
-        const channel = supabase.channel('biz-ops').on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true)).on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => fetchData(true)).subscribe();
-        return () => { supabase.removeChannel(channel); };
+        const bChannel = supabase.channel('biz-bookings').on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true)).subscribe();
+        const lChannel = supabase.channel('biz-leads').on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => fetchData(true)).subscribe();
+        return () => { supabase.removeChannel(bChannel); supabase.removeChannel(lChannel); };
     }, [fetchData]);
 
     const handleUpdateStatus = async (id: string, status: string, empId?: string) => {
@@ -82,18 +96,18 @@ export default function BusinessDashboardPage() {
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary flex items-center gap-3 italic">
                         <LayoutDashboard className="h-10 w-10" />
-                        Operational Command
+                        Live Operations
                     </h1>
-                    <p className="text-muted-foreground font-medium">Real-time leads and wash operations for {business?.name}.</p>
+                    <p className="text-muted-foreground font-medium">Real-time marketplace requests for {business?.name}.</p>
                 </div>
                 <Button variant="outline" onClick={() => fetchData(true)} className="rounded-full bg-white shadow-sm h-10 px-6">
-                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Feed
+                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Hub
                 </Button>
             </div>
 
             <Tabs defaultValue="wash" className="w-full">
                 <TabsList className="mb-8 bg-muted/50 p-1 rounded-xl w-fit">
-                    <TabsTrigger value="wash" className="rounded-lg font-bold px-8">Car Wash Queue</TabsTrigger>
+                    <TabsTrigger value="wash" className="rounded-lg font-bold px-8">Wash Requests</TabsTrigger>
                     <TabsTrigger value="leads" className="rounded-lg font-bold px-8">Marketplace Leads</TabsTrigger>
                 </TabsList>
 
@@ -103,8 +117,8 @@ export default function BusinessDashboardPage() {
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
                                     <TableHead className="font-black py-4 pl-6 uppercase text-[10px] tracking-widest">Client & Date</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">WhatsApp (Secure)</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Staff Assignment</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">WhatsApp (Secured)</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Staff Registry</TableHead>
                                     <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
                                     <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">Controls</TableHead>
                                 </TableRow>
@@ -115,11 +129,13 @@ export default function BusinessDashboardPage() {
                                         <TableCell className="pl-6 py-4">
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-sm">{booking.user?.name || 'Customer'}</span>
-                                                <span className="text-[10px] text-muted-foreground font-black uppercase">{new Date(booking.booking_date).toLocaleDateString()} @ {booking.booking_time}</span>
+                                                <span className="text-[10px] text-muted-foreground font-black uppercase">
+                                                    {new Date(booking.booking_date).toLocaleDateString()} @ {new Date(booking.booking_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
                                             </div>
                                         </TableCell>
                                         <TableCell className="font-mono text-xs font-black">
-                                            {formatPhone(booking.whatsapp_number, booking.status)}
+                                            {formatPhone(booking.customer_whatsapp || booking.whatsapp_number, booking.status)}
                                         </TableCell>
                                         <TableCell className="min-w-[180px]">
                                             <select 
@@ -128,7 +144,7 @@ export default function BusinessDashboardPage() {
                                                 onChange={(e) => handleUpdateStatus(booking.id, 'assigned', e.target.value)}
                                                 disabled={['completed', 'cancelled', 'rejected'].includes(booking.status)}
                                             >
-                                                <option value="">-- Choose Detailer --</option>
+                                                <option value="">-- Assign Detailer --</option>
                                                 {employees.map(e => <option key={e.id} value={e.id}>{e.name.toUpperCase()}</option>)}
                                             </select>
                                         </TableCell>
@@ -160,7 +176,7 @@ export default function BusinessDashboardPage() {
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
                                     <TableHead className="font-black py-4 pl-6 uppercase text-[10px] tracking-widest">Buyer Identity</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Category</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Listing Reference</TableHead>
                                     <TableHead className="font-black uppercase text-[10px] tracking-widest">Captured On</TableHead>
                                     <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">WhatsApp Direct</TableHead>
                                 </TableRow>
@@ -169,7 +185,7 @@ export default function BusinessDashboardPage() {
                                 {leads.map((lead) => (
                                     <TableRow key={lead.id} className="hover:bg-primary/5 border-b">
                                         <TableCell className="pl-6 py-4 font-bold text-sm">{lead.customer_name}</TableCell>
-                                        <TableCell><Badge variant="secondary" className="uppercase text-[9px] font-black">{lead.lead_type}</Badge></TableCell>
+                                        <TableCell><Badge variant="secondary" className="uppercase text-[9px] font-black">ID: #{lead.listing_id.slice(-6).toUpperCase()}</Badge></TableCell>
                                         <TableCell className="text-[10px] font-black text-muted-foreground uppercase">{new Date(lead.created_at).toLocaleDateString()}</TableCell>
                                         <TableCell className="text-right pr-6">
                                             <Button size="sm" variant="outline" className="h-9 text-[10px] font-black uppercase rounded-full border-primary text-primary hover:bg-primary hover:text-white transition-all shadow-sm" asChild>

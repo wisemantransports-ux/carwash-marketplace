@@ -38,23 +38,22 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       if (authResult.error) throw new Error(authResult.error);
 
       // 2. Fetch Listing & Business Context
-      const { data: listing } = await supabase
+      const { data: listing, error: lErr } = await supabase
         .from('listings')
         .select('business_id, listing_type, business:business_id(whatsapp_number)')
         .eq('id', listingId)
         .single();
 
-      if (!listing) throw new Error("Listing unavailable.");
+      if (lErr || !listing) throw new Error("Listing unavailable.");
 
       const cleanWa = whatsapp.replace(/\D/g, '');
       const currentUserId = authResult.userId;
 
-      // 3. Log Lead
+      // 3. Log Lead (Schema Alignment)
       const { error: leadErr } = await supabase.from('leads').insert({
-        seller_id: listing.business_id,
-        user_id: currentUserId,
+        customer_id: currentUserId,
+        seller_business_id: listing.business_id,
         listing_id: listingId,
-        lead_type: listing.listing_type,
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         status: 'new'
@@ -66,10 +65,11 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       const url = `https://wa.me/${bizPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name}.`)}`;
       
       window.open(url, '_blank');
-      toast({ title: "Inquiry Logged! ✅", description: "Sellers typically respond in 1-2 hours." });
+      toast({ title: "Inquiry Logged! ✅", description: "Connect with the seller on WhatsApp now." });
       onClose();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Inquiry Failed', description: err.message });
+      console.error("Lead Error:", err);
+      toast({ variant: 'destructive', title: 'Inquiry Failed', description: err.message || "Data integrity error." });
     } finally {
       setLoading(false);
     }
@@ -84,28 +84,28 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
             Direct Inquiry
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Frictionless connection. Your identity is matched via WhatsApp.
+            Instant connection via WhatsApp. No account required.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase">Full Name</Label>
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="Enter your name" value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10" />
+                <Input placeholder="Enter your name" value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase">WhatsApp Number</Label>
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">WhatsApp Number</Label>
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10" />
+                <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={loading}>
+            <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter" disabled={loading}>
               {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <MessageCircle className="mr-2 h-5 w-5" />}
               Connect on WhatsApp
             </Button>

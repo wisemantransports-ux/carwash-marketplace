@@ -27,23 +27,28 @@ export default function CustomerDashboardPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            // 1. Fetch Wash Bookings
-            const { data: bData } = await supabase
+            // 1. Fetch Wash Bookings (Schema Aligned)
+            const { data: bData, error: bErr } = await supabase
                 .from('wash_bookings')
-                .select('*, business:wash_business_id(name, city), listing:service_type(name)')
-                .eq('user_id', user.id)
+                .select('*, business:seller_business_id(name, city), service:wash_service_id(name)')
+                .eq('customer_id', user.id)
                 .order('created_at', { ascending: false });
+            
+            if (bErr) throw bErr;
             setBookings(bData as any || []);
 
-            // 2. Fetch Marketplace Leads (Cars/Parts)
-            const { data: lData } = await supabase
+            // 2. Fetch Marketplace Leads (Schema Aligned)
+            const { data: lData, error: lErr } = await supabase
                 .from('leads')
-                .select('*, listing:listing_id(name), business:seller_id(name)')
-                .eq('user_id', user.id)
+                .select('*, business:seller_business_id(name)')
+                .eq('customer_id', user.id)
                 .order('created_at', { ascending: false });
+            
+            if (lErr) throw lErr;
             setLeads(lData as any || []);
 
         } catch (e: any) {
+            console.error("Dashboard Sync Error:", e);
             toast({ variant: 'destructive', title: 'Sync Error', description: e.message });
         } finally {
             setLoading(false);
@@ -75,18 +80,18 @@ export default function CustomerDashboardPage() {
         <div className="space-y-8 animate-in fade-in duration-500 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div className="space-y-1">
-                    <h1 className="text-4xl font-extrabold tracking-tight text-primary uppercase italic">Activity Command</h1>
-                    <p className="text-muted-foreground font-medium">History of your service requests and inquiries.</p>
+                    <h1 className="text-4xl font-extrabold tracking-tight text-primary uppercase italic">Activity Tracking</h1>
+                    <p className="text-muted-foreground font-medium">History of your service requests and marketplace inquiries.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-6">
-                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Status
+                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Refresh Feed
                 </Button>
             </div>
 
             <Tabs defaultValue="wash" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 max-w-md bg-muted/50 p-1 rounded-xl">
-                    <TabsTrigger value="wash" className="rounded-lg font-bold">Car Wash Tracking</TabsTrigger>
-                    <TabsTrigger value="leads" className="rounded-lg font-bold">Marketplace Inquiries</TabsTrigger>
+                    <TabsTrigger value="wash" className="rounded-lg font-bold">Wash Queue</TabsTrigger>
+                    <TabsTrigger value="leads" className="rounded-lg font-bold">Inquiries</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="wash" className="mt-8">
@@ -94,10 +99,10 @@ export default function CustomerDashboardPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
-                                    <TableHead className="font-black py-4 pl-6 uppercase text-[10px]">Service & Partner</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px]">Scheduled Date</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px]">Status</TableHead>
-                                    <TableHead className="text-right pr-6 font-black uppercase text-[10px]">Actions</TableHead>
+                                    <TableHead className="font-black py-4 pl-6 uppercase text-[10px] tracking-widest">Service & Partner</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Scheduled On</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
+                                    <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">Control</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -105,31 +110,32 @@ export default function CustomerDashboardPage() {
                                     <TableRow key={booking.id} className="hover:bg-primary/5 transition-colors border-b">
                                         <TableCell className="pl-6 py-4">
                                             <div className="flex flex-col">
-                                                <span className="font-bold text-sm">{booking.listing?.name || 'Wash Service'}</span>
-                                                <span className="text-[10px] text-muted-foreground font-bold">{booking.business?.name} • {booking.business?.city}</span>
+                                                <span className="font-bold text-sm text-primary">{booking.service?.name || 'Professional Wash'}</span>
+                                                <span className="text-[10px] text-muted-foreground font-bold uppercase">{booking.business?.name} • {booking.business?.city}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-xs font-bold text-slate-600">
-                                            {new Date(booking.booking_date).toLocaleDateString()} @ {booking.booking_time}
+                                            {new Date(booking.booking_date).toLocaleDateString()} @ {new Date(booking.booking_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant="outline" className={cn(
-                                                "uppercase text-[9px] font-black px-2",
-                                                booking.status === 'completed' ? "bg-green-50 text-green-700" : "bg-primary/5 text-primary"
+                                                "uppercase text-[9px] font-black px-2 py-0.5",
+                                                booking.status === 'completed' ? "bg-green-50 text-green-700" : 
+                                                booking.status === 'cancelled' ? "bg-red-50 text-red-700" : "bg-primary/5 text-primary"
                                             )}>
                                                 {booking.status.replace('_', ' ')}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
                                             {['pending_assignment', 'assigned'].includes(booking.status) && (
-                                                <Button size="icon" variant="ghost" className="text-destructive h-8 w-8" onClick={() => handleCancel(booking.id)}>
+                                                <Button size="icon" variant="ghost" className="text-destructive h-8 w-8 hover:bg-red-50" onClick={() => handleCancel(booking.id)}>
                                                     <XCircle className="h-4 w-4" />
                                                 </Button>
                                             )}
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {bookings.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic">No car wash bookings found.</TableCell></TableRow>}
+                                {bookings.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic font-medium opacity-40">No car wash bookings found.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </Card>
@@ -140,10 +146,10 @@ export default function CustomerDashboardPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
-                                    <TableHead className="font-black py-4 pl-6 uppercase text-[10px]">Interested Item</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px]">Seller</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px]">Inquiry Date</TableHead>
-                                    <TableHead className="text-right pr-6 font-black uppercase text-[10px]">Status</TableHead>
+                                    <TableHead className="font-black py-4 pl-6 uppercase text-[10px] tracking-widest">Marketplace Item</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Provider</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Logged Date</TableHead>
+                                    <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">Status</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -151,18 +157,18 @@ export default function CustomerDashboardPage() {
                                     <TableRow key={lead.id} className="hover:bg-primary/5 border-b">
                                         <TableCell className="pl-6 py-4">
                                             <div className="flex items-center gap-2">
-                                                {lead.lead_type === 'car' ? <ShoppingCart className="h-3 w-3 text-primary" /> : <ShoppingCart className="h-3 w-3 text-slate-400" />}
-                                                <span className="font-bold text-sm">{lead.listing?.name || 'Listing'}</span>
+                                                <ShoppingCart className="h-3.5 w-3.5 text-primary" />
+                                                <span className="font-bold text-sm">Lead ID: #{lead.id.slice(-6).toUpperCase()}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-xs font-bold text-slate-600">{lead.business?.name}</TableCell>
                                         <TableCell className="text-[10px] text-muted-foreground font-black uppercase">{new Date(lead.created_at).toLocaleDateString()}</TableCell>
                                         <TableCell className="text-right pr-6">
-                                            <Badge className="bg-slate-800 text-white font-black uppercase text-[9px]">{lead.status}</Badge>
+                                            <Badge className="bg-slate-800 text-white font-black uppercase text-[9px] tracking-widest px-2">{lead.status}</Badge>
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {leads.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic">No marketplace inquiries yet.</TableCell></TableRow>}
+                                {leads.length === 0 && <TableRow><TableCell colSpan={4} className="h-48 text-center text-muted-foreground italic font-medium opacity-40">No marketplace inquiries yet.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </Card>

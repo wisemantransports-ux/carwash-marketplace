@@ -45,14 +45,14 @@ export type LeadStatus = 'new' | 'contacted' | 'converted' | 'closed';
 
 export type Lead = {
   id: string;
-  user_id: string | null;
-  seller_id: string;
+  customer_id: string | null;
+  seller_business_id: string;
   listing_id: string;
-  lead_type: ListingCategory;
   customer_name: string;
   customer_whatsapp: string;
   status: LeadStatus;
   created_at: string;
+  listing_type?: string;
   listing?: { name: string };
   business?: { name: string };
 };
@@ -92,19 +92,17 @@ export type WashBookingStatus = 'pending_assignment' | 'assigned' | 'confirmed' 
 
 export type WashBooking = {
   id: string;
-  user_id: string | null;
-  whatsapp_number: string;
-  wash_business_id: string;
+  customer_id: string | null;
+  seller_business_id: string;
+  wash_service_id: string;
   employee_id: string | null;
-  service_type: string; // This links to listing_id
   booking_date: string;
-  booking_time: string;
-  location_pin?: string;
+  location?: string;
   status: WashBookingStatus;
   price?: number;
   user?: { name: string };
   employee?: { name: string; phone: string; image_url: string };
   business?: { name: string; city: string; logo_url: string };
-  listing?: { name: string };
+  service?: { name: string; price: number };
   created_at: string;
 };
