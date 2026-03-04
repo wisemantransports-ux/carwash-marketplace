@@ -57,7 +57,7 @@ function MarketplaceContent() {
       // STAGE 2: Fetch Verified Listings
       const { data: listingData } = await supabase
         .from('listings')
-        .select('*')
+        .select('id, business_id, name, description, price, listing_type, type, image_url, service_image_url, verified, created_at')
         .eq('verified', true)
         .in('business_id', verifiedIds)
         .order('created_at', { ascending: false });
@@ -65,7 +65,6 @@ function MarketplaceContent() {
       if (listingData) {
         const enriched = listingData.map(l => {
           const biz = bizMap[l.business_id];
-          // Performance Mock logic for ranking
           const score = (biz?.rating || 4.5) / 5;
           return {
             ...l,
@@ -99,14 +98,15 @@ function MarketplaceContent() {
     const s = search.toLowerCase();
     return listings.filter(l => {
       const matchesSearch = l.name.toLowerCase().includes(s) || (l.business?.city || '').toLowerCase().includes(s);
-      const matchesCategory = category === 'all' || l.listing_type === category;
+      const matchesCategory = category === 'all' || l.listing_type === category || l.type === category;
       return matchesSearch && matchesCategory;
     }).sort((a, b) => b.performanceScore - a.performanceScore);
   }, [listings, search, category]);
 
   const handleAction = (listing: any) => {
     setSelectedListing(listing);
-    if (listing.listing_type === 'wash_service') {
+    const type = listing.listing_type || listing.type;
+    if (type === 'wash_service') {
       setBookingModalOpen(true);
     } else {
       setLeadModalOpen(true);
@@ -184,45 +184,52 @@ function MarketplaceContent() {
               <Card key={i} className="h-[400px] overflow-hidden rounded-2xl"><Skeleton className="h-full w-full" /></Card>
             ))
           ) : filtered.length > 0 ? (
-            filtered.map((item) => (
-              <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-2xl border-2 rounded-2xl h-full group">
-                <div className="relative h-48 bg-muted overflow-hidden">
-                  <Image 
-                    src={item.image_url || `https://picsum.photos/seed/${item.id}/600/400`} 
-                    alt={item.name} 
-                    fill 
-                    className="object-cover transition-transform duration-500 group-hover:scale-110" 
-                  />
-                  <div className="absolute top-2 left-2 flex flex-col gap-1.5">
-                    <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
-                      {item.listing_type.replace('_', ' ')}
-                    </Badge>
-                    <Badge className={cn(
-                      "text-[8px] font-black uppercase shadow-sm border-none",
-                      item.performanceBadge === "Top Performer" ? "bg-yellow-500 text-black" : "bg-slate-800 text-white"
-                    )}>
-                      <Zap className="h-2 w-2 mr-1" /> {item.performanceBadge}
-                    </Badge>
+            filtered.map((item) => {
+              const type = item.listing_type || item.type;
+              
+              // Hierarchical Fallback logic
+              const displayImage = item.service_image_url || item.image_url || item.business?.logo_url || `https://picsum.photos/seed/${item.id}/600/400`;
+
+              return (
+                <Card key={item.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-2xl border-2 rounded-2xl h-full group">
+                  <div className="relative h-48 bg-muted overflow-hidden">
+                    <Image 
+                      src={displayImage} 
+                      alt={item.name} 
+                      fill 
+                      className="object-cover transition-transform duration-500 group-hover:scale-110" 
+                    />
+                    <div className="absolute top-2 left-2 flex flex-col gap-1.5">
+                      <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm">
+                        {type.replace('_', ' ')}
+                      </Badge>
+                      <Badge className={cn(
+                        "text-[8px] font-black uppercase shadow-sm border-none",
+                        item.performanceBadge === "Top Performer" ? "bg-yellow-500 text-black" : "bg-slate-800 text-white"
+                      )}>
+                        <Zap className="h-2 w-2 mr-1" /> {item.performanceBadge}
+                      </Badge>
+                    </div>
+                    {item.price && <div className="absolute bottom-2 right-2"><Badge className="bg-primary text-white font-black px-3 py-1 shadow-lg">P{Number(item.price).toLocaleString()}</Badge></div>}
                   </div>
-                  {item.price && <div className="absolute bottom-2 right-2"><Badge className="bg-primary text-white font-black px-3 py-1 shadow-lg">P{Number(item.price).toLocaleString()}</Badge></div>}
-                </div>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
-                    <div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-primary opacity-60" /><span>{item.business?.city || 'Botswana'}</span></div>
-                    <div className="flex items-center gap-1 text-yellow-600"><Star className="h-3 w-3 fill-current" /><span>{item.business?.rating || '4.5'}</span></div>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-grow">
-                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed italic">{item.description}</p>
-                </CardContent>
-                <CardFooter className="mt-auto pt-4 bg-muted/5 border-t">
-                  <Button onClick={() => handleAction(item)} className="w-full font-black h-11 uppercase tracking-tighter">
-                    {item.listing_type === 'wash_service' ? 'Book Service' : 'Request Info'}
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xl font-bold line-clamp-1 group-hover:text-primary transition-colors">{item.name}</CardTitle>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                      <div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-primary opacity-60" /><span>{item.business?.city || 'Botswana'}</span></div>
+                      <div className="flex items-center gap-1 text-yellow-600"><Star className="h-3 w-3 fill-current" /><span>{item.business?.rating || '4.5'}</span></div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex-grow">
+                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed italic">{item.description}</p>
+                  </CardContent>
+                  <CardFooter className="mt-auto pt-4 bg-muted/5 border-t">
+                    <Button onClick={() => handleAction(item)} className="w-full font-black h-11 uppercase tracking-tighter">
+                      {type === 'wash_service' ? 'Book Service' : 'Request Info'}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              );
+            })
           ) : (
             <div className="col-span-full py-24 text-center border-2 border-dashed rounded-3xl bg-muted/20">
               <Store className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />

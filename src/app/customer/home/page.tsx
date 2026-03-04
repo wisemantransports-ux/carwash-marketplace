@@ -73,7 +73,7 @@ function MarketplaceContent() {
       if (verifiedIds.length > 0) {
         const { data: listingData, error: lError } = await supabase
           .from('listings')
-          .select('id, business_id, name, description, price, listing_type, type, image_url, created_at')
+          .select('id, business_id, name, description, price, listing_type, type, image_url, service_image_url, created_at')
           .in('business_id', verifiedIds)
           .order('created_at', { ascending: false });
 
@@ -174,19 +174,29 @@ function MarketplaceContent() {
         ) : filteredItems.length > 0 ? (
           filteredItems.map((item: any) => {
             const biz = item.itemType === 'business' ? item : item.business;
-            const isRegistered = biz?.business_type === 'registered';
+            const type = item.listing_type || item.type || 'business';
+            
+            // Hierarchical Image Fallback
+            let displayImage = `https://picsum.photos/seed/${item.id}/600/400`;
+            if (item.itemType === 'business') {
+              displayImage = item.logo_url || displayImage;
+            } else {
+              // Priority: service_image_url -> image_url -> business logo -> placeholder
+              displayImage = item.service_image_url || item.image_url || biz?.logo_url || displayImage;
+            }
+
             const performanceBadge = biz?.performanceBadge;
 
             return (
               <Card key={`${item.itemType}-${item.id}`} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl border-2 rounded-2xl h-full group">
                 <div className="relative h-48 bg-muted overflow-hidden">
                   <Image 
-                    src={item.itemType === 'business' ? (item.logo_url || `https://picsum.photos/seed/biz-${item.id}/600/400`) : (item.image_url || `https://picsum.photos/seed/list-${item.id}/600/400`)} 
+                    src={displayImage} 
                     alt={item.name} fill className="object-cover transition-transform duration-500 group-hover:scale-110" 
                   />
                   <div className="absolute top-2 left-2 flex flex-col gap-1.5">
                     <Badge className="bg-white/90 text-black uppercase text-[9px] font-black shadow-sm w-fit">
-                      {item.itemType === 'business' ? (item.category || 'Operator') : (item.listing_type || item.type).replace('_', ' ')}
+                      {item.itemType === 'business' ? (item.category || 'Operator') : type.replace('_', ' ')}
                     </Badge>
                     <Badge className={cn(
                       "text-[8px] font-black uppercase shadow-sm w-fit border-none",
@@ -208,7 +218,7 @@ function MarketplaceContent() {
                 <CardContent className="flex-grow"><p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed italic">{item.description || item.address}</p></CardContent>
                 <CardFooter className="mt-auto flex flex-col gap-2">
                   <Button asChild className="w-full font-black h-11 shadow-sm uppercase">
-                    <Link href={item.itemType === 'business' || item.listing_type === 'wash_service' || item.type === 'wash_service' ? `/customer/book/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${item.listing_type === 'car' || item.type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
+                    <Link href={item.itemType === 'business' || type === 'wash_service' ? `/customer/book/${item.itemType === 'business' ? item.id : item.business_id}` : `/marketplace/${type === 'car' ? 'cars' : 'spare-parts'}/${item.id}`}>
                       {item.itemType === 'business' ? 'View Profile' : 'View Details'}
                     </Link>
                   </Button>
