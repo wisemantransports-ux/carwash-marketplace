@@ -19,12 +19,6 @@ interface BookingModalProps {
   services: any[];
 }
 
-/**
- * @fileOverview Progressive Booking Modal
- * Aligned with the leads schema contract.
- * Wash bookings are treated as specialized leads for tracking consistency.
- */
-
 export function BookingModal({ isOpen, onClose, businessId, businessName, services }: BookingModalProps) {
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -35,75 +29,50 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
 
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanWhatsapp = whatsapp.trim().replace(/\D/g, '');
-    if (!name || !cleanWhatsapp || !listingId || !date || !time) {
-      toast({ variant: 'destructive', title: "Missing Details", description: "Please fill in all fields." });
-      return;
-    }
+    const cleanWa = whatsapp.trim().replace(/\D/g, '');
+    if (!name || !cleanWa || !listingId || !date || !time) return;
 
     setLoading(true);
     try {
-      // 1. FETCH LISTING FIRST (Validation & Derivation)
-      const { data: listing, error: fetchError } = await supabase
-        .from('listings')
-        .select('business_id, type')
-        .eq('id', listingId)
-        .single();
-
-      if (fetchError || !listing) throw new Error("Service package not found.");
-
-      // 2. Resolve Identity
-      let { data: user } = await supabase
-        .from('users')
-        .select('*')
-        .eq('whatsapp_number', cleanWhatsapp)
-        .maybeSingle();
-
+      // 1. Progressive Identity
+      let { data: user } = await supabase.from('users').select('id').eq('whatsapp_number', cleanWa).maybeSingle();
       if (!user) {
-        const { data: newUser } = await supabase
-          .from('users')
-          .insert({ whatsapp_number: cleanWhatsapp, name: name.trim(), role: 'customer' })
-          .select().single();
+        const { data: newUser } = await supabase.from('users').insert({ 
+          whatsapp_number: cleanWa, 
+          name: name.trim(), 
+          role: 'customer' 
+        }).select().single();
         user = newUser;
       }
 
-      // 3. Create Lead Record (Aligned with Backend contract)
-      const { error: leadError } = await supabase
-        .from('leads')
-        .insert({
-          customer_name: name.trim(),
-          customer_whatsapp: cleanWhatsapp,
-          whatsapp_number: cleanWhatsapp,
-          user_id: user?.id || null,
-          listing_id: listingId,
-          listing_type: 'wash_service',
-          lead_type: 'wash_service',
-          seller_id: listing.business_id,
-          seller_business_id: listing.business_id,
-          status: 'new'
-        });
+      // 2. Log Lead
+      await supabase.from('leads').insert({
+        seller_id: businessId,
+        user_id: user?.id,
+        listing_id: listingId,
+        lead_type: 'wash_service',
+        customer_name: name.trim(),
+        customer_whatsapp: cleanWa,
+        status: 'new'
+      });
 
-      if (leadError) throw leadError;
-
-      // 4. Create specialized wash_bookings record for operational workflow
-      const { error: bookingError } = await supabase
-        .from('wash_bookings')
-        .insert({
-          user_id: user?.id || null,
-          whatsapp_number: cleanWhatsapp,
-          wash_business_id: listing.business_id,
-          service_type: listingId, // Or service name
-          booking_date: date,
-          booking_time: time,
-          status: 'pending_assignment'
-        });
+      // 3. Create Operational Booking
+      const { error: bookingError } = await supabase.from('wash_bookings').insert({
+        user_id: user?.id,
+        whatsapp_number: cleanWa,
+        wash_business_id: businessId,
+        service_type: listingId,
+        booking_date: date,
+        booking_time: time,
+        status: 'pending_assignment'
+      });
 
       if (bookingError) throw bookingError;
 
       toast({ title: "Booking Requested! ✨", description: "The business will confirm via WhatsApp shortly." });
       onClose();
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Booking Failed', description: e.message });
+      toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally {
       setLoading(false);
     }
@@ -118,13 +87,13 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
             Book Your Wash
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            at {businessName}. No account needed to request.
+            Request a service at {businessName}.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleBooking} className="space-y-6 py-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Full Name</Label>
+              <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Name</Label>
               <Input placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required className="bg-white/5 border-white/10 h-12" />
             </div>
             <div className="space-y-2">
@@ -134,10 +103,10 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
           </div>
 
           <div className="space-y-2">
-            <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Select Service</Label>
+            <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Select Package</Label>
             <Select value={listingId} onValueChange={setListingId}>
-              <SelectTrigger className="bg-white/5 border-white/10 h-12">
-                <SelectValue placeholder="Choose a package" />
+              <SelectTrigger className="bg-white/5 border-white/10 h-12 text-white">
+                <SelectValue placeholder="Choose a wash" />
               </SelectTrigger>
               <SelectContent className="bg-slate-900 border-white/10 text-white">
                 {services.map(s => (
@@ -149,7 +118,7 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Date</Label>
+              <Label className="text-[10px] uppercase font-black text-slate-500 tracking-widest">Preferred Date</Label>
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-white/5 border-white/10 h-12" />
             </div>
             <div className="space-y-2">
@@ -161,7 +130,7 @@ export function BookingModal({ isOpen, onClose, businessId, businessName, servic
           <DialogFooter className="pt-4">
             <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={loading}>
               {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <Sparkles className="mr-2 h-5 w-5" />}
-              Confirm Booking Request
+              Send Booking Request
             </Button>
           </DialogFooter>
         </form>
