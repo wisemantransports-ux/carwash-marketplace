@@ -65,7 +65,11 @@ async function submitBooking({
       .insert([
         {
           name: customerName,
-          whatsapp_number: whatsappNumber
+          full_name: customerName,
+          role: "customer",
+          whatsapp_number: whatsappNumber,
+          is_anonymous: true,
+          is_sso_user: false
         }
       ])
       .select("id")
