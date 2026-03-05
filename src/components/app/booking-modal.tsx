@@ -14,8 +14,18 @@ import { useAuth } from "@/hooks/use-auth";
 interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  service: any; // Receives the FULL wash service object
+  service: any;
 }
+
+/**
+ * Diagnostic helper to extract detailed error info
+ */
+const getErrorInfo = (err: any) => ({
+  message: err?.message || 'Unknown error',
+  details: err?.details || '',
+  code: err?.code || '',
+  hint: err?.hint || ''
+});
 
 async function submitBooking({
   customerName,
@@ -32,100 +42,102 @@ async function submitBooking({
   selectedDate: Date;
   locationText: string;
 }) {
-  console.group("🚀 Booking Debug Start");
+  const results: any = {
+    anonymousUserId: null,
+    userRowCreated: false,
+    bookingRowCreated: false,
+    errors: []
+  };
 
-  // Defensive Guards
-  if (!service?.id || !service?.business_id) {
-    throw new Error("Invalid service data. Missing service ID or Business ID.");
-  }
+  try {
+    console.group("🚀 Anonymous Booking Flow Test");
 
-  if (!customerName || !whatsappNumber) {
-    throw new Error("Customer name and WhatsApp number are required.");
-  }
+    // 1️⃣ Anonymous User Test
+    let { data: { user: authUser } } = await supabase.auth.getUser();
+    
+    if (!authUser) {
+      console.log("No session found. Attempting anonymous sign-in...");
+      const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+      if (anonError) {
+        results.errors.push({ step: 'auth', ...getErrorInfo(anonError) });
+        throw anonError;
+      }
+      authUser = anonData.user;
+    }
+    
+    results.anonymousUserId = authUser?.id;
+    console.log("Authenticated as:", results.anonymousUserId);
 
-  // 1️⃣ Check Authentication / Frictionless Sign-in
-  let { data: { user: authUser } } = await supabase.auth.getUser();
-
-  if (!authUser) {
-    console.log("Creating anonymous session...");
-    const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-    if (anonError) throw anonError;
-    authUser = anonData.user;
-  }
-
-  if (!authUser) {
-    throw new Error("Failed to establish a secure session.");
-  }
-
-  // 2️⃣ Auto-create or fetch customer in public.users
-  const { data: existingCustomer } = await supabase
-    .from("users")
-    .select("id")
-    .eq("whatsapp_number", whatsappNumber)
-    .maybeSingle();
-
-  let customerId = existingCustomer?.id;
-
-  if (!customerId) {
-    console.log("Syncing new customer profile...");
-    const { data: newCustomer, error: createError } = await supabase
+    // 2️⃣ Auto-Create Customer Profile
+    const { data: existingUser } = await supabase
       .from("users")
-      .insert([
-        {
-          id: authUser.id,
-          name: customerName,
-          full_name: customerName,
-          role: "customer",
+      .select("id")
+      .eq("whatsapp_number", whatsappNumber)
+      .maybeSingle();
+
+    if (!existingUser) {
+      console.log("No profile found. Auto-creating customer record...");
+      const { error: userError } = await supabase
+        .from("users")
+        .insert([{
+          id: authUser?.id,
+          name: customerName || 'Anonymous',
+          full_name: customerName || 'Anonymous',
+          role: 'customer',
           whatsapp_number: whatsappNumber,
           is_anonymous: true,
           is_sso_user: false
-        }
-      ])
-      .select("id")
-      .single();
+        }]);
 
-    if (createError && !createError.message.includes('unique constraint')) {
-      console.error("Customer profile sync failed:", createError);
-      throw createError;
+      if (userError) {
+        // If it's a unique constraint error, someone might have just registered
+        if (!userError.message.includes('unique constraint')) {
+          results.errors.push({ step: 'user_creation', ...getErrorInfo(userError) });
+          throw userError;
+        }
+      } else {
+        results.userRowCreated = true;
+      }
     }
 
-    customerId = newCustomer?.id || authUser.id;
+    // 3️⃣ Book Carwash Service
+    const bookingPayload = {
+      customer_id: authUser?.id,
+      seller_business_id: service.business_id,
+      business_id: service.business_id, 
+      wash_service_id: service.id,
+      employee_id: null,
+      status: "pending_assignment",
+      booking_date: new Date(selectedDate).toISOString(),
+      requested_time: new Date(selectedDate).toISOString(),
+      location: locationText,
+      customer_name: customerName,
+      customer_whatsapp: whatsappNumber,
+      customer_email: customerEmail || null
+    };
+
+    console.log("Attempting booking insert:", bookingPayload);
+    const { data: bookingData, error: bookingError } = await supabase
+      .from("wash_bookings")
+      .insert([bookingPayload])
+      .select();
+
+    if (bookingError) {
+      results.errors.push({ step: 'booking_insert', ...getErrorInfo(bookingError) });
+      throw bookingError;
+    }
+
+    results.bookingRowCreated = true;
+    console.log("✅ Results Summary:", JSON.stringify(results, null, 2));
+    console.groupEnd();
+
+    return { results, data: bookingData };
+
+  } catch (err: any) {
+    console.log("❌ Test Failed:", JSON.stringify(results, null, 2));
+    console.groupEnd();
+    throw err;
   }
-
-  // 3️⃣ Prepare booking payload (Mapped exactly to wash_bookings schema)
-  const bookingPayload = {
-    customer_id: customerId,
-    seller_business_id: service.business_id,
-    business_id: service.business_id, 
-    wash_service_id: service.id,
-    employee_id: null,
-    assigned_employee_id: null,
-    status: "pending_assignment",
-    booking_date: new Date(selectedDate).toISOString(),
-    requested_time: new Date(selectedDate).toISOString(),
-    location: locationText,
-    customer_name: customerName,
-    customer_whatsapp: whatsappNumber,
-    customer_email: customerEmail || null
-  };
-
-  console.log("📦 Booking Payload:", bookingPayload);
-
-  // 4️⃣ Insert booking into wash_bookings ONLY
-  const { data, error } = await supabase
-    .from("wash_bookings")
-    .insert([bookingPayload])
-    .select();
-
-  if (error) {
-    console.error("❌ Supabase Insert Error:", error);
-    throw error;
-  }
-
-  console.log("✅ Booking Success:", data);
-  console.groupEnd();
-
-  return data;
 }
 
 export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
@@ -154,11 +166,10 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     setLoading(true);
 
     try {
-      if (!date || !time) {
-        throw new Error("Please select both a date and time.");
-      }
+      if (!date || !time) throw new Error("Please select both a date and time.");
+      if (!service?.id || !service?.business_id) throw new Error("Invalid service data.");
 
-      await submitBooking({
+      const { results } = await submitBooking({
         customerName: name,
         whatsappNumber: whatsapp,
         customerEmail: email,
@@ -173,19 +184,14 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       });
 
       onClose();
+      // Redirection simulation/execution
       router.push("/customer/bookings");
 
     } catch (err: any) {
-      console.group("❌ Booking Process Failure");
-      console.error("Raw Error:", err);
-      console.error("Message:", err?.message);
-      console.error("Details:", err?.details);
-      console.groupEnd();
-
       toast({
         variant: "destructive",
         title: "Booking Failed",
-        description: err?.message || "Unexpected error occurred. Please try again."
+        description: err?.message || "Check console for diagnostic JSON."
       });
     } finally {
       setLoading(false);
