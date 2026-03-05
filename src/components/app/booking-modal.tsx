@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,147 +18,95 @@ interface BookingModalProps {
 }
 
 /**
- * Diagnostic helper to extract detailed error info
+ * OBJECTIVE: Handle bookings for anonymous or returning users.
+ * This logic ensures a customer record exists and links the booking to it.
  */
-const getErrorInfo = (err: any) => ({
-  message: err?.message || 'Unknown error',
-  details: err?.details || '',
-  code: err?.code || '',
-  hint: err?.hint || ''
-});
-
-/**
- * End-to-end Anonymous Booking Flow
- * 1. Auth check/sign-in
- * 2. Profile resolution/creation
- * 3. Booking insertion
- */
-async function submitBooking({
+async function processBooking({
   customerName,
   whatsappNumber,
-  customerEmail,
-  service,
-  selectedDate,
-  locationText
+  serviceId,
+  scheduledAt
 }: {
   customerName: string;
   whatsappNumber: string;
-  customerEmail?: string;
-  service: any;
-  selectedDate: Date;
-  locationText: string;
+  serviceId: string;
+  scheduledAt: Date;
 }) {
-  const results: any = {
-    anonymousUserId: null,
-    userRowCreated: false,
-    bookingRowCreated: false,
-    errors: []
-  };
-
   try {
-    console.group("🚀 END-TO-END ANONYMOUS BOOKING FLOW");
-
-    // 1️⃣ Anonymous Sign-In Test
+    // 1. Ensure Auth Session
     let { data: { user: authUser } } = await supabase.auth.getUser();
     
     if (!authUser) {
-      console.log("[STEP 1] No session found. Initiating anonymous sign-in...");
       const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-      if (anonError) {
-        console.error("[STEP 1] Auth Failure:", anonError);
-        results.errors.push({ step: 'auth', ...getErrorInfo(anonError) });
-        throw anonError;
-      }
+      if (anonError) throw { step: 'auth', message: anonError.message, details: anonError };
       authUser = anonData.user;
-      console.log("[STEP 1] Auth Success. User ID:", authUser?.id);
-    } else {
-      console.log("[STEP 1] Using existing session. User ID:", authUser.id);
     }
-    
-    results.anonymousUserId = authUser?.id;
 
-    // 2️⃣ Customer Auto-Creation / Resolution
-    console.log("[STEP 2] Resolving customer profile by WhatsApp...");
-    const { data: existingUser } = await supabase
-      .from("users")
-      .select("id")
-      .eq("whatsapp_number", whatsappNumber)
+    if (!authUser) throw { step: 'auth', message: 'Failed to establish auth session', details: null };
+
+    // 2. Check/Create Customer Record
+    let customerData = null;
+    const { data: existingCustomer, error: fetchError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('auth_id', authUser.id)
       .maybeSingle();
 
-    let targetCustomerId = existingUser?.id;
+    if (fetchError) throw { step: 'customer_lookup', message: fetchError.message, details: fetchError };
 
-    if (!existingUser) {
-      console.log("[STEP 2] Profile missing. Creating new user record...");
-      const { error: userError } = await supabase
-        .from("users")
+    if (!existingCustomer) {
+      const { data: newCustomer, error: createError } = await supabase
+        .from('customers')
         .insert([{
-          id: authUser?.id,
-          name: customerName,
-          full_name: customerName,
-          role: 'customer',
+          auth_id: authUser.id,
           whatsapp_number: whatsappNumber,
-          is_anonymous: true,
-          is_sso_user: false
-        }]);
+          full_name: customerName,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
 
-      if (userError) {
-        // Handle race condition if user was created between check and insert
-        if (!userError.message.includes('unique constraint')) {
-          console.error("[STEP 2] User Insertion Failed:", userError);
-          results.errors.push({ step: 'user_creation', ...getErrorInfo(userError) });
-          throw userError;
-        }
-        console.log("[STEP 2] User already exists (race condition handled).");
-      } else {
-        results.userRowCreated = true;
-        console.log("[STEP 2] New user record created successfully.");
-      }
-      targetCustomerId = authUser?.id;
+      if (createError) throw { step: 'customer_creation', message: createError.message, details: createError };
+      customerData = newCustomer;
     } else {
-      console.log("[STEP 2] Existing user found. ID:", targetCustomerId);
+      customerData = existingCustomer;
     }
 
-    // 3️⃣ Insert Wash Booking
-    const bookingPayload = {
-      customer_id: targetCustomerId,
-      seller_business_id: service.business_id,
-      business_id: service.business_id, 
-      wash_service_id: service.id,
-      employee_id: null,
-      assigned_employee_id: null,
-      status: "pending_assignment",
-      booking_date: new Date(selectedDate).toISOString(),
-      requested_time: new Date(selectedDate).toISOString(),
-      location: locationText,
-      customer_name: customerName,
-      customer_whatsapp: whatsappNumber,
-      customer_email: customerEmail || null
+    // 3. Create Booking linked to customer_id
+    const { data: bookingData, error: bookingError } = await supabase
+      .from('bookings')
+      .insert([{
+        customer_id: customerData.id,
+        service_id: serviceId,
+        scheduled_at: scheduledAt.toISOString(),
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (bookingError) throw { step: 'booking_insert', message: bookingError.message, details: bookingError };
+
+    // 4. Return Success JSON
+    return {
+      customer: customerData,
+      booking: bookingData,
+      error: null
     };
 
-    console.log("[STEP 3] Attempting booking insertion with payload:", bookingPayload);
-    const { data: bookingData, error: bookingError } = await supabase
-      .from("wash_bookings")
-      .insert([bookingPayload])
-      .select();
-
-    if (bookingError) {
-      console.error("[STEP 3] Booking Insertion Failed:", bookingError);
-      results.errors.push({ step: 'booking_insert', ...getErrorInfo(bookingError) });
-      throw bookingError;
-    }
-
-    results.bookingRowCreated = true;
-    console.log("[STEP 3] Booking successful. Data recorded:", bookingData);
-    
-    console.log("✅ DIAGNOSTIC SUMMARY:", JSON.stringify(results, null, 2));
-    console.groupEnd();
-
-    return { results, data: bookingData };
-
   } catch (err: any) {
-    console.log("❌ FLOW FAILURE. DIAGNOSTIC LOG:", JSON.stringify(results, null, 2));
-    console.groupEnd();
-    throw err;
+    // Return Structured Error JSON
+    return {
+      customer: null,
+      booking: null,
+      error: {
+        step: err.step || 'unknown',
+        message: err.message || 'An unexpected database error occurred',
+        details: err.details || err
+      }
+    };
   }
 }
 
@@ -187,35 +135,29 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     e.preventDefault();
     setLoading(true);
 
-    try {
-      if (!date || !time) throw new Error("Please select both a date and time.");
-      if (!service?.id || !service?.business_id) throw new Error("Invalid service data.");
+    const result = await processBooking({
+      customerName: name,
+      whatsappNumber: whatsapp,
+      serviceId: service.id,
+      scheduledAt: new Date(`${date}T${time}`)
+    });
 
-      await submitBooking({
-        customerName: name,
-        whatsappNumber: whatsapp,
-        customerEmail: email,
-        service: service,
-        selectedDate: new Date(`${date}T${time}`),
-        locationText: locationText
+    console.log("📝 IDX Booking Result:", JSON.stringify(result, null, 2));
+
+    if (result.error) {
+      toast({
+        variant: "destructive",
+        title: `Booking Failed (${result.error.step})`,
+        description: result.error.message
       });
-
+      setLoading(false);
+    } else {
       toast({
         title: "Booking Confirmed",
         description: "Your carwash booking has been submitted."
       });
-
       onClose();
       router.push("/customer/bookings");
-
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Booking Failed",
-        description: err?.message || "Check browser console for diagnostic JSON."
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
