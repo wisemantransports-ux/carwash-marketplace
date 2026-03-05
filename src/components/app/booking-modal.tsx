@@ -34,24 +34,30 @@ async function submitBooking({
 }) {
   console.group("🚀 Booking Debug Start");
 
+  // Defensive Guards
   if (!service?.id || !service?.business_id) {
-    throw new Error("Service missing id or business_id");
+    throw new Error("Invalid service data. Missing service ID or Business ID.");
   }
 
   if (!customerName || !whatsappNumber) {
-    throw new Error("Customer name or WhatsApp missing");
+    throw new Error("Customer name and WhatsApp number are required.");
   }
 
-  // 1️⃣ Get logged-in user (important for RLS)
+  // 1️⃣ Check Authentication / Frictionless Sign-in
   let { data: { user: authUser } } = await supabase.auth.getUser();
 
   if (!authUser) {
+    console.log("Creating anonymous session...");
     const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
     if (anonError) throw anonError;
     authUser = anonData.user;
   }
 
-  // 2️⃣ Auto-create or fetch customer
+  if (!authUser) {
+    throw new Error("Failed to establish a secure session.");
+  }
+
+  // 2️⃣ Auto-create or fetch customer in public.users
   const { data: existingCustomer } = await supabase
     .from("users")
     .select("id")
@@ -61,10 +67,12 @@ async function submitBooking({
   let customerId = existingCustomer?.id;
 
   if (!customerId) {
+    console.log("Syncing new customer profile...");
     const { data: newCustomer, error: createError } = await supabase
       .from("users")
       .insert([
         {
+          id: authUser.id,
           name: customerName,
           full_name: customerName,
           role: "customer",
@@ -76,19 +84,19 @@ async function submitBooking({
       .select("id")
       .single();
 
-    if (createError) {
-      console.error("Customer creation failed:", createError);
+    if (createError && !createError.message.includes('unique constraint')) {
+      console.error("Customer profile sync failed:", createError);
       throw createError;
     }
 
-    customerId = newCustomer.id;
+    customerId = newCustomer?.id || authUser.id;
   }
 
-  // 3️⃣ Prepare booking payload
+  // 3️⃣ Prepare booking payload (Mapped exactly to wash_bookings schema)
   const bookingPayload = {
     customer_id: customerId,
     seller_business_id: service.business_id,
-    business_id: service.business_id, // important since column exists
+    business_id: service.business_id, 
     wash_service_id: service.id,
     employee_id: null,
     assigned_employee_id: null,
@@ -103,7 +111,7 @@ async function submitBooking({
 
   console.log("📦 Booking Payload:", bookingPayload);
 
-  // 4️⃣ Insert booking
+  // 4️⃣ Insert booking into wash_bookings ONLY
   const { data, error } = await supabase
     .from("wash_bookings")
     .insert([bookingPayload])
@@ -122,7 +130,7 @@ async function submitBooking({
 
 export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   const router = useRouter();
-  const { user: authUser } = useAuth();
+  const { user: initialAuthUser } = useAuth();
   
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -133,13 +141,13 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen && authUser) {
-      setName(authUser.user_metadata?.name || '');
-      const wa = authUser.phone || authUser.user_metadata?.whatsapp || '';
+    if (isOpen && initialAuthUser) {
+      setName(initialAuthUser.user_metadata?.name || '');
+      const wa = initialAuthUser.phone || initialAuthUser.user_metadata?.whatsapp || '';
       setWhatsapp(wa);
-      setEmail(authUser.email || '');
+      setEmail(initialAuthUser.email || '');
     }
-  }, [isOpen, authUser]);
+  }, [isOpen, initialAuthUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,7 +185,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       toast({
         variant: "destructive",
         title: "Booking Failed",
-        description: err?.message || "Unexpected error occurred"
+        description: err?.message || "Unexpected error occurred. Please try again."
       });
     } finally {
       setLoading(false);

@@ -15,7 +15,7 @@ import type { WashBooking, Lead } from "@/lib/types";
 /**
  * Customer Dashboard
  * Displays wash_bookings and marketplace inquiries.
- * Refactored to strictly avoid leads table for carwash services.
+ * Strictly avoids leads table for carwash services.
  */
 export default function CustomerDashboardPage() {
     const [bookings, setBookings] = useState<any[]>([]);
@@ -32,7 +32,6 @@ export default function CustomerDashboardPage() {
             if (!user) return;
 
             // 1. Fetch Wash Bookings directly from wash_bookings table
-            // Aligned with seller_business_id and wash_service_id schema
             const { data: bData, error: bErr } = await supabase
                 .from('wash_bookings')
                 .select(`
@@ -67,7 +66,6 @@ export default function CustomerDashboardPage() {
 
     useEffect(() => {
         fetchData();
-        // Subscribe to real-time status changes for the current customer
         const channel = supabase
             .channel('customer-realtime')
             .on('postgres_changes', { 
@@ -162,7 +160,7 @@ export default function CustomerDashboardPage() {
                                                 </div>
                                                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium truncate max-w-[200px]">
                                                     <MapPin className="h-3 w-3 shrink-0" />
-                                                    {booking.location || 'Location provided'}
+                                                    {booking.location || 'No location provided'}
                                                 </div>
                                             </div>
                                         </TableCell>
