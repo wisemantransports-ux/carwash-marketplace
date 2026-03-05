@@ -43,11 +43,12 @@ async function submitBooking({
   }
 
   // 1️⃣ Get logged-in user (important for RLS)
-  const { data: authData } = await supabase.auth.getUser();
-  const authUser = authData?.user;
+  let { data: { user: authUser } } = await supabase.auth.getUser();
 
   if (!authUser) {
-    throw new Error("User not authenticated");
+    const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+    if (anonError) throw anonError;
+    authUser = anonData.user;
   }
 
   // 2️⃣ Auto-create or fetch customer
