@@ -27,6 +27,12 @@ const getErrorInfo = (err: any) => ({
   hint: err?.hint || ''
 });
 
+/**
+ * End-to-end Anonymous Booking Flow
+ * 1. Auth check/sign-in
+ * 2. Profile resolution/creation
+ * 3. Booking insertion
+ */
 async function submitBooking({
   customerName,
   whatsappNumber,
@@ -50,39 +56,45 @@ async function submitBooking({
   };
 
   try {
-    console.group("🚀 Anonymous Booking Flow Test");
+    console.group("🚀 END-TO-END ANONYMOUS BOOKING FLOW");
 
-    // 1️⃣ Anonymous User Test
+    // 1️⃣ Anonymous Sign-In Test
     let { data: { user: authUser } } = await supabase.auth.getUser();
     
     if (!authUser) {
-      console.log("No session found. Attempting anonymous sign-in...");
+      console.log("[STEP 1] No session found. Initiating anonymous sign-in...");
       const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
       if (anonError) {
+        console.error("[STEP 1] Auth Failure:", anonError);
         results.errors.push({ step: 'auth', ...getErrorInfo(anonError) });
         throw anonError;
       }
       authUser = anonData.user;
+      console.log("[STEP 1] Auth Success. User ID:", authUser?.id);
+    } else {
+      console.log("[STEP 1] Using existing session. User ID:", authUser.id);
     }
     
     results.anonymousUserId = authUser?.id;
-    console.log("Authenticated as:", results.anonymousUserId);
 
-    // 2️⃣ Auto-Create Customer Profile
+    // 2️⃣ Customer Auto-Creation / Resolution
+    console.log("[STEP 2] Resolving customer profile by WhatsApp...");
     const { data: existingUser } = await supabase
       .from("users")
       .select("id")
       .eq("whatsapp_number", whatsappNumber)
       .maybeSingle();
 
+    let targetCustomerId = existingUser?.id;
+
     if (!existingUser) {
-      console.log("No profile found. Auto-creating customer record...");
+      console.log("[STEP 2] Profile missing. Creating new user record...");
       const { error: userError } = await supabase
         .from("users")
         .insert([{
           id: authUser?.id,
-          name: customerName || 'Anonymous',
-          full_name: customerName || 'Anonymous',
+          name: customerName,
+          full_name: customerName,
           role: 'customer',
           whatsapp_number: whatsappNumber,
           is_anonymous: true,
@@ -90,23 +102,30 @@ async function submitBooking({
         }]);
 
       if (userError) {
-        // If it's a unique constraint error, someone might have just registered
+        // Handle race condition if user was created between check and insert
         if (!userError.message.includes('unique constraint')) {
+          console.error("[STEP 2] User Insertion Failed:", userError);
           results.errors.push({ step: 'user_creation', ...getErrorInfo(userError) });
           throw userError;
         }
+        console.log("[STEP 2] User already exists (race condition handled).");
       } else {
         results.userRowCreated = true;
+        console.log("[STEP 2] New user record created successfully.");
       }
+      targetCustomerId = authUser?.id;
+    } else {
+      console.log("[STEP 2] Existing user found. ID:", targetCustomerId);
     }
 
-    // 3️⃣ Book Carwash Service
+    // 3️⃣ Insert Wash Booking
     const bookingPayload = {
-      customer_id: authUser?.id,
+      customer_id: targetCustomerId,
       seller_business_id: service.business_id,
       business_id: service.business_id, 
       wash_service_id: service.id,
       employee_id: null,
+      assigned_employee_id: null,
       status: "pending_assignment",
       booking_date: new Date(selectedDate).toISOString(),
       requested_time: new Date(selectedDate).toISOString(),
@@ -116,25 +135,28 @@ async function submitBooking({
       customer_email: customerEmail || null
     };
 
-    console.log("Attempting booking insert:", bookingPayload);
+    console.log("[STEP 3] Attempting booking insertion with payload:", bookingPayload);
     const { data: bookingData, error: bookingError } = await supabase
       .from("wash_bookings")
       .insert([bookingPayload])
       .select();
 
     if (bookingError) {
+      console.error("[STEP 3] Booking Insertion Failed:", bookingError);
       results.errors.push({ step: 'booking_insert', ...getErrorInfo(bookingError) });
       throw bookingError;
     }
 
     results.bookingRowCreated = true;
-    console.log("✅ Results Summary:", JSON.stringify(results, null, 2));
+    console.log("[STEP 3] Booking successful. Data recorded:", bookingData);
+    
+    console.log("✅ DIAGNOSTIC SUMMARY:", JSON.stringify(results, null, 2));
     console.groupEnd();
 
     return { results, data: bookingData };
 
   } catch (err: any) {
-    console.log("❌ Test Failed:", JSON.stringify(results, null, 2));
+    console.log("❌ FLOW FAILURE. DIAGNOSTIC LOG:", JSON.stringify(results, null, 2));
     console.groupEnd();
     throw err;
   }
@@ -169,7 +191,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       if (!date || !time) throw new Error("Please select both a date and time.");
       if (!service?.id || !service?.business_id) throw new Error("Invalid service data.");
 
-      const { results } = await submitBooking({
+      await submitBooking({
         customerName: name,
         whatsappNumber: whatsapp,
         customerEmail: email,
@@ -184,14 +206,13 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       });
 
       onClose();
-      // Redirection simulation/execution
       router.push("/customer/bookings");
 
     } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Booking Failed",
-        description: err?.message || "Check console for diagnostic JSON."
+        description: err?.message || "Check browser console for diagnostic JSON."
       });
     } finally {
       setLoading(false);
