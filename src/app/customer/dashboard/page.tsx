@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, ArrowRight, Droplets, MapPin, Calendar, Clock, Star, Zap, ShieldCheck } from 'lucide-react';
+import { Loader2, Plus, ArrowRight, Droplets, MapPin, Calendar, Clock, Star, Zap, ShieldCheck, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
@@ -24,21 +24,21 @@ export default function CustomerDashboardPage() {
     if (!user) return;
     setLoading(true);
     try {
-      // 1. Fetch Most Recent Active Booking
+      // 1. Fetch Most Recent Active Booking (Priority to Pending/Assigned)
       const { data: active } = await supabase
         .from('wash_bookings')
         .select('*')
         .eq('customer_id', user.id)
-        .in('status', ['pending_assignment', 'assigned', 'confirmed'])
+        .in('status', ['pending_assignment', 'assigned', 'confirmed', 'pending'])
         .order('requested_time', { ascending: false })
         .limit(1)
         .maybeSingle();
       
       if (active) {
         // Wire business and service info
-        const { data: biz } = await supabase.from('businesses').select('name, city').eq('id', active.seller_business_id).single();
-        const { data: svc } = await supabase.from('listings').select('name').eq('id', active.wash_service_id).single();
-        setActiveBooking({ ...active, business_name: biz?.name, service_name: svc?.name });
+        const { data: biz } = await supabase.from('businesses').select('name, city').eq('id', active.seller_business_id).maybeSingle();
+        const { data: svc } = await supabase.from('listings').select('name').eq('id', active.wash_service_id).maybeSingle();
+        setActiveBooking({ ...active, business_name: biz?.name || 'Partner', service_name: svc?.name || 'Wash' });
       } else {
         setActiveBooking(null);
       }
@@ -73,7 +73,7 @@ export default function CustomerDashboardPage() {
   );
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12 animate-in fade-in duration-500">
       <header className="space-y-1 pt-4">
         <h1 className="text-4xl font-black tracking-tight text-slate-900 uppercase italic">
           Hello, {user?.user_metadata?.name?.split(' ')[0] || 'Customer'}
@@ -95,13 +95,23 @@ export default function CustomerDashboardPage() {
       <div className="grid md:grid-cols-2 gap-8">
         {/* Active Tracking Card */}
         <section className="space-y-4">
-          <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Live Request</h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Live Request</h2>
+            {activeBooking && (
+              <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 animate-pulse text-[9px] font-black uppercase">
+                Active Tracking
+              </Badge>
+            )}
+          </div>
           {activeBooking ? (
             <Card className="border-2 border-primary/20 bg-white shadow-xl rounded-3xl overflow-hidden group hover:border-primary/40 transition-colors">
               <Link href="/customer/bookings">
                 <div className="p-6 flex items-start justify-between">
                   <div className="space-y-3">
-                    <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase px-3 py-1">
+                    <Badge className={cn(
+                        "border-none font-black text-[10px] uppercase px-3 py-1",
+                        (activeBooking.status === 'pending_assignment' || activeBooking.status === 'pending') ? "bg-orange-100 text-orange-700" : "bg-primary/10 text-primary"
+                    )}>
                       {activeBooking.status.replace('_', ' ')}
                     </Badge>
                     <div className="space-y-1">
@@ -114,7 +124,7 @@ export default function CustomerDashboardPage() {
                     </div>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-2xl group-hover:bg-primary/5 transition-colors shrink-0">
-                    <Zap className="h-8 w-8 text-primary animate-pulse" />
+                    <Zap className={cn("h-8 w-8 text-primary", (activeBooking.status === 'pending_assignment' || activeBooking.status === 'pending') && "animate-pulse")} />
                   </div>
                 </div>
                 <div className="bg-primary/5 p-4 flex items-center justify-center text-primary font-black text-[10px] uppercase tracking-widest border-t border-primary/5">

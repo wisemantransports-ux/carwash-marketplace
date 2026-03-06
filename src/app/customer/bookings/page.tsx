@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, XCircle, Droplets, Calendar, Clock, MapPin, History, UserCheck, ShieldCheck, Plus } from "lucide-react";
+import { Loader2, RefreshCw, XCircle, Droplets, Calendar, Clock, MapPin, History, UserCheck, ShieldCheck, Plus, RotateCcw, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
@@ -27,6 +27,7 @@ interface Booking {
   business?: { name: string; city: string };
   employee_name?: string;
   service_name?: string;
+  price?: number;
 }
 
 export default function CustomerDashboardPage() {
@@ -60,19 +61,20 @@ export default function CustomerDashboardPage() {
                 const [bizRes, empRes, svcRes] = await Promise.all([
                     supabase.from('businesses').select('id, name, city').in('id', bizIds),
                     supabase.from('employees').select('id, name').in('id', empIds),
-                    supabase.from('listings').select('id, name').in('id', svcIds)
+                    supabase.from('listings').select('id, name, price').in('id', svcIds)
                 ]);
 
                 const bizMap = (bizRes.data || []).reduce((acc: any, b: any) => ({ ...acc, [b.id]: b }), {});
                 const empMap = (empRes.data || []).reduce((acc: any, e: any) => ({ ...acc, [e.id]: e.name }), {});
-                const svcMap = (svcRes.data || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s.name }), {});
+                const svcMap = (svcRes.data || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s }), {});
 
                 // 3. STAGE 3: In-Memory Wiring
                 const enriched = bData.map(b => ({
                     ...b,
                     business: bizMap[b.seller_business_id],
                     employee_name: empMap[b.assigned_employee_id || ''] || 'Not assigned',
-                    service_name: svcMap[b.wash_service_id] || 'Wash Service'
+                    service_name: svcMap[b.wash_service_id]?.name || 'Wash Service',
+                    price: svcMap[b.wash_service_id]?.price || 0
                 }));
 
                 setBookings(enriched);
@@ -153,6 +155,19 @@ export default function CustomerDashboardPage() {
                 </div>
             </div>
 
+            {/* PENDING NOTIFICATION SECTION */}
+            {bookings.some(b => b.status === 'pending_assignment' || b.status === 'pending') && (
+                <div className="bg-orange-50 border-2 border-orange-200 p-4 rounded-2xl flex items-center gap-4 animate-pulse">
+                    <div className="bg-orange-500 p-2 rounded-full text-white">
+                        <AlertCircle className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                        <p className="text-sm font-black text-orange-900 uppercase">Awaiting Business Response</p>
+                        <p className="text-xs text-orange-700">You have wash requests waiting for partner assignment.</p>
+                    </div>
+                </div>
+            )}
+
             <Card className="shadow-2xl border-2 overflow-hidden rounded-2xl bg-white/50 backdrop-blur-sm">
                 <div className="overflow-x-auto">
                     <Table>
@@ -171,9 +186,16 @@ export default function CustomerDashboardPage() {
                                     <TableCell className="pl-6 py-5">
                                         <div className="flex flex-col gap-1">
                                             <span className="font-bold text-sm text-slate-900">{booking.business?.name ?? 'Verified Partner'}</span>
-                                            <Badge variant="outline" className="w-fit text-[10px] font-black uppercase text-primary border-primary/20 bg-primary/5">
-                                                {booking.service_name}
-                                            </Badge>
+                                            <div className="flex flex-wrap gap-2">
+                                                <Badge variant="outline" className="text-[9px] font-black uppercase text-primary border-primary/20 bg-primary/5">
+                                                    {booking.service_name}
+                                                </Badge>
+                                                {booking.price && (
+                                                    <Badge variant="secondary" className="text-[9px] font-black uppercase">
+                                                        P{Number(booking.price).toFixed(2)}
+                                                    </Badge>
+                                                )}
+                                            </div>
                                         </div>
                                     </TableCell>
                                     <TableCell>
@@ -183,6 +205,7 @@ export default function CustomerDashboardPage() {
                                             booking.status === 'completed' ? "bg-blue-50 text-blue-700 border-blue-200" : 
                                             booking.status === 'cancelled' ? "bg-red-50 text-red-700 border-red-200" : 
                                             booking.status === 'assigned' ? "bg-cyan-50 text-cyan-700 border-cyan-200" :
+                                            (booking.status === 'pending_assignment' || booking.status === 'pending') ? "bg-orange-50 text-orange-700 border-orange-200 animate-pulse" :
                                             "bg-slate-50 text-slate-700"
                                         )}>
                                             {booking.status.replace('_', ' ')}
@@ -209,16 +232,25 @@ export default function CustomerDashboardPage() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right pr-6">
-                                        {['pending_assignment', 'assigned', 'pending'].includes(booking.status) && (
-                                            <Button size="sm" variant="ghost" className="text-destructive h-8 font-black uppercase text-[10px] hover:bg-red-50" onClick={() => handleCancel(booking.id)}>
-                                                <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
-                                            </Button>
-                                        )}
-                                        {booking.status === 'completed' && (
-                                            <Badge variant="ghost" className="text-[10px] font-black text-green-600">
-                                                <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Verified
-                                            </Badge>
-                                        )}
+                                        <div className="flex justify-end gap-2">
+                                            {['pending_assignment', 'assigned', 'pending'].includes(booking.status) && (
+                                                <Button size="sm" variant="ghost" className="text-destructive h-8 font-black uppercase text-[10px] hover:bg-red-50 border border-transparent hover:border-red-100" onClick={() => handleCancel(booking.id)}>
+                                                    <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
+                                                </Button>
+                                            )}
+                                            {booking.status === 'completed' && (
+                                                <Badge variant="ghost" className="text-[10px] font-black text-green-600">
+                                                    <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Verified
+                                                </Badge>
+                                            )}
+                                            {['cancelled', 'completed'].includes(booking.status) && (
+                                                <Button size="sm" variant="outline" className="h-8 text-[10px] font-black uppercase" asChild>
+                                                    <Link href="/customer/home">
+                                                        <RotateCcw className="h-3.5 w-3.5 mr-1" /> Rebook
+                                                    </Link>
+                                                </Button>
+                                            )}
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             )) : (
