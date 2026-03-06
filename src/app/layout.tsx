@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
-import Script from 'next/script';
 import { AuthProvider } from '@/hooks/use-auth';
 
 export const metadata: Metadata = {
@@ -43,15 +42,6 @@ export default function RootLayout({
           {children}
           <Toaster />
         </AuthProvider>
-        <Script id="register-sw" strategy="afterInteractive">
-          {`
-            if ('serviceWorker' in navigator) {
-              window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/sw.js');
-              });
-            }
-          `}
-        </Script>
       </body>
     </html>
   );

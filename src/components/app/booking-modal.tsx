@@ -18,8 +18,8 @@ interface BookingModalProps {
 }
 
 /**
- * OBJECTIVE: Handle bookings for anonymous or returning users.
- * This logic ensures a customer record exists and links the booking to it.
+ * Handle bookings for users who may be anonymous or returning.
+ * Ensures a 'customers' record exists and links the booking to it.
  */
 async function processBooking({
   customerName,
@@ -97,7 +97,7 @@ async function processBooking({
     };
 
   } catch (err: any) {
-    // Return Structured Error JSON
+    console.error("Booking Logic Error:", err);
     return {
       customer: null,
       booking: null,
@@ -141,8 +141,6 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       serviceId: service.id,
       scheduledAt: new Date(`${date}T${time}`)
     });
-
-    console.log("📝 IDX Booking Result:", JSON.stringify(result, null, 2));
 
     if (result.error) {
       toast({
