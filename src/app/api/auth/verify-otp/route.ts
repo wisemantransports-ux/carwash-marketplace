@@ -1,6 +1,5 @@
-
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase-admin';
 
 /**
  * @fileOverview API Route to verify a WhatsApp OTP and manage user identity.
@@ -9,6 +8,13 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export async function POST(req: Request) {
   try {
+    if (!isSupabaseAdminConfigured) {
+      return NextResponse.json(
+        { error: 'Supabase Admin is not configured.' },
+        { status: 500 }
+      );
+    }
+
     const { phone, otp, name } = await req.json();
     const cleanPhone = phone.trim().replace(/\D/g, '');
 
@@ -34,10 +40,9 @@ export async function POST(req: Request) {
     const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
     if (listError) throw listError;
 
-    let authUser = users.find(u => u.phone === cleanPhone || u.user_metadata?.whatsapp === cleanPhone);
+    let authUser = users.find((u: any) => u.phone === cleanPhone || u.user_metadata?.whatsapp === cleanPhone);
 
     if (!authUser) {
-      // Create new Auth User with pre-confirmed phone to allow session generation
       const { data: { user: newUser }, error: createError } = await supabaseAdmin.auth.admin.createUser({
         phone: cleanPhone,
         phone_confirm: true,
