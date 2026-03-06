@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useCallback } from "react";
@@ -22,6 +21,7 @@ interface Booking {
   location: string | null;
   assigned_employee_id: string | null;
   wash_service_id: string;
+  seller_business_id: string;
   business?: { name: string; city: string };
   employee_name?: string;
   service_name?: string;
@@ -37,21 +37,20 @@ export default function CustomerDashboardPage() {
         else setRefreshing(true);
 
         try {
-            // 1. Get Identity from Auth OR LocalStorage (for frictionless tracking)
+            // 1. Get Identity STRICTLY from Auth
             const { data: { user } } = await supabase.auth.getUser();
-            const storedId = typeof window !== 'undefined' ? localStorage.getItem('customer_id') : null;
-            const targetId = user?.id || storedId;
 
-            if (!targetId) {
+            if (!user) {
+                console.warn("[CUSTOMER-DASHBOARD] No authenticated user found.");
                 setBookings([]);
                 return;
             }
 
-            // 2. Fetch Wash Bookings - STAGE 1 (The source of truth)
+            // 2. Fetch Wash Bookings - Filtered by AUTH.UID()
             const { data: bData, error: bErr } = await supabase
                 .from('wash_bookings')
                 .select('*')
-                .eq('customer_id', targetId)
+                .eq('customer_id', user.id)
                 .order('requested_time', { ascending: false });
             
             if (bErr) throw bErr;
@@ -141,7 +140,7 @@ export default function CustomerDashboardPage() {
                         <Droplets className="h-10 w-10" />
                         Activity Tracker
                     </h1>
-                    <p className="text-muted-foreground font-medium">Real-time management for your carwash requests.</p>
+                    <p className="text-muted-foreground font-medium">Real-time tracking for your carwash requests.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-6 border-primary/20 bg-white shadow-sm">
                     <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Live
@@ -176,7 +175,8 @@ export default function CustomerDashboardPage() {
                                             "uppercase text-[9px] font-black px-3 py-1 shadow-sm",
                                             booking.status === 'confirmed' ? "bg-green-50 text-green-700 border-green-200" : 
                                             booking.status === 'completed' ? "bg-blue-50 text-blue-700 border-blue-200" : 
-                                            booking.status === 'cancelled' || booking.status === 'rejected' ? "bg-red-50 text-red-700 border-red-200" : 
+                                            booking.status === 'cancelled' ? "bg-red-50 text-red-700 border-red-200" : 
+                                            booking.status === 'assigned' ? "bg-cyan-50 text-cyan-700 border-cyan-200" :
                                             "bg-slate-50 text-slate-700"
                                         )}>
                                             {booking.status.replace('_', ' ')}
@@ -185,7 +185,7 @@ export default function CustomerDashboardPage() {
                                     <TableCell>
                                         <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
                                             <UserCheck className="h-3.5 w-3.5 text-primary opacity-60" />
-                                            {booking.employee_name}
+                                            {booking.assigned_employee_id ? booking.employee_name : "Not assigned"}
                                         </div>
                                     </TableCell>
                                     <TableCell>
