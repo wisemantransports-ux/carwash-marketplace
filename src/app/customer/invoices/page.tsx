@@ -6,56 +6,93 @@ import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Receipt, FileText, Store, Car, UserCheck, Calendar, Banknote } from "lucide-react";
+import { Loader2, Receipt, FileText, Store, Car, UserCheck, Calendar, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function CustomerInvoicesPage() {
+    const { user, loading: authLoading } = useAuth();
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [mounted, setMounted] = useState(false);
 
-    const fetchInvoices = useCallback(async () => {
-        setLoading(true);
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return;
+    const fetchInvoices = useCallback(async (silent = false) => {
+        if (!user) return;
+        
+        if (!silent) setLoading(true);
+        else setRefreshing(true);
 
-            // Deep relational join to match the 10 required data points
-            const { data, error } = await supabase
+        try {
+            // 1. Fetch Flat Invoices
+            const { data: invData, error: invError } = await supabase
                 .from('invoices')
-                .select(`
-                    id,
-                    status,
-                    amount,
-                    issued_at,
-                    business:business_id ( name ),
-                    booking:booking_id (
-                        service:services ( name, price ),
-                        car:cars ( make, model ),
-                        staff:employees ( name )
-                    )
-                `)
-                .eq('customer_id', session.user.id)
+                .select('*')
+                .eq('customer_id', user.id)
                 .order('issued_at', { ascending: false });
 
-            if (error) throw error;
-            setInvoices(data || []);
+            if (invError) throw invError;
+
+            if (invData && invData.length > 0) {
+                // 2. STAGE 2: Parallel Fetching for Metadata (Manual Wiring Pattern)
+                const bizIds = [...new Set(invData.map(i => i.business_id))];
+                const bookingIds = [...new Set(invData.map(i => i.booking_id))];
+
+                const [bizRes, bookingsRes] = await Promise.all([
+                    supabase.from('businesses').select('id, name').in('id', bizIds),
+                    supabase.from('wash_bookings').select('*').in('id', bookingIds)
+                ]);
+
+                const bizMap = (bizRes.data || []).reduce((acc: any, b: any) => ({ ...acc, [b.id]: b }), {});
+                const bookingsData = bookingsRes.data || [];
+                
+                // Fetch service info for these bookings from listings
+                const serviceIds = [...new Set(bookingsData.map(b => b.wash_service_id))];
+                const { data: svcData } = await supabase.from('listings').select('id, name').in('id', serviceIds);
+                const svcMap = (svcData || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s.name }), {});
+
+                const bookingsMap = bookingsData.reduce((acc: any, b: any) => ({
+                    ...acc,
+                    [b.id]: {
+                        ...b,
+                        service_name: svcMap[b.wash_service_id] || 'Wash Service'
+                    }
+                }), {});
+
+                // 3. STAGE 3: In-Memory Wiring
+                const enriched = invData.map(inv => ({
+                    ...inv,
+                    business: bizMap[inv.business_id] || { name: 'Verified Partner' },
+                    booking: bookingsMap[inv.booking_id] || null
+                }));
+
+                setInvoices(enriched);
+            } else {
+                setInvoices([]);
+            }
         } catch (e: any) {
-            console.error("Invoice fetch error:", e);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not load your invoices.' });
+            console.error("[INVOICES] Fetch error details:", e);
+            toast({ 
+                variant: 'destructive', 
+                title: 'Sync Error', 
+                description: e.message || 'Could not load your billing records.' 
+            });
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         setMounted(true);
-        fetchInvoices();
-    }, [fetchInvoices]);
+        if (!authLoading && user) {
+            fetchInvoices();
+        }
+    }, [authLoading, user, fetchInvoices]);
 
-    if (!mounted) return (
+    if (!mounted || (authLoading && !refreshing)) return (
         <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
             <Loader2 className="animate-spin h-8 w-8 text-primary" />
             <p className="text-muted-foreground animate-pulse font-medium">Securing your billing records...</p>
@@ -64,12 +101,17 @@ export default function CustomerInvoicesPage() {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-12">
-            <div className="flex flex-col gap-2">
-                <h1 className="text-4xl font-extrabold tracking-tight text-primary">My Invoices</h1>
-                <p className="text-muted-foreground text-lg">Review your booking bills and digital service receipts.</p>
+            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                <div className="flex flex-col gap-2">
+                    <h1 className="text-4xl font-extrabold tracking-tight text-primary uppercase italic">My Invoices</h1>
+                    <p className="text-muted-foreground text-lg">Review your booking bills and digital service receipts.</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => fetchInvoices(true)} className="rounded-full h-10 px-6 border-primary/20 bg-white shadow-sm">
+                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Billing
+                </Button>
             </div>
 
-            <Card className="shadow-2xl border-muted/50 overflow-hidden rounded-2xl">
+            <Card className="shadow-2xl border-muted/50 overflow-hidden rounded-2xl bg-white/50 backdrop-blur-sm">
                 <CardHeader className="bg-muted/10 border-b">
                     <CardTitle className="text-lg">Service Billing History</CardTitle>
                     <CardDescription>Official digital proof of services rendered to your registered vehicles.</CardDescription>
@@ -79,60 +121,51 @@ export default function CustomerInvoicesPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/30 border-b-2">
-                                    <TableHead className="font-bold py-4 pl-6">Invoice #</TableHead>
-                                    <TableHead className="font-bold">Partner</TableHead>
-                                    <TableHead className="font-bold">Service & Vehicle</TableHead>
-                                    <TableHead className="font-bold">Staff</TableHead>
-                                    <TableHead className="font-bold">Date</TableHead>
-                                    <TableHead className="font-bold">Amount</TableHead>
-                                    <TableHead className="font-bold">Status</TableHead>
-                                    <TableHead className="text-right pr-6 font-bold">Action</TableHead>
+                                    <TableHead className="font-black py-4 pl-6 uppercase text-[10px] tracking-widest">Invoice #</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Partner</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Service & Vehicle</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Date</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Amount</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Status</TableHead>
+                                    <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">Action</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {loading ? (
+                                {loading && !refreshing ? (
                                     Array.from({length: 3}).map((_, i) => (
                                         <TableRow key={i}>
-                                            <TableCell colSpan={8} className="h-16 text-center">
+                                            <TableCell colSpan={7} className="h-16 text-center">
                                                 <Loader2 className="animate-spin h-4 w-4 mx-auto text-muted-foreground" />
                                             </TableCell>
                                         </TableRow>
                                     ))
                                 ) : invoices.length > 0 ? (
                                     invoices.map(inv => {
-                                        const serviceName = inv.booking?.service?.name || "N/A";
-                                        const carDetails = inv.booking?.car ? `${inv.booking.car.make} ${inv.booking.car.model}` : "N/A";
-                                        const staffName = inv.booking?.staff?.name || "N/A";
+                                        const serviceName = inv.booking?.service_name || "Wash Service";
                                         const dateStr = inv.issued_at ? new Date(inv.issued_at).toLocaleDateString() : "N/A";
 
                                         return (
-                                            <TableRow key={inv.id} className="hover:bg-muted/10 transition-colors border-b">
-                                                <TableCell className="font-mono text-[10px] font-black uppercase pl-6 py-4">
+                                            <TableRow key={inv.id} className="hover:bg-primary/5 transition-colors border-b group">
+                                                <TableCell className="font-mono text-[10px] font-black uppercase pl-6 py-5">
                                                     #{inv.id.slice(-8)}
                                                 </TableCell>
                                                 <TableCell className="font-bold text-sm">
                                                     <div className="flex items-center gap-2">
-                                                        <Store className="h-3 w-3 opacity-40" />
-                                                        {inv.business?.name || "Unknown Partner"}
+                                                        <Store className="h-3 w-3 text-primary opacity-60" />
+                                                        {inv.business?.name || "Verified Partner"}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex flex-col">
-                                                        <span className="text-xs font-bold text-primary">{serviceName}</span>
-                                                        <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
-                                                            <Car className="h-2.5 w-2.5" /> {carDetails}
+                                                        <span className="text-xs font-bold text-slate-900">{serviceName}</span>
+                                                        <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                                                            <Car className="h-2.5 w-2.5" /> {inv.booking?.location || 'Station Wash'}
                                                         </span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-xs font-medium">
+                                                <TableCell className="text-[11px] font-bold text-slate-600">
                                                     <div className="flex items-center gap-2">
-                                                        <UserCheck className="h-3 w-3 opacity-40 text-primary" />
-                                                        {staffName}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-[11px] font-bold text-muted-foreground">
-                                                    <div className="flex items-center gap-2">
-                                                        <Calendar className="h-3 w-3" />
+                                                        <Calendar className="h-3 w-3 text-primary opacity-60" />
                                                         {dateStr}
                                                     </div>
                                                 </TableCell>
@@ -151,7 +184,7 @@ export default function CustomerInvoicesPage() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right pr-6">
-                                                    <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold">
+                                                    <Button variant="ghost" size="sm" className="h-8 text-[10px] font-black uppercase tracking-tight">
                                                         <FileText className="h-3 w-3 mr-2" /> Details
                                                     </Button>
                                                 </TableCell>
@@ -160,13 +193,15 @@ export default function CustomerInvoicesPage() {
                                     })
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="h-64 text-center">
+                                        <TableCell colSpan={7} className="h-64 text-center">
                                             <div className="flex flex-col items-center justify-center gap-4 opacity-40">
-                                                <div className="bg-muted p-6 rounded-full border-2 border-dashed">
+                                                <div className="bg-muted p-6 rounded-full">
                                                     <Receipt className="h-12 w-12" />
                                                 </div>
-                                                <p className="text-lg font-bold">No invoices available.</p>
-                                                <p className="text-sm max-w-xs mx-auto italic">Your billing history will appear here once your wash requests are accepted.</p>
+                                                <div className="space-y-1">
+                                                    <p className="font-black uppercase text-[10px] tracking-widest text-slate-900">No invoices available</p>
+                                                    <p className="text-xs italic">Billing history will appear here once requests are accepted.</p>
+                                                </div>
                                             </div>
                                         </TableCell>
                                     </TableRow>
