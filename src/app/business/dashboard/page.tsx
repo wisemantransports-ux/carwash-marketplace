@@ -1,18 +1,16 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, LayoutDashboard, Phone, CheckCircle2, History, UserCheck, Droplets, MapPin, Calendar, Clock, XCircle, Mail, MoreHorizontal, AlertCircle } from "lucide-react";
+import { Loader2, RefreshCw, LayoutDashboard, Phone, CheckCircle2, History, Droplets, MapPin, Calendar, Clock, XCircle, Mail, MoreHorizontal, UserCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { WashBooking, Employee, Business } from "@/lib/types";
+import type { Business, Employee } from "@/lib/types";
 
 /**
  * @fileOverview Business Dashboard for Carwash Management
@@ -52,7 +50,7 @@ export default function BusinessDashboardPage() {
             
             if (bErr) throw bErr;
 
-            // 3. Fetch Employees for assignment resolution
+            // 3. Fetch Employees for assignment resolution (Manual Wiring)
             const { data: eData } = await supabase
                 .from('employees')
                 .select('*')
@@ -61,7 +59,7 @@ export default function BusinessDashboardPage() {
             setEmployees(eData || []);
             const empMap = (eData || []).reduce((acc: any, e: any) => ({ ...acc, [e.id]: e }), {});
 
-            // 4. Fetch Service Names (from listings table)
+            // 4. Fetch Service Names (Manual Wiring from listings table)
             const { data: sData } = await supabase
                 .from('listings')
                 .select('id, name')
@@ -69,7 +67,7 @@ export default function BusinessDashboardPage() {
             
             const sMap = (sData || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s }), {});
 
-            // 5. Manual Wiring: Map nullable IDs to display names
+            // 5. Manual Wiring: Map IDs to display names while respecting NULL fallbacks
             const wiredBookings = (bData || []).map(b => ({
                 ...b,
                 service_display_name: sMap[b.wash_service_id]?.name || 'Standard Wash',
@@ -93,9 +91,9 @@ export default function BusinessDashboardPage() {
 
     useEffect(() => {
         fetchData();
-        // Supabase Real-time Subscription
+        // Supabase Real-time Subscription for immediate dashboard updates
         const channel = supabase
-            .channel('wash-realtime')
+            .channel('wash-realtime-dashboard')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true))
             .subscribe();
 
@@ -108,7 +106,7 @@ export default function BusinessDashboardPage() {
                 .from('wash_bookings')
                 .update({ 
                     assigned_employee_id: employeeId,
-                    employee_id: employeeId, // Syncing both for schema safety
+                    employee_id: employeeId, 
                     status: 'assigned',
                     updated_at: new Date().toISOString()
                 })
@@ -151,7 +149,7 @@ export default function BusinessDashboardPage() {
                 .eq('id', bookingId);
 
             if (error) throw error;
-            toast({ title: `Booking status: ${newStatus.toUpperCase()}` });
+            toast({ title: `Status set to ${newStatus.toUpperCase()}` });
             fetchData(true);
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: e.message });
@@ -197,13 +195,13 @@ export default function BusinessDashboardPage() {
                                 <TableRow key={booking.id} className="hover:bg-primary/5 transition-colors border-b group">
                                     <TableCell className="pl-6 py-5">
                                         <div className="flex flex-col gap-1">
-                                            <span className="font-bold text-sm text-slate-900">{booking.customer_name}</span>
+                                            <span className="font-bold text-sm text-slate-900">{booking.customer_name || 'Unknown Customer'}</span>
                                             <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold">
-                                                <Phone className="h-3 w-3" /> {booking.customer_whatsapp}
+                                                <Phone className="h-3 w-3" /> {booking.customer_whatsapp || 'No contact'}
                                             </div>
                                             <div className="flex items-center gap-2 text-[10px] text-slate-500">
                                                 <Mail className="h-3 w-3 opacity-60" /> 
-                                                {booking.customer_email || 'No email provided'}
+                                                {booking.customer_email || 'No email'}
                                             </div>
                                             {booking.location && (
                                                 <div className="flex items-center gap-2 text-[10px] text-primary mt-1 font-medium">
@@ -235,7 +233,7 @@ export default function BusinessDashboardPage() {
                                             onChange={(e) => handleAssignEmployee(booking.id, e.target.value)}
                                             disabled={['completed', 'cancelled'].includes(booking.status)}
                                         >
-                                            <option value="">-- UNASSIGNED --</option>
+                                            <option value="">-- Unassigned --</option>
                                             {employees.map(e => <option key={e.id} value={e.id}>{e.name.toUpperCase()}</option>)}
                                         </select>
                                     </TableCell>
@@ -244,10 +242,9 @@ export default function BusinessDashboardPage() {
                                             "uppercase text-[9px] font-black px-3 py-1 shadow-sm",
                                             booking.status === 'confirmed' ? "bg-green-50 text-green-700 border-green-200" : 
                                             booking.status === 'assigned' ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                            booking.status === 'pending_assignment' ? "bg-orange-50 text-orange-700 border-orange-200" :
                                             "bg-slate-50 text-slate-700"
                                         )}>
-                                            {booking.status === 'pending_assignment' ? 'Unassigned' : booking.status.replace('_', ' ')}
+                                            {booking.assigned_employee_id ? booking.status.replace('_', ' ') : 'Unassigned'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right pr-6">
