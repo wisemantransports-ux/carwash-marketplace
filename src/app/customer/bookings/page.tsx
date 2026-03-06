@@ -4,12 +4,13 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, XCircle, Droplets, Calendar, Clock, MapPin, History, UserCheck, ShieldCheck } from "lucide-react";
+import { Loader2, RefreshCw, XCircle, Droplets, Calendar, Clock, MapPin, History, UserCheck, ShieldCheck, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import Link from "next/link";
 
 interface Booking {
   id: string;
@@ -140,9 +141,16 @@ export default function CustomerDashboardPage() {
                     </h1>
                     <p className="text-muted-foreground font-medium">Real-time tracking for your carwash requests.</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-6 border-primary/20 bg-white shadow-sm">
-                    <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Live
-                </Button>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="rounded-full h-10 px-6 border-primary/20 bg-white shadow-sm flex-1 md:flex-none">
+                        <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Live
+                    </Button>
+                    <Button asChild className="rounded-full h-10 px-6 shadow-lg flex-1 md:flex-none font-black uppercase text-[10px]">
+                        <Link href="/customer/home">
+                            <Plus className="h-4 w-4 mr-2" /> Request Wash
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <Card className="shadow-2xl border-2 overflow-hidden rounded-2xl bg-white/50 backdrop-blur-sm">
@@ -201,7 +209,7 @@ export default function CustomerDashboardPage() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right pr-6">
-                                        {['pending_assignment', 'assigned'].includes(booking.status) && (
+                                        {['pending_assignment', 'assigned', 'pending'].includes(booking.status) && (
                                             <Button size="sm" variant="ghost" className="text-destructive h-8 font-black uppercase text-[10px] hover:bg-red-50" onClick={() => handleCancel(booking.id)}>
                                                 <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
                                             </Button>
@@ -215,13 +223,18 @@ export default function CustomerDashboardPage() {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-64 text-center">
+                                    <TableCell colSpan={5} className="h-72 text-center">
                                         <div className="flex flex-col items-center justify-center gap-4 opacity-40">
-                                            <History className="h-12 w-12" />
+                                            <div className="bg-muted p-6 rounded-full border-2 border-dashed">
+                                                <History className="h-12 w-12" />
+                                            </div>
                                             <div className="space-y-1">
                                                 <p className="font-black uppercase text-[10px] tracking-widest text-slate-900">No active bookings</p>
                                                 <p className="text-xs italic">Your service history will appear here.</p>
                                             </div>
+                                            <Button asChild className="mt-4 rounded-full font-black uppercase text-[10px] px-8 shadow-xl">
+                                                <Link href="/customer/home">Request your first wash</Link>
+                                            </Button>
                                         </div>
                                     </TableCell>
                                 </TableRow>
