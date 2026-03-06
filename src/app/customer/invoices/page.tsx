@@ -37,21 +37,26 @@ export default function CustomerInvoicesPage() {
 
             if (invData && invData.length > 0) {
                 // 2. STAGE 2: Parallel Fetching for Metadata (Manual Wiring Pattern)
-                const bizIds = [...new Set(invData.map(i => i.business_id))];
-                const bookingIds = [...new Set(invData.map(i => i.booking_id))];
+                // Filter out falsy IDs to prevent PostgREST errors
+                const bizIds = [...new Set(invData.map(i => i.business_id).filter(Boolean))];
+                const bookingIds = [...new Set(invData.map(i => i.booking_id).filter(Boolean))];
 
                 const [bizRes, bookingsRes] = await Promise.all([
-                    supabase.from('businesses').select('id, name').in('id', bizIds),
-                    supabase.from('wash_bookings').select('*').in('id', bookingIds)
+                    bizIds.length > 0 ? supabase.from('businesses').select('id, name').in('id', bizIds) : Promise.resolve({ data: [] }),
+                    bookingIds.length > 0 ? supabase.from('wash_bookings').select('*').in('id', bookingIds) : Promise.resolve({ data: [] })
                 ]);
 
                 const bizMap = (bizRes.data || []).reduce((acc: any, b: any) => ({ ...acc, [b.id]: b }), {});
                 const bookingsData = bookingsRes.data || [];
                 
                 // Fetch service info for these bookings from listings
-                const serviceIds = [...new Set(bookingsData.map(b => b.wash_service_id))];
-                const { data: svcData } = await supabase.from('listings').select('id, name').in('id', serviceIds);
-                const svcMap = (svcData || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s.name }), {});
+                const serviceIds = [...new Set(bookingsData.map(b => b.wash_service_id).filter(Boolean))];
+                let svcMap: Record<string, string> = {};
+                
+                if (serviceIds.length > 0) {
+                    const { data: svcData } = await supabase.from('listings').select('id, name').in('id', serviceIds);
+                    svcMap = (svcData || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s.name }), {});
+                }
 
                 const bookingsMap = bookingsData.reduce((acc: any, b: any) => ({
                     ...acc,
@@ -73,11 +78,15 @@ export default function CustomerInvoicesPage() {
                 setInvoices([]);
             }
         } catch (e: any) {
-            console.error("[INVOICES] Fetch error details:", e);
+            console.error("[CUSTOMER-INVOICES] Fetch failure details:", {
+                message: e?.message || "Unknown Error",
+                details: e?.details,
+                code: e?.code
+            });
             toast({ 
                 variant: 'destructive', 
                 title: 'Sync Error', 
-                description: e.message || 'Could not load your billing records.' 
+                description: 'Could not load your billing records.' 
             });
         } finally {
             setLoading(false);
@@ -158,7 +167,7 @@ export default function CustomerInvoicesPage() {
                                                 <TableCell>
                                                     <div className="flex flex-col">
                                                         <span className="text-xs font-bold text-slate-900">{serviceName}</span>
-                                                        <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                                                        <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
                                                             <Car className="h-2.5 w-2.5" /> {inv.booking?.location || 'Station Wash'}
                                                         </span>
                                                     </div>

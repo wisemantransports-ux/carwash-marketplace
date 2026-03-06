@@ -27,32 +27,47 @@ export default function BusinessInvoicesPage() {
         else setRefreshing(true);
 
         try {
-            // 1. Fetch Flat Invoices for this Business
+            // 1. Resolve the Business ID first (Mapping Owner to Business)
+            const { data: biz } = await supabase
+                .from('businesses')
+                .select('id')
+                .eq('owner_id', user.id)
+                .maybeSingle();
+            
+            if (!biz) {
+                setInvoices([]);
+                return;
+            }
+
+            // 2. Fetch Invoices for this specifically resolved Business record
             const { data: invData, error: invError } = await supabase
                 .from('invoices')
                 .select('*')
-                .eq('business_id', user.id)
+                .eq('business_id', biz.id)
                 .order('issued_at', { ascending: false });
 
             if (invError) throw invError;
 
             if (invData && invData.length > 0) {
-                // 2. STAGE 2: Parallel Fetching for Metadata (Manual Wiring Pattern)
-                const customerIds = [...new Set(invData.map(i => i.customer_id))];
-                const bookingIds = [...new Set(invData.map(i => i.booking_id))];
+                // 3. STAGE 2: Parallel Metadata Fetching
+                const customerIds = [...new Set(invData.map(i => i.customer_id).filter(Boolean))];
+                const bookingIds = [...new Set(invData.map(i => i.booking_id).filter(Boolean))];
 
                 const [custRes, bookingsRes] = await Promise.all([
-                    supabase.from('users').select('id, name, email').in('id', customerIds),
-                    supabase.from('wash_bookings').select('*').in('id', bookingIds)
+                    customerIds.length > 0 ? supabase.from('users').select('id, name, email').in('id', customerIds) : Promise.resolve({ data: [] }),
+                    bookingIds.length > 0 ? supabase.from('wash_bookings').select('*').in('id', bookingIds) : Promise.resolve({ data: [] })
                 ]);
 
                 const custMap = (custRes.data || []).reduce((acc: any, c: any) => ({ ...acc, [c.id]: c }), {});
                 const bookingsData = bookingsRes.data || [];
                 
                 // Fetch service info from listings
-                const serviceIds = [...new Set(bookingsData.map(b => b.wash_service_id))];
-                const { data: svcData } = await supabase.from('listings').select('id, name').in('id', serviceIds);
-                const svcMap = (svcData || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s.name }), {});
+                const serviceIds = [...new Set(bookingsData.map(b => b.wash_service_id).filter(Boolean))];
+                let svcMap: Record<string, string> = {};
+                if (serviceIds.length > 0) {
+                    const { data: svcData } = await supabase.from('listings').select('id, name').in('id', serviceIds);
+                    svcMap = (svcData || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s.name }), {});
+                }
 
                 const bookingsMap = bookingsData.reduce((acc: any, b: any) => ({
                     ...acc,
@@ -62,7 +77,7 @@ export default function BusinessInvoicesPage() {
                     }
                 }), {});
 
-                // 3. STAGE 3: In-Memory Wiring
+                // 4. STAGE 3: In-Memory Data Wiring
                 const enriched = invData.map(inv => ({
                     ...inv,
                     customer: custMap[inv.customer_id] || { name: 'Unknown Customer', email: 'No email' },
@@ -74,7 +89,11 @@ export default function BusinessInvoicesPage() {
                 setInvoices([]);
             }
         } catch (e: any) {
-            console.error("[BIZ-INVOICES] Fetch error details:", e);
+            console.error("[BUSINESS-INVOICES] Sync failure details:", {
+                message: e?.message || "Unknown error",
+                details: e?.details,
+                code: e?.code
+            });
             toast({ 
                 variant: 'destructive', 
                 title: 'Sync Error', 
