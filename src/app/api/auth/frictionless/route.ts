@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
@@ -44,7 +43,6 @@ export async function POST(req: Request) {
 
     if (!existingUser) {
       // 3. Create entry in Supabase Auth via Admin API
-      // We use a random password internally as customers use WhatsApp identity
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         phone: cleanWa,
         phone_confirm: true,
@@ -67,14 +65,17 @@ export async function POST(req: Request) {
       }
 
       if (targetUserId) {
-        // 4. Sync to public users table
+        // 4. Sync to public users table - SYNC WITH SOURCE OF TRUTH REQUIRED COLUMNS
         const { error: syncError } = await supabaseAdmin.from('users').upsert({
           id: targetUserId,
           name: (name || 'New Customer').trim(),
+          full_name: (name || 'New Customer').trim(),
           whatsapp_number: cleanWa,
           role: 'customer',
-          is_verified: true,
-          trial_expiry: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+          is_anonymous: true,
+          is_sso_user: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         });
         
         if (syncError) {

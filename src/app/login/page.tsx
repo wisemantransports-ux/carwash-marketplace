@@ -66,6 +66,13 @@ export default function LoginPage() {
         body: JSON.stringify({ whatsapp })
       });
 
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const errorText = await response.text();
+        console.error("[LOGIN-API] Invalid Response format:", errorText);
+        throw new Error("Server returned an invalid format. Please try again later.");
+      }
+
       const result = await response.json();
 
       if (!result.success) {
@@ -76,7 +83,6 @@ export default function LoginPage() {
       localStorage.setItem('customer_id', result.customer_id);
       
       // Ensure an active Supabase session exists so RLS doesn't block connection
-      // We sign in anonymously to anchor the session for public reads/writes
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         await supabase.auth.signInAnonymously();

@@ -70,14 +70,23 @@ export async function POST(req: Request) {
       
       customerId = newUser.user.id;
 
-      // Sync to public.users table
-      await supabaseAdmin.from('users').upsert({
+      // Sync to public.users table - INCLUDES ALL REQUIRED COLUMNS FROM SOURCE OF TRUTH
+      const { error: syncError } = await supabaseAdmin.from('users').upsert({
         id: customerId,
         name: 'Customer',
+        full_name: 'Anonymous Customer',
         whatsapp_number: cleanWa,
         role: 'customer',
-        is_verified: true
+        is_anonymous: true,
+        is_sso_user: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       });
+
+      if (syncError) {
+        console.error('[LOGIN-API] Public Sync Error:', syncError);
+        // We continue because the auth record is already created
+      }
     } else {
       customerId = foundUser.id;
     }
@@ -91,7 +100,6 @@ export async function POST(req: Request) {
 
     if (bookingError) {
       console.error('[LOGIN-API] Booking Fetch Error:', bookingError);
-      // We still return success for the login itself even if bookings fetch fails
     }
 
     // 5. Return success JSON

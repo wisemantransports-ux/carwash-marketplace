@@ -70,7 +70,8 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
         const contentType = res.headers.get("content-type");
         if (!res.ok || !contentType || !contentType.includes("application/json")) {
-          throw new Error("Identity resolution unavailable. Please check your network.");
+          const errorMsg = !res.ok ? `Server error: ${res.status}` : "Invalid response format from server.";
+          throw new Error(errorMsg);
         }
 
         const authResult = await res.json();
