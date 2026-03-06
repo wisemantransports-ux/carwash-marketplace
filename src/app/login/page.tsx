@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ShieldCheck, ArrowLeft, MessageCircle, Mail, Lock, AlertCircle } from "lucide-react";
+import { Loader2, ShieldCheck, ArrowLeft, MessageCircle, Mail, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import Link from 'next/link';
@@ -54,7 +54,10 @@ export default function LoginPage() {
 
   const handleCustomerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!whatsapp.trim()) return;
+    if (!whatsapp.trim()) {
+      toast({ variant: 'destructive', title: 'Input Required', description: 'Please enter your WhatsApp number.' });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -64,19 +67,37 @@ export default function LoginPage() {
         body: JSON.stringify({ whatsapp })
       });
 
+      // Handle non-JSON responses gracefully
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response format.");
+      }
+
       const result = await response.json();
 
       if (!response.ok) {
         throw new Error(result.error || 'Authentication failed');
       }
 
-      // Store identity locally for the dashboard to use
+      // Prototyping "Frictionless Session": 
+      // 1. Store the resolved ID for data fetching
       localStorage.setItem('customer_id', result.customer_id);
       
-      toast({ title: "Welcome Back!", description: "Opening your activity tracker..." });
-      router.push('/customer/bookings');
+      // 2. Ensure an active Supabase session exists so RLS doesn't block connection
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        await supabase.auth.signInAnonymously();
+      }
+      
+      toast({ title: "Welcome Back!", description: "Opening your dashboard..." });
+      router.push('/customer/dashboard');
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Login Error", description: error.message });
+      console.error("[LOGIN-CLIENT] Error:", error);
+      toast({ 
+        variant: "destructive", 
+        title: "Access Denied", 
+        description: error.message 
+      });
     } finally {
       setLoading(false);
     }
@@ -113,7 +134,7 @@ export default function LoginPage() {
                   WhatsApp Access
                 </CardTitle>
                 <CardDescription className="text-slate-400">
-                  Access your tracking dashboard using your number.
+                  Enter your number to track your active services.
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-8">
@@ -129,8 +150,8 @@ export default function LoginPage() {
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={loading}>
-                    {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Sign In to Tracker"}
+                  <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter" disabled={loading}>
+                    {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Sign In to Dashboard"}
                   </Button>
                   <p className="text-[10px] text-center text-slate-500 font-medium">
                     <AlertCircle className="h-3 w-3 inline mr-1" />

@@ -5,30 +5,37 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 /**
  * @fileOverview Customer Login API
  * Resolves a customer's identity using only their WhatsApp number.
- * Bypasses OTP/Passwords for a frictionless experience.
+ * Ensures strict JSON responses to prevent parsing errors.
  */
 
 export async function POST(req: Request) {
   try {
-    const { whatsapp } = await req.json();
+    // 1. Safely parse body
+    const body = await req.json().catch(() => ({}));
+    const { whatsapp } = body;
 
     if (!whatsapp) {
-      return NextResponse.json({ error: 'WhatsApp number is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'WhatsApp number is required.' }, 
+        { status: 400 }
+      );
     }
 
-    // Normalize number (strip non-digits)
+    // 2. Normalize number
     const cleanWa = whatsapp.trim().replace(/\D/g, '');
 
-    // 1. Query auth.users via Admin API (Service Role)
-    // We look for users with this phone number
+    // 3. Query auth users via Admin API
     const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
     
     if (listError) {
-      console.error('[LOGIN-API] List Error:', listError);
-      return NextResponse.json({ error: 'Database connection failed' }, { status: 500 });
+      console.error('[LOGIN-API] Admin List Error:', listError);
+      return NextResponse.json(
+        { error: 'Database connection failed.' }, 
+        { status: 500 }
+      );
     }
 
-    // Find the user whose phone or metadata matches the WhatsApp number
+    // 4. Match user by phone or metadata
     const foundUser = users.find(u => 
       u.phone === cleanWa || 
       u.phone === `+${cleanWa}` || 
@@ -36,9 +43,13 @@ export async function POST(req: Request) {
     );
 
     if (!foundUser) {
-      return NextResponse.json({ error: 'No account found. Please place a booking first.' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'No account found. Please place a booking first.' }, 
+        { status: 404 }
+      );
     }
 
+    // 5. Success
     return NextResponse.json({ 
       success: true,
       customer_id: foundUser.id,
@@ -47,6 +58,9 @@ export async function POST(req: Request) {
 
   } catch (err: any) {
     console.error('[LOGIN-API] Fatal Error:', err);
-    return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || 'An unexpected error occurred during login.' }, 
+      { status: 500 }
+    );
   }
 }
