@@ -84,25 +84,40 @@ export type Employee = {
   business_id: string;
   name: string;
   phone: string;
-  image_url: string;
+  image_url?: string;
   id_reference?: string;
+};
+
+export type WashService = {
+  id: string;
+  name: string;
+  business_id: string;
+  price: number;
+  duration_minutes: number;
 };
 
 export type WashBookingStatus = 'pending_assignment' | 'assigned' | 'confirmed' | 'completed' | 'cancelled' | 'rejected';
 
 export type WashBooking = {
   id: string;
-  customer_id: string | null;
-  seller_business_id: string;
+  customer_name: string;
+  customer_whatsapp: string;
+  customer_email: string | null;
+  verified: boolean;
   wash_service_id: string;
-  employee_id: string | null;
-  booking_date: string;
-  location?: string;
+  seller_business_id: string;
+  assigned_employee_id: string | null;
   status: WashBookingStatus;
-  price?: number;
-  user?: { name: string };
-  employee?: { name: string; phone: string; image_url: string };
-  business?: { name: string; city: string; logo_url: string };
-  service?: { name: string; price: number };
+  requested_time: string;
   created_at: string;
+  updated_at: string;
+  booking_date: string;
+  customer_id: string | null;
+  employee_id: string | null;
+  business_id: string;
+  location: string | null;
+  
+  // UI helper fields
+  service_name?: string;
+  employee_name?: string;
 };

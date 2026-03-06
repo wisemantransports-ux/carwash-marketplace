@@ -1,16 +1,17 @@
+
 'use client';
 
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, LayoutDashboard, Phone, CheckCircle2, History, UserCheck, Droplets } from "lucide-react";
+import { Loader2, RefreshCw, LayoutDashboard, Phone, CheckCircle2, History, UserCheck, Droplets, MapPin, Calendar, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { Business, Lead, WashBooking, Employee } from "@/lib/types";
+import type { Business, Lead, WashBooking, Employee, WashService } from "@/lib/types";
 
 /**
  * Robust error message extraction for Supabase/JS errors.
@@ -24,7 +25,7 @@ const extractError = (err: any): string => {
 export default function BusinessDashboardPage() {
     const [business, setBusiness] = useState<Business | null>(null);
     const [leads, setLeads] = useState<Lead[]>([]);
-    const [bookings, setBookings] = useState<any[]>([]);
+    const [bookings, setBookings] = useState<WashBooking[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -48,56 +49,61 @@ export default function BusinessDashboardPage() {
             if (!biz) return;
             setBusiness(biz as Business);
 
-            // 2. Fetch Wash Bookings (Flat)
+            // 2. Fetch Wash Bookings (seller_business_id = auth.uid())
+            // Sorted by requested_time ascending as per requirement
             const { data: bData, error: bErr } = await supabase
                 .from('wash_bookings')
                 .select('*')
-                .eq('seller_business_id', biz.id)
-                .order('created_at', { ascending: false });
+                .eq('seller_business_id', user.id)
+                .order('requested_time', { ascending: true });
             
             if (bErr) throw bErr;
 
-            // 3. Fetch Marketplace Leads (Flat)
-            const { data: lData, error: lErr } = await supabase
+            // 3. Fetch Employees for the business
+            const { data: eData, error: eErr } = await supabase
+                .from('employees')
+                .select('*')
+                .eq('business_id', biz.id);
+            
+            if (eErr) throw eErr;
+            setEmployees(eData || []);
+            const empMap = (eData || []).reduce((acc: any, e: any) => ({ ...acc, [e.id]: e }), {});
+
+            // 4. Fetch Wash Services details
+            const serviceIds = (bData || []).map(b => b.wash_service_id).filter(Boolean);
+            let sMap: Record<string, WashService> = {};
+            
+            if (serviceIds.length > 0) {
+                const { data: sData, error: sErr } = await supabase
+                    .from('wash_services')
+                    .select('*')
+                    .in('id', serviceIds);
+                
+                if (!sErr && sData) {
+                    sMap = sData.reduce((acc: any, s: any) => ({ ...acc, [s.id]: s }), {});
+                }
+            }
+
+            // 5. MANUAL WIRING: Interleave names into bookings
+            const wiredBookings = (bData || []).map(b => ({
+                ...b,
+                service_name: sMap[b.wash_service_id]?.name || 'Standard Wash',
+                employee_name: empMap[b.assigned_employee_id || b.employee_id]?.name || 'Unassigned'
+            }));
+
+            setBookings(wiredBookings);
+
+            // 6. Fetch Marketplace Leads (Flat)
+            const { data: lData } = await supabase
                 .from('leads')
                 .select('*')
                 .eq('seller_business_id', biz.id)
                 .order('created_at', { ascending: false });
             
-            if (lErr) throw lErr;
-
-            // 4. Fetch Employees
-            const { data: eData } = await supabase
-                .from('employees')
-                .select('*')
-                .eq('business_id', biz.id);
-            
-            const empMap = (eData || []).reduce((acc: any, e: any) => ({ ...acc, [e.id]: e }), {});
-            setEmployees(eData || []);
-
-            // 5. MANUAL WIRING: Fetch related service names from listings
-            const serviceIds = (bData || []).map(b => b.wash_service_id).filter(Boolean);
-            const { data: sData } = await supabase
-                .from('listings')
-                .select('id, name')
-                .in('id', serviceIds);
-            
-            const sMap = (sData || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s }), {});
-
-            // Interleave names into bookings
-            const wiredBookings = (bData || []).map(b => ({
-                ...b,
-                service_name: sMap[b.wash_service_id]?.name || 'Professional Wash',
-                employee_name: empMap[b.employee_id || b.assigned_employee_id]?.name || null
-            }));
-
-            setBookings(wiredBookings);
             setLeads(lData as any || []);
 
         } catch (e: any) {
-            console.group("❌ Biz Dashboard Sync Failure");
-            console.error("Error Detail:", e);
-            console.groupEnd();
+            console.error("Biz Dashboard Fetch Error:", e);
             toast({ 
                 variant: 'destructive', 
                 title: 'Sync Error', 
@@ -111,32 +117,56 @@ export default function BusinessDashboardPage() {
 
     useEffect(() => {
         fetchData();
-        const bChannel = supabase.channel('biz-bookings').on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true)).subscribe();
-        const lChannel = supabase.channel('biz-leads').on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => fetchData(true)).subscribe();
-        return () => { supabase.removeChannel(bChannel); supabase.removeChannel(lChannel); };
+        // Set up real-time subscription for bookings
+        const channel = supabase
+            .channel('db-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'wash_bookings' }, () => fetchData(true))
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
     }, [fetchData]);
 
-    const handleUpdateStatus = async (id: string, status: string, empId?: string) => {
+    const handleAssignEmployee = async (bookingId: string, employeeId: string) => {
         try {
-            const update: any = { status };
-            if (empId) {
-                update.employee_id = empId;
-                update.assigned_employee_id = empId;
-            }
-            const { error } = await supabase.from('wash_bookings').update(update).eq('id', id);
+            // Requirement: Assign employee to a booking by updating assigned_employee_id and employee_id
+            const { error } = await supabase
+                .from('wash_bookings')
+                .update({ 
+                    assigned_employee_id: employeeId,
+                    employee_id: employeeId,
+                    status: 'assigned', // Auto-move to assigned if currently pending
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', bookingId);
+
             if (error) throw error;
-            toast({ title: 'Status Updated ✅' });
+
+            toast({ title: 'Employee Assigned ✅' });
+            await fetchData(true); // Refetch to show latest status and info
         } catch (e: any) {
-            toast({ variant: 'destructive', title: 'Update Failed', description: extractError(e) });
+            toast({ variant: 'destructive', title: 'Assignment Failed', description: extractError(e) });
         }
     };
 
-    const formatPhone = (phone: string, status: string) => {
-        if (!phone) return '---';
-        // Mask phone until booking is confirmed or completed
-        return ['pending_assignment', 'assigned'].includes(status) 
-            ? phone.slice(0, 3) + '••••' + phone.slice(-2) 
-            : phone;
+    const handleConfirmBooking = async (bookingId: string) => {
+        try {
+            // Requirement: Update status from pending_assignment → confirmed
+            // Requirement: Update updated_at = now()
+            const { error } = await supabase
+                .from('wash_bookings')
+                .update({ 
+                    status: 'confirmed',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', bookingId);
+
+            if (error) throw error;
+
+            toast({ title: 'Booking Confirmed ✅' });
+            await fetchData(true); // Refetch to show latest status
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Confirmation Failed', description: extractError(e) });
+        }
     };
 
     if (loading && !refreshing) return <div className="flex justify-center py-24"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
@@ -147,9 +177,9 @@ export default function BusinessDashboardPage() {
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary flex items-center gap-3 italic">
                         <LayoutDashboard className="h-10 w-10" />
-                        Live Operations
+                        Operational Control
                     </h1>
-                    <p className="text-muted-foreground font-medium">Real-time requests for {business?.name || 'Your Business'}.</p>
+                    <p className="text-muted-foreground font-medium">Real-time booking management for {business?.name || 'Your Business'}.</p>
                 </div>
                 <Button variant="outline" onClick={() => fetchData(true)} className="rounded-full bg-white shadow-sm h-10 px-6 border-primary/20">
                     <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Hub
@@ -167,11 +197,11 @@ export default function BusinessDashboardPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50 border-b-2">
-                                    <TableHead className="font-black py-4 pl-6 uppercase text-[10px] tracking-widest">Client & Service</TableHead>
-                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">WhatsApp (Secured)</TableHead>
+                                    <TableHead className="font-black py-4 pl-6 uppercase text-[10px] tracking-widest">Customer & Service</TableHead>
+                                    <TableHead className="font-black uppercase text-[10px] tracking-widest">Requested Time</TableHead>
                                     <TableHead className="font-black uppercase text-[10px] tracking-widest">Staff Assignment</TableHead>
                                     <TableHead className="font-black uppercase text-[10px] tracking-widest text-center">Status</TableHead>
-                                    <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">Controls</TableHead>
+                                    <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -179,26 +209,35 @@ export default function BusinessDashboardPage() {
                                     <TableRow key={booking.id} className="hover:bg-primary/5 transition-colors border-b group">
                                         <TableCell className="pl-6 py-4">
                                             <div className="flex flex-col">
-                                                <span className="font-bold text-sm text-slate-900">{booking.customer_name || 'Customer'}</span>
-                                                <span className="text-[10px] text-primary font-black uppercase flex items-center gap-1">
+                                                <span className="font-bold text-sm text-slate-900">{booking.customer_name}</span>
+                                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                    <Phone className="h-3 w-3" /> {booking.customer_whatsapp}
+                                                </div>
+                                                <span className="text-[10px] text-primary font-black uppercase flex items-center gap-1 mt-1">
                                                     <Droplets className="h-2.5 w-2.5" /> {booking.service_name}
-                                                </span>
-                                                <span className="text-[9px] text-muted-foreground font-bold mt-0.5">
-                                                    {new Date(booking.booking_date).toLocaleDateString()} @ {new Date(booking.booking_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="font-mono text-xs font-black">
-                                            {formatPhone(booking.customer_whatsapp, booking.status)}
+                                        <TableCell>
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                                                    <Calendar className="h-3 w-3 opacity-60" /> 
+                                                    {new Date(booking.requested_time).toLocaleDateString()}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                                    <Clock className="h-3 w-3 opacity-60" /> 
+                                                    {new Date(booking.requested_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </div>
+                                            </div>
                                         </TableCell>
                                         <TableCell className="min-w-[180px]">
                                             <select 
                                                 className="h-9 w-full rounded-lg border-2 bg-white px-2 text-[11px] font-black uppercase outline-none focus:border-primary transition-all cursor-pointer"
-                                                value={booking.employee_id || booking.assigned_employee_id || ""}
-                                                onChange={(e) => handleUpdateStatus(booking.id, 'assigned', e.target.value)}
+                                                value={booking.assigned_employee_id || ""}
+                                                onChange={(e) => handleAssignEmployee(booking.id, e.target.value)}
                                                 disabled={['completed', 'cancelled', 'rejected'].includes(booking.status)}
                                             >
-                                                <option value="">-- Assign Detailer --</option>
+                                                <option value="">-- Choose Detailer --</option>
                                                 {employees.map(e => <option key={e.id} value={e.id}>{e.name.toUpperCase()}</option>)}
                                             </select>
                                         </TableCell>
@@ -215,13 +254,10 @@ export default function BusinessDashboardPage() {
                                         <TableCell className="text-right pr-6">
                                             <div className="flex justify-end gap-2">
                                                 {booking.status === 'assigned' && (
-                                                    <Button size="sm" onClick={() => handleUpdateStatus(booking.id, 'confirmed')} className="h-8 text-[10px] font-black uppercase bg-primary shadow-md">Confirm</Button>
+                                                    <Button size="sm" onClick={() => handleConfirmBooking(booking.id)} className="h-8 text-[10px] font-black uppercase bg-primary shadow-md">Confirm</Button>
                                                 )}
                                                 {booking.status === 'confirmed' && (
-                                                    <Button size="sm" onClick={() => handleUpdateStatus(booking.id, 'completed')} className="h-8 text-[10px] font-black uppercase bg-green-600 shadow-md">Finish</Button>
-                                                )}
-                                                {['pending_assignment', 'assigned'].includes(booking.status) && (
-                                                    <Button variant="ghost" size="sm" onClick={() => handleUpdateStatus(booking.id, 'rejected')} className="h-8 text-[10px] font-black uppercase text-destructive hover:bg-destructive/5">Reject</Button>
+                                                    <Badge variant="secondary" className="bg-green-100 text-green-800 font-bold text-[10px]">VERIFIED</Badge>
                                                 )}
                                             </div>
                                         </TableCell>
@@ -232,7 +268,7 @@ export default function BusinessDashboardPage() {
                                         <TableCell colSpan={5} className="h-48 text-center">
                                             <div className="flex flex-col items-center gap-2 opacity-40">
                                                 <History className="h-10 w-10 text-muted-foreground" />
-                                                <p className="font-black uppercase text-xs tracking-widest">No active wash queue.</p>
+                                                <p className="font-black uppercase text-xs tracking-widest">No bookings found.</p>
                                             </div>
                                         </TableCell>
                                     </TableRow>
