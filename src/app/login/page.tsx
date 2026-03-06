@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -67,29 +66,23 @@ export default function LoginPage() {
         body: JSON.stringify({ whatsapp })
       });
 
-      // Handle non-JSON responses gracefully
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("Server returned an invalid response format.");
-      }
-
       const result = await response.json();
 
-      if (!response.ok) {
+      if (!result.success) {
         throw new Error(result.error || 'Authentication failed');
       }
 
-      // Prototyping "Frictionless Session": 
-      // 1. Store the resolved ID for data fetching
+      // Success flow
       localStorage.setItem('customer_id', result.customer_id);
       
-      // 2. Ensure an active Supabase session exists so RLS doesn't block connection
+      // Ensure an active Supabase session exists so RLS doesn't block connection
+      // We sign in anonymously to anchor the session for public reads/writes
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         await supabase.auth.signInAnonymously();
       }
       
-      toast({ title: "Welcome Back!", description: "Opening your dashboard..." });
+      toast({ title: "Welcome Back!", description: "Opening your tracker dashboard..." });
       router.push('/customer/dashboard');
     } catch (error: any) {
       console.error("[LOGIN-CLIENT] Error:", error);
@@ -131,10 +124,10 @@ export default function LoginPage() {
               <CardHeader className="bg-white/5 border-b border-white/5">
                 <CardTitle className="text-white text-xl flex items-center gap-2">
                   <MessageCircle className="h-5 w-5 text-green-500" />
-                  WhatsApp Access
+                  Instant Access
                 </CardTitle>
                 <CardDescription className="text-slate-400">
-                  Enter your number to track your active services.
+                  Enter your number to view your carwash status.
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-8">
@@ -155,7 +148,7 @@ export default function LoginPage() {
                   </Button>
                   <p className="text-[10px] text-center text-slate-500 font-medium">
                     <AlertCircle className="h-3 w-3 inline mr-1" />
-                    No account found? Place your first booking to register.
+                    First-time user? An account will be created automatically.
                   </p>
                 </form>
               </CardContent>

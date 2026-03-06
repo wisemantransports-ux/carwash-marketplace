@@ -1,65 +1,110 @@
-
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
 /**
  * @fileOverview Customer Login API
- * Resolves a customer's identity using only their WhatsApp number.
- * Ensures strict JSON responses to prevent parsing errors.
+ * Implements frictionless login using WhatsApp number.
+ * Auto-creates auth user if missing and returns active bookings.
  */
 
 export async function POST(req: Request) {
   try {
-    // 1. Safely parse body
     const body = await req.json().catch(() => ({}));
     const { whatsapp } = body;
 
     if (!whatsapp) {
       return NextResponse.json(
-        { error: 'WhatsApp number is required.' }, 
+        { success: false, error: 'WhatsApp number is required.' }, 
         { status: 400 }
       );
     }
 
-    // 2. Normalize number
+    // 1. Normalize number (remove non-digits)
     const cleanWa = whatsapp.trim().replace(/\D/g, '');
+    
+    // Check if number is at least 8 digits
+    if (cleanWa.length < 8) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid WhatsApp number format.' }, 
+        { status: 400 }
+      );
+    }
 
-    // 3. Query auth users via Admin API
+    // 2. Query auth users via Admin API
     const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
     
     if (listError) {
       console.error('[LOGIN-API] Admin List Error:', listError);
       return NextResponse.json(
-        { error: 'Database connection failed.' }, 
+        { success: false, error: 'Identity provider connection failed.' }, 
         { status: 500 }
       );
     }
 
-    // 4. Match user by phone or metadata
-    const foundUser = users.find(u => 
+    // Match user by phone or metadata (handling + prefix)
+    let foundUser = users.find(u => 
       u.phone === cleanWa || 
       u.phone === `+${cleanWa}` || 
       u.user_metadata?.whatsapp === cleanWa
     );
 
+    let customerId: string;
+
+    // 3. Auto-create user if not found
     if (!foundUser) {
-      return NextResponse.json(
-        { error: 'No account found. Please place a booking first.' }, 
-        { status: 404 }
-      );
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        phone: cleanWa,
+        phone_confirm: true,
+        user_metadata: { role: 'customer', whatsapp: cleanWa, name: 'Customer' },
+        // Random password since they use WhatsApp identity
+        password: Math.random().toString(36).slice(-16) 
+      });
+
+      if (createError) {
+        console.error('[LOGIN-API] User Creation Error:', createError);
+        return NextResponse.json(
+          { success: false, error: createError.message }, 
+          { status: 500 }
+        );
+      }
+      
+      customerId = newUser.user.id;
+
+      // Sync to public.users table
+      await supabaseAdmin.from('users').upsert({
+        id: customerId,
+        name: 'Customer',
+        whatsapp_number: cleanWa,
+        role: 'customer',
+        is_verified: true
+      });
+    } else {
+      customerId = foundUser.id;
     }
 
-    // 5. Success
+    // 4. Retrieve Wash Bookings for this customer
+    const { data: bookings, error: bookingError } = await supabaseAdmin
+      .from('wash_bookings')
+      .select('id, status, wash_service_id, assigned_employee_id, requested_time, booking_date, location')
+      .eq('customer_id', customerId)
+      .order('requested_time', { ascending: false });
+
+    if (bookingError) {
+      console.error('[LOGIN-API] Booking Fetch Error:', bookingError);
+      // We still return success for the login itself even if bookings fetch fails
+    }
+
+    // 5. Return success JSON
     return NextResponse.json({ 
       success: true,
-      customer_id: foundUser.id,
-      whatsapp: cleanWa 
+      customer_id: customerId,
+      active_bookings: bookings || []
     });
 
   } catch (err: any) {
     console.error('[LOGIN-API] Fatal Error:', err);
     return NextResponse.json(
-      { error: err.message || 'An unexpected error occurred during login.' }, 
+      { success: false, error: err.message || 'An unexpected error occurred during login.' }, 
       { status: 500 }
     );
   }
