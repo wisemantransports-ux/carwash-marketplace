@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ShieldCheck, ArrowLeft, MessageCircle, Smartphone, CheckCircle2, Mail, Lock } from "lucide-react";
+import { Loader2, ShieldCheck, ArrowLeft, MessageCircle, Mail, Lock, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import Link from 'next/link';
@@ -18,9 +18,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   
   // WhatsApp State
-  const [whatsappStep, setWhatsappStep] = useState<'phone' | 'otp'>('phone');
   const [whatsapp, setWhatsapp] = useState('');
-  const [otp, setOtp] = useState('');
 
   // Email State
   const [email, setEmail] = useState('');
@@ -37,7 +35,6 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      // Fetch role for redirect
       const { data: profile } = await supabase
         .from('users')
         .select('role')
@@ -55,70 +52,31 @@ export default function LoginPage() {
     }
   };
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleCustomerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!whatsapp.trim()) return;
 
     setLoading(true);
     try {
-      const cleanWa = whatsapp.trim().replace(/\D/g, '');
-      const { data: user, error: findError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('whatsapp_number', cleanWa)
-        .maybeSingle();
-
-      if (!user) {
-        toast({ 
-          variant: "destructive", 
-          title: "Number Not Found", 
-          description: "This WhatsApp number isn't registered yet. Please book a wash or contact a seller first." 
-        });
-        setLoading(false);
-        return;
-      }
-
-      const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiry = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-      await supabase
-        .from('users')
-        .update({ otp_code: generatedOtp, otp_expires_at: expiry })
-        .eq('id', user.id);
-
-      console.log(`[DEV] WhatsApp OTP for ${cleanWa}: ${generatedOtp}`);
-      toast({ title: "Code Sent", description: "Check your WhatsApp for the code." });
-      setWhatsappStep('otp');
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const cleanWa = whatsapp.trim().replace(/\D/g, '');
-      const { data: user } = await supabase
-        .from('users')
-        .select('*')
-        .eq('whatsapp_number', cleanWa)
-        .single();
-
-      if (user.otp_code !== otp) throw new Error("Invalid verification code.");
-      
-      const { error: sessionError } = await supabase.auth.signInAnonymously({
-        options: { data: { role: 'customer', name: user.name, whatsapp: cleanWa } }
+      const response = await fetch('/api/customer-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ whatsapp })
       });
 
-      if (sessionError) throw sessionError;
+      const result = await response.json();
 
-      toast({ title: "Verified Successfully!" });
-      router.push('/customer/home');
+      if (!response.ok) {
+        throw new Error(result.error || 'Authentication failed');
+      }
+
+      // Store identity locally for the dashboard to use
+      localStorage.setItem('customer_id', result.customer_id);
+      
+      toast({ title: "Welcome Back!", description: "Opening your activity tracker..." });
+      router.push('/customer/bookings');
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Verification Failed", description: error.message });
+      toast({ variant: "destructive", title: "Login Error", description: error.message });
     } finally {
       setLoading(false);
     }
@@ -138,7 +96,7 @@ export default function LoginPage() {
             </div>
           </div>
           <h1 className="text-3xl font-black tracking-tight text-white uppercase italic">AutoLink Africa</h1>
-          <p className="text-slate-400 font-medium">Secure platform authentication center.</p>
+          <p className="text-slate-400 font-medium">Platform Authentication Center</p>
         </div>
 
         <Tabs defaultValue="customer" className="w-full">
@@ -152,50 +110,33 @@ export default function LoginPage() {
               <CardHeader className="bg-white/5 border-b border-white/5">
                 <CardTitle className="text-white text-xl flex items-center gap-2">
                   <MessageCircle className="h-5 w-5 text-green-500" />
-                  WhatsApp OTP
+                  WhatsApp Access
                 </CardTitle>
                 <CardDescription className="text-slate-400">
-                  {whatsappStep === 'phone' ? 'Enter your registered number.' : 'Enter the 6-digit code.'}
+                  Access your tracking dashboard using your number.
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-8">
-                {whatsappStep === 'phone' ? (
-                  <form onSubmit={handleSendOtp} className="space-y-6">
-                    <div className="space-y-2">
-                      <Label className="text-slate-300 font-bold uppercase text-[10px] tracking-widest ml-1">WhatsApp Number</Label>
-                      <Input 
-                        placeholder="26777123456" 
-                        className="h-14 bg-white/5 border-white/10 text-white text-lg rounded-2xl" 
-                        value={whatsapp}
-                        onChange={e => setWhatsapp(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={loading}>
-                      {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Send Code"}
-                    </Button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleVerifyOtp} className="space-y-6">
-                    <div className="space-y-2">
-                      <Label className="text-slate-300 font-bold uppercase text-[10px] tracking-widest ml-1">Verification Code</Label>
-                      <Input 
-                        placeholder="••••••" 
-                        maxLength={6}
-                        className="h-16 bg-white/5 border-white/10 text-white text-3xl font-black text-center tracking-[0.5em] rounded-2xl" 
-                        value={otp}
-                        onChange={e => setOtp(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl bg-green-600 hover:bg-green-700" disabled={loading}>
-                      {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Verify Identity"}
-                    </Button>
-                    <Button variant="link" className="w-full text-slate-500 font-bold text-xs" onClick={() => setWhatsappStep('phone')}>
-                      Use a different number
-                    </Button>
-                  </form>
-                )}
+                <form onSubmit={handleCustomerLogin} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label className="text-slate-300 font-bold uppercase text-[10px] tracking-widest ml-1">WhatsApp Number</Label>
+                    <Input 
+                      id="whatsapp"
+                      placeholder="26770000000" 
+                      className="h-14 bg-white/5 border-white/10 text-white text-lg rounded-2xl" 
+                      value={whatsapp}
+                      onChange={e => setWhatsapp(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={loading}>
+                    {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Sign In to Tracker"}
+                  </Button>
+                  <p className="text-[10px] text-center text-slate-500 font-medium">
+                    <AlertCircle className="h-3 w-3 inline mr-1" />
+                    No account found? Place your first booking to register.
+                  </p>
+                </form>
               </CardContent>
             </Card>
           </TabsContent>
@@ -213,31 +154,25 @@ export default function LoginPage() {
                 <form onSubmit={handlePartnerLogin} className="space-y-6">
                   <div className="space-y-2">
                     <Label className="text-slate-300 font-bold uppercase text-[10px] tracking-widest ml-1">Email Address</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
-                      <Input 
-                        type="email"
-                        placeholder="partner@example.com" 
-                        className="pl-10 h-14 bg-white/5 border-white/10 text-white rounded-2xl" 
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        required
-                      />
-                    </div>
+                    <Input 
+                      type="email"
+                      placeholder="partner@example.com" 
+                      className="h-14 bg-white/5 border-white/10 text-white rounded-2xl" 
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-slate-300 font-bold uppercase text-[10px] tracking-widest ml-1">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
-                      <Input 
-                        type="password"
-                        placeholder="••••••••" 
-                        className="pl-10 h-14 bg-white/5 border-white/10 text-white rounded-2xl" 
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        required
-                      />
-                    </div>
+                    <Input 
+                      type="password"
+                      placeholder="••••••••" 
+                      className="h-14 bg-white/5 border-white/10 text-white rounded-2xl" 
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      required
+                    />
                   </div>
                   <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={loading}>
                     {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Sign In to Dashboard"}
