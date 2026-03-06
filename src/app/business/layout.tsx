@@ -1,4 +1,3 @@
-
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
 import { LayoutDashboard, Users, DollarSign, CreditCard, AlertCircle, Lock, UserCircle, Receipt, Package, Loader2, MapPin, CarFront, Droplets } from "lucide-react";
@@ -9,6 +8,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 
 /**
  * @fileOverview Business Dashboard Layout
@@ -17,21 +17,16 @@ import { usePathname } from "next/navigation";
  */
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user, loading: authLoading } = useAuth();
   const [business, setBusiness] = useState<Business | null>(null);
   const [isRestricted, setIsRestricted] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    if (!isSupabaseConfigured) {
-      setLoading(false);
-      return;
-    }
+    if (!user) return;
     
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       // 1. Status Check (RBAC & Subscription)
       const { data: profile } = await supabase
         .from('users')
@@ -44,7 +39,6 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
       const trialExpiry = profile?.trial_expiry ? new Date(profile.trial_expiry) : null;
       const isTrialValid = trialExpiry ? trialExpiry > now : false;
       
-      // Admin is never restricted; customers shouldn't be in this layout
       const restricted = profile?.role === 'business-owner' && !isPaid && !isTrialValid;
       setIsRestricted(restricted);
 
@@ -61,13 +55,14 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (!authLoading) {
+      fetchData();
+    }
+  }, [authLoading, fetchData]);
 
-  // Block sensitive operations if restricted
   const sensitivePaths = [
     "/business/dashboard", 
     "/business/locations", 
@@ -93,12 +88,11 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     { href: "/business/profile", label: "Credentials", icon: UserCircle },
   ];
 
-  // Only show Subscription and Profile in nav if restricted
   const filteredNavItems = !isRestricted 
     ? navItems 
     : navItems.filter(item => ["/business/subscription", "/business/profile"].includes(item.href));
 
-  if (loading) return (
+  if (authLoading || loading) return (
     <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-slate-50">
       <Loader2 className="animate-spin h-10 w-10 text-primary" />
       <p className="text-sm text-muted-foreground animate-pulse font-black tracking-widest uppercase">ALM Partner Gating</p>

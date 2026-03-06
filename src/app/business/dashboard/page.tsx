@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 interface Booking {
   id: string;
@@ -32,19 +33,19 @@ interface Booking {
 }
 
 export default function BusinessDashboardPage() {
+    const { user, loading: authLoading } = useAuth();
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [employees, setEmployees] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
     const fetchData = useCallback(async (silent = false) => {
+        if (!user) return;
+
         if (!silent) setLoading(true);
         else setRefreshing(true);
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-
             // 1. Find the business ID for this owner
             const { data: biz } = await supabase
                 .from('businesses')
@@ -58,7 +59,7 @@ export default function BusinessDashboardPage() {
                 return;
             }
 
-            // 2. Fetch Bookings using the business ID (not auth user ID)
+            // 2. Fetch Bookings using the business ID
             const { data: bData, error: bErr } = await supabase
                 .from('wash_bookings')
                 .select('*')
@@ -87,23 +88,24 @@ export default function BusinessDashboardPage() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => {
-        fetchData();
-        
-        // Real-time subscription
-        const channel = supabase
-            .channel('wash-realtime-dashboard')
-            .on('postgres_changes', { 
-                event: '*', 
-                schema: 'public', 
-                table: 'wash_bookings' 
-            }, () => fetchData(true))
-            .subscribe();
+        if (!authLoading && user) {
+            fetchData();
+            
+            const channel = supabase
+                .channel(`wash-realtime-${user.id}`)
+                .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'wash_bookings' 
+                }, () => fetchData(true))
+                .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
-    }, [fetchData]);
+            return () => { supabase.removeChannel(channel); };
+        }
+    }, [authLoading, user, fetchData]);
 
     const handleAssignEmployee = async (bookingId: string, employeeId: string) => {
         try {
@@ -119,7 +121,6 @@ export default function BusinessDashboardPage() {
 
             if (error) throw error;
             toast({ title: 'Employee Assigned' });
-            // Local state update for immediate feedback
             setBookings(prev => prev.map(b => 
                 b.id === bookingId ? { ...b, assigned_employee_id: employeeId, status: 'assigned' } : b
             ));
@@ -148,7 +149,7 @@ export default function BusinessDashboardPage() {
         }
     };
 
-    if (loading && !refreshing) return (
+    if (authLoading || (loading && !refreshing)) return (
         <div className="flex flex-col items-center justify-center py-24 space-y-4">
             <Loader2 className="animate-spin h-10 w-10 text-primary" />
             <p className="text-sm font-black text-muted-foreground uppercase tracking-widest animate-pulse">Syncing Operational Hub...</p>

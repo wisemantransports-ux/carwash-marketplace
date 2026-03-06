@@ -11,6 +11,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/use-auth";
 
 type NavItem = {
     href: string;
@@ -35,21 +36,15 @@ function AutoLinkLogo() {
 }
 
 function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, loading: boolean }) {
+    const { signOut } = useAuth();
+
     const handleSignOut = async () => {
-        try {
-            if (isSupabaseConfigured) {
-                await supabase.auth.signOut();
-            }
-            window.location.href = '/login';
-        } catch (error) {
-            console.error('Error signing out:', error);
-            window.location.href = '/login';
-        }
+        await signOut();
+        window.location.href = '/login';
     };
 
     if (loading) return <div className="flex justify-center p-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>;
     
-    // Fallback profile for unconfigured dev state
     const displayProfile = userProfile || { 
         name: 'Guest User', 
         email: 'unconfigured@local', 
@@ -94,14 +89,11 @@ function UserMenu({ userProfile, loading }: { userProfile: ProfileUser | null, l
 export default function SharedLayout({ children, navItems: rawNavItems, role }: SharedLayoutProps) {
     const pathname = usePathname();
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
     const [userProfile, setUserProfile] = useState<ProfileUser | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [profileLoading, setProfileLoading] = useState(true);
 
     const fetchProfile = useCallback(async (userId: string) => {
-        if (!isSupabaseConfigured) {
-            setLoading(false);
-            return;
-        }
         try {
             const { data, error } = await supabase
                 .from('users')
@@ -112,43 +104,31 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
             if (data) {
                 setUserProfile(data as ProfileUser);
             } else {
-                // If user doesn't exist in our table yet but is authed
                 setUserProfile({ id: userId, role: 'customer' } as any);
             }
         } catch (e) {
             console.error("[LAYOUT] Fetch failure:", e);
         } finally {
-            setLoading(false);
+            setProfileLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        const checkSession = async () => {
-            if (!isSupabaseConfigured) {
-                setLoading(false);
-                return;
+        if (!authLoading) {
+            if (!user) {
+                router.replace('/login');
+            } else {
+                fetchProfile(user.id);
             }
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session?.user?.id) {
-                    router.replace('/login');
-                    return;
-                }
-                await fetchProfile(session.user.id);
-            } catch (e) {
-                console.error("[LAYOUT] Session check failed:", e);
-                setLoading(false);
-            }
-        };
-        checkSession();
-    }, [router, fetchProfile]);
+        }
+    }, [authLoading, user, router, fetchProfile]);
 
     const navItems: NavItem[] = rawNavItems.map(item => ({
         ...item,
         active: pathname === item.href,
     }));
 
-    if (loading) return (
+    if (authLoading || profileLoading) return (
         <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-slate-50">
             <Loader2 className="animate-spin h-10 w-10 text-primary" />
             <p className="text-sm font-black text-slate-400 uppercase tracking-widest animate-pulse">ALM Secure Session</p>
@@ -179,7 +159,7 @@ export default function SharedLayout({ children, navItems: rawNavItems, role }: 
                     </SidebarMenu>
                 </SidebarContent>
                 <div className="mt-auto p-3 border-t bg-muted/5">
-                    <UserMenu userProfile={userProfile} loading={loading} />
+                    <UserMenu userProfile={userProfile} loading={profileLoading} />
                 </div>
             </Sidebar>
             <SidebarInset>

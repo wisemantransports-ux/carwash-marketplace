@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 interface Booking {
   id: string;
@@ -28,25 +29,19 @@ interface Booking {
 }
 
 export default function CustomerDashboardPage() {
+    const { user, loading: authLoading } = useAuth();
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
     const fetchData = useCallback(async (silent = false) => {
+        if (!user) return;
+        
         if (!silent) setLoading(true);
         else setRefreshing(true);
 
         try {
-            // 1. Get Identity STRICTLY from Auth
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (!user) {
-                console.warn("[CUSTOMER-DASHBOARD] No authenticated user found.");
-                setBookings([]);
-                return;
-            }
-
-            // 2. Fetch Wash Bookings - Filtered by AUTH.UID()
+            // 1. Fetch Wash Bookings - Filtered by current user
             const { data: bData, error: bErr } = await supabase
                 .from('wash_bookings')
                 .select('*')
@@ -56,7 +51,7 @@ export default function CustomerDashboardPage() {
             if (bErr) throw bErr;
 
             if (bData && bData.length > 0) {
-                // 3. STAGE 2: Parallel Fetching for Metadata (Manual Wiring Pattern)
+                // 2. STAGE 2: Parallel Fetching for Metadata (Manual Wiring Pattern)
                 const bizIds = [...new Set(bData.map(b => b.seller_business_id))];
                 const empIds = [...new Set(bData.filter(b => b.assigned_employee_id).map(b => b.assigned_employee_id))];
                 const svcIds = [...new Set(bData.map(b => b.wash_service_id))];
@@ -71,7 +66,7 @@ export default function CustomerDashboardPage() {
                 const empMap = (empRes.data || []).reduce((acc: any, e: any) => ({ ...acc, [e.id]: e.name }), {});
                 const svcMap = (svcRes.data || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s.name }), {});
 
-                // 4. STAGE 3: In-Memory Wiring
+                // 3. STAGE 3: In-Memory Wiring
                 const enriched = bData.map(b => ({
                     ...b,
                     business: bizMap[b.seller_business_id],
@@ -91,23 +86,26 @@ export default function CustomerDashboardPage() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => {
-        fetchData();
-        
-        // Real-time subscription for instant status updates
-        const channel = supabase
-            .channel('customer-realtime')
-            .on('postgres_changes', { 
-                event: '*', 
-                schema: 'public', 
-                table: 'wash_bookings' 
-            }, () => fetchData(true))
-            .subscribe();
+        if (!authLoading && user) {
+            fetchData();
+            
+            // Real-time subscription for instant status updates
+            const channel = supabase
+                .channel(`customer-realtime-${user.id}`)
+                .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'wash_bookings',
+                    filter: `customer_id=eq.${user.id}`
+                }, () => fetchData(true))
+                .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
-    }, [fetchData]);
+            return () => { supabase.removeChannel(channel); };
+        }
+    }, [authLoading, user, fetchData]);
 
     const handleCancel = async (id: string) => {
         if (!confirm('Are you sure you want to cancel this request?')) return;
@@ -125,7 +123,7 @@ export default function CustomerDashboardPage() {
         }
     };
 
-    if (loading && !refreshing) return (
+    if (authLoading || (loading && !refreshing)) return (
         <div className="flex flex-col items-center justify-center py-24 space-y-4">
             <Loader2 className="animate-spin h-10 w-10 text-primary" />
             <p className="text-sm font-black text-muted-foreground uppercase tracking-widest animate-pulse">Syncing Tracker...</p>
