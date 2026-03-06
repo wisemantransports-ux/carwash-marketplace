@@ -18,93 +18,98 @@ interface BookingModalProps {
 }
 
 /**
- * Handle bookings for users who may be anonymous or returning.
- * Ensures a 'customers' record exists and links the booking to it.
+ * processBooking
+ * Atomicly ensures identity and creates a service record.
  */
 async function processBooking({
   customerName,
   whatsappNumber,
-  serviceId,
-  scheduledAt
+  customerEmail,
+  service,
+  scheduledAt,
+  locationText
 }: {
   customerName: string;
   whatsappNumber: string;
-  serviceId: string;
+  customerEmail?: string;
+  service: any;
   scheduledAt: Date;
+  locationText: string;
 }) {
   try {
-    // 1. Ensure Auth Session
+    // 1. Ensure Auth Session (SignIn Anonymously if missing)
     let { data: { user: authUser } } = await supabase.auth.getUser();
     
     if (!authUser) {
       const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-      if (anonError) throw { step: 'auth', message: anonError.message, details: anonError };
+      if (anonError) throw { step: 'auth', message: anonError.message };
       authUser = anonData.user;
     }
 
-    if (!authUser) throw { step: 'auth', message: 'Failed to establish auth session', details: null };
+    if (!authUser) throw { step: 'auth', message: 'Identity establishment failed' };
 
-    // 2. Check/Create Customer Record
-    let customerData = null;
+    // 2. Resolve/Create Customer Record
     const { data: existingCustomer, error: fetchError } = await supabase
       .from('customers')
       .select('*')
       .eq('auth_id', authUser.id)
       .maybeSingle();
 
-    if (fetchError) throw { step: 'customer_lookup', message: fetchError.message, details: fetchError };
+    if (fetchError) throw { step: 'customer_lookup', message: fetchError.message };
+
+    let customerData = existingCustomer;
 
     if (!existingCustomer) {
       const { data: newCustomer, error: createError } = await supabase
-        .from('customers')
-        .insert([{
-          auth_id: authUser.id,
-          whatsapp_number: whatsappNumber,
-          full_name: customerName,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
+          .from('customers')
+          .insert([{
+            auth_id: authUser.id,
+            whatsapp_number: whatsappNumber,
+            full_name: customerName,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+          .select()
+          .single();
 
-      if (createError) throw { step: 'customer_creation', message: createError.message, details: createError };
+      if (createError) throw { step: 'customer_creation', message: createError.message };
       customerData = newCustomer;
-    } else {
-      customerData = existingCustomer;
     }
 
-    // 3. Create Booking linked to customer_id
+    // 3. Create Wash Booking using schema-authoritative columns
     const { data: bookingData, error: bookingError } = await supabase
-      .from('bookings')
+      .from('wash_bookings')
       .insert([{
         customer_id: customerData.id,
-        service_id: serviceId,
-        scheduled_at: scheduledAt.toISOString(),
-        status: 'pending',
+        business_id: service.business_id,
+        seller_business_id: service.business_id,
+        wash_service_id: service.id,
+        customer_name: customerName,
+        customer_whatsapp: whatsappNumber,
+        customer_email: customerEmail || null,
+        requested_time: scheduledAt.toISOString(),
+        booking_date: scheduledAt.toISOString().split('T')[0],
+        location: locationText,
+        status: 'pending_assignment',
+        verified: false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }])
       .select()
       .single();
 
-    if (bookingError) throw { step: 'booking_insert', message: bookingError.message, details: bookingError };
+    if (bookingError) throw { step: 'booking_insert', message: bookingError.message };
 
-    // 4. Return Success JSON
-    return {
-      customer: customerData,
-      booking: bookingData,
-      error: null
-    };
+    return { customer: customerData, booking: bookingData, error: null };
 
   } catch (err: any) {
-    console.error("Booking Logic Error:", err);
+    console.error("Booking Flow Error:", err);
     return {
       customer: null,
       booking: null,
       error: {
-        step: err.step || 'unknown',
-        message: err.message || 'An unexpected database error occurred',
-        details: err.details || err
+        step: err.step || 'db',
+        message: err.message || 'Transaction interrupted'
       }
     };
   }
@@ -138,22 +143,21 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     const result = await processBooking({
       customerName: name,
       whatsappNumber: whatsapp,
-      serviceId: service.id,
-      scheduledAt: new Date(`${date}T${time}`)
+      customerEmail: email,
+      service: service,
+      scheduledAt: new Date(`${date}T${time}`),
+      locationText: locationText
     });
 
     if (result.error) {
       toast({
         variant: "destructive",
-        title: `Booking Failed (${result.error.step})`,
+        title: `Booking Interrupted (${result.error.step})`,
         description: result.error.message
       });
       setLoading(false);
     } else {
-      toast({
-        title: "Booking Confirmed",
-        description: "Your carwash booking has been submitted."
-      });
+      toast({ title: "Request Sent!", description: "The partner has been notified of your wash request." });
       onClose();
       router.push("/customer/bookings");
     }
