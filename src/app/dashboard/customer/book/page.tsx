@@ -13,6 +13,12 @@ import { Loader2, Droplets, MapPin, Calendar, Clock, ArrowLeft, ShieldCheck } fr
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+/**
+ * @fileOverview Dashboard Booking Page
+ * Strictly uses wash_services table for UUID compatibility.
+ * Always sends customer_id from current session.
+ */
+
 export default function BookServicePage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -44,6 +50,7 @@ export default function BookServicePage() {
   useEffect(() => {
     if (selectedBiz) {
       const fetchServices = async () => {
+        // Query wash_services for valid UUIDs
         const { data, error } = await supabase
           .from('wash_services')
           .select('id, name, price')
@@ -77,11 +84,11 @@ export default function BookServicePage() {
     }
 
     const payload = {
-      customer_id: user.id,
+      customer_id: user.id, // Mandatory for logged in users
       customer_name: user.user_metadata?.name || 'Customer',
       customer_whatsapp: user.phone || user.user_metadata?.whatsapp || 'No Phone',
       customer_email: user.email || null,
-      wash_service_id: selectedSvc, 
+      wash_service_id: selectedSvc, // MUST BE UUID from wash_services
       business_id: selectedBiz,
       seller_business_id: selectedBiz,
       location: location,
@@ -90,7 +97,11 @@ export default function BookServicePage() {
       status: 'pending_assignment'
     };
 
-    console.log("[BOOKING-DEBUG] Submission Payload:", payload);
+    console.log("[DASHBOARD-BOOKING-DEBUG] Payload Submission:", {
+      wash_service_id: selectedSvc,
+      customer_id: user.id,
+      business_id: selectedBiz
+    });
 
     setSubmitting(true);
     try {
@@ -98,11 +109,15 @@ export default function BookServicePage() {
 
       if (error) throw error;
 
-      toast({ title: 'Success', description: 'Your wash request has been submitted.' });
+      toast({ title: 'Success! ✅', description: 'Your wash request has been submitted.' });
       router.push('/dashboard/customer/bookings');
     } catch (e: any) {
       console.error("Booking Error:", e);
-      toast({ variant: 'destructive', title: 'Booking Failed', description: e.message });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Booking Failed', 
+        description: e.message || 'Check console for constraint details.' 
+      });
     } finally {
       setSubmitting(false);
     }
@@ -142,7 +157,9 @@ export default function BookServicePage() {
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Wash Package</Label>
               <Select value={selectedSvc} onValueChange={setSelectedSvc} disabled={!selectedBiz}>
-                <SelectTrigger className="h-14 rounded-2xl border-2"><SelectValue placeholder="Select service" /></SelectTrigger>
+                <SelectTrigger className="h-14 rounded-2xl border-2">
+                  <SelectValue placeholder="Select service" />
+                </SelectTrigger>
                 <SelectContent>
                   {services.map(s => (
                     <SelectItem key={s.id} value={s.id}>
@@ -189,7 +206,7 @@ export default function BookServicePage() {
             Confirm Reservation
           </Button>
           <p className="text-center text-[10px] text-muted-foreground font-bold mt-4 uppercase tracking-widest">
-            Payment will be handled directly with the partner upon service.
+            Identity matched to: {user.email}
           </p>
         </div>
       </form>

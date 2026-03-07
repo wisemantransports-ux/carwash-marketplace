@@ -14,9 +14,12 @@ import { useAuth } from "@/hooks/use-auth";
 interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  service: any;
+  service: any; // Can be from listings or wash_services
 }
 
+/**
+ * Robust error message extraction for Supabase and standard JS errors.
+ */
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
@@ -59,10 +62,10 @@ async function processBooking({
     const { data: { user: authUser } } = await supabase.auth.getUser();
 
     const payload = {
-      customer_id: authUser?.id || null, 
+      customer_id: authUser?.id || null, // NULL triggers auto-account creation
       business_id: service.business_id,
       seller_business_id: service.business_id,
-      wash_service_id: service.id, // Using service UUID
+      wash_service_id: service.id, // EXPECTS UUID
       customer_name: customerName,
       customer_whatsapp: whatsappNumber,
       customer_email: customerEmail || null,
@@ -72,7 +75,10 @@ async function processBooking({
       status: 'pending_assignment'
     };
 
-    console.log("[MODAL-BOOKING-DEBUG] Submission Payload:", payload);
+    console.log("[MODAL-BOOKING-DEBUG] Submission Payload:", {
+      wash_service_id: service.id,
+      customer_id: authUser?.id || 'ANONYMOUS (Triggering Auto-Account)'
+    });
 
     const { data: bookingData, error: bookingError } = await supabase
       .from('wash_bookings')
@@ -146,6 +152,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     } else {
       toast({ title: "Success! ✅", description: "Your booking has been requested." });
       onClose();
+      // Redirect authenticated users to their tracker
       if (initialAuthUser) {
         router.push("/dashboard/customer/bookings");
       }
