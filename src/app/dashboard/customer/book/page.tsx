@@ -15,7 +15,7 @@ import Link from 'next/link';
 
 export default function BookServicePage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -54,38 +54,49 @@ export default function BookServicePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !selectedBiz || !selectedSvc || !date || !time) {
+    
+    // Ensure identity
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) {
+      toast({ variant: 'destructive', title: 'Session Expired', description: 'Please sign in again.' });
+      router.push('/login');
+      return;
+    }
+
+    if (!selectedBiz || !selectedSvc || !date || !time) {
       toast({ variant: 'destructive', title: 'Details Required' });
       return;
     }
 
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.from('wash_bookings').insert({
-        customer_id: user.id,
-        customer_name: user.user_metadata?.name || 'Customer',
-        customer_whatsapp: user.user_metadata?.whatsapp || user.phone || 'No Phone',
+      const { error } = await supabase.from('wash_bookings').insert({
+        customer_id: currentUser.id,
+        customer_name: currentUser.user_metadata?.name || 'Customer',
+        customer_whatsapp: currentUser.phone || currentUser.user_metadata?.whatsapp || 'No Phone',
+        customer_email: currentUser.email || null,
         wash_service_id: selectedSvc,
         business_id: selectedBiz,
         seller_business_id: selectedBiz,
         location: location,
         booking_date: date,
         requested_time: `${date}T${time}:00`,
-        booking_status: 'pending_assignment'
-      }).select().single();
+        status: 'pending_assignment'
+      });
 
       if (error) throw error;
 
-      toast({ title: 'Booking Requested!', description: 'Connecting you with the partner.' });
-      router.push(`/dashboard/customer/bookings/${data.id}`);
+      toast({ title: 'Your booking has been submitted successfully.', description: 'Connecting you with the partner.' });
+      router.push('/dashboard/customer/bookings');
     } catch (e: any) {
+      console.error("Booking Error:", e);
       toast({ variant: 'destructive', title: 'Booking Failed', description: e.message });
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
+  if (authLoading || loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-8">
@@ -93,13 +104,13 @@ export default function BookServicePage() {
         <Button variant="ghost" size="icon" asChild className="rounded-full">
           <Link href="/dashboard/customer"><ArrowLeft className="h-5 w-5" /></Link>
         </Button>
-        <h1 className="text-3xl font-black uppercase italic tracking-tight">Request Wash</h1>
+        <h1 className="text-3xl font-black uppercase italic tracking-tight text-slate-900">Request Wash</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="rounded-3xl border-2 shadow-xl overflow-hidden">
-          <CardHeader className="bg-slate-900 text-white p-6">
-            <CardTitle className="flex items-center gap-2">
+        <Card className="rounded-[2.5rem] border-2 shadow-xl overflow-hidden">
+          <CardHeader className="bg-slate-900 text-white p-8">
+            <CardTitle className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight">
               <Droplets className="h-6 w-6 text-primary" />
               Service Preferences
             </CardTitle>

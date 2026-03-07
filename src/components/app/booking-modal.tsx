@@ -19,7 +19,7 @@ interface BookingModalProps {
 
 /**
  * processBooking
- * Atomicly ensures identity and creates a service record.
+ * Rule: If logged in, send customer_id. If public, send null.
  */
 async function processBooking({
   customerName,
@@ -37,50 +37,15 @@ async function processBooking({
   locationText: string;
 }) {
   try {
-    // 1. Ensure Auth Session (SignIn Anonymously if missing)
-    let { data: { user: authUser } } = await supabase.auth.getUser();
-    
-    if (!authUser) {
-      const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-      if (anonError) throw { step: 'auth', message: anonError.message };
-      authUser = anonData.user;
-    }
+    // 1. Get Logged In User (if any)
+    const { data: { user: authUser } } = await supabase.auth.getUser();
 
-    if (!authUser) throw { step: 'auth', message: 'Identity establishment failed' };
-
-    // 2. Resolve/Create Customer Record
-    const { data: existingCustomer, error: fetchError } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('auth_id', authUser.id)
-      .maybeSingle();
-
-    if (fetchError) throw { step: 'customer_lookup', message: fetchError.message };
-
-    let customerData = existingCustomer;
-
-    if (!existingCustomer) {
-      const { data: newCustomer, error: createError } = await supabase
-          .from('customers')
-          .insert([{
-            auth_id: authUser.id,
-            whatsapp_number: whatsappNumber,
-            full_name: customerName,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }])
-          .select()
-          .single();
-
-      if (createError) throw { step: 'customer_creation', message: createError.message };
-      customerData = newCustomer;
-    }
-
-    // 3. Create Wash Booking using schema-authoritative columns
+    // 2. Create Booking
+    // If authUser is null, the trigger on wash_bookings will create the customer record
     const { data: bookingData, error: bookingError } = await supabase
       .from('wash_bookings')
       .insert([{
-        customer_id: customerData.id,
+        customer_id: authUser?.id || null, 
         business_id: service.business_id,
         seller_business_id: service.business_id,
         wash_service_id: service.id,
@@ -90,27 +55,20 @@ async function processBooking({
         requested_time: scheduledAt.toISOString(),
         booking_date: scheduledAt.toISOString().split('T')[0],
         location: locationText,
-        status: 'pending_assignment',
-        verified: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        status: 'pending_assignment'
       }])
       .select()
       .single();
 
-    if (bookingError) throw { step: 'booking_insert', message: bookingError.message };
+    if (bookingError) throw bookingError;
 
-    return { customer: customerData, booking: bookingData, error: null };
+    return { booking: bookingData, error: null };
 
   } catch (err: any) {
     console.error("Booking Flow Error:", err);
     return {
-      customer: null,
       booking: null,
-      error: {
-        step: err.step || 'db',
-        message: err.message || 'Transaction interrupted'
-      }
+      error: err.message || 'Booking request failed'
     };
   }
 }
@@ -152,14 +110,19 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     if (result.error) {
       toast({
         variant: "destructive",
-        title: `Booking Interrupted (${result.error.step})`,
-        description: result.error.message
+        title: "Booking Failed",
+        description: result.error
       });
       setLoading(false);
     } else {
-      toast({ title: "Request Sent!", description: "The partner has been notified of your wash request." });
+      toast({ title: "Booking Submitted Successfully!", description: "The partner has been notified." });
       onClose();
-      router.push("/customer/bookings");
+      // Redirect based on whether user is logged in
+      if (initialAuthUser) {
+        router.push("/dashboard/customer/bookings");
+      } else {
+        router.push(`/find-wash/${service.business_id}`);
+      }
     }
   };
 
