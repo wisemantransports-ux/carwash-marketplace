@@ -13,12 +13,6 @@ import { Loader2, Droplets, MapPin, Calendar, Clock, ArrowLeft, ShieldCheck } fr
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-/**
- * @fileOverview Dashboard Booking Page
- * Strictly uses wash_services table for UUID compatibility.
- * Always sends customer_id from current session.
- */
-
 export default function BookServicePage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -50,7 +44,6 @@ export default function BookServicePage() {
   useEffect(() => {
     if (selectedBiz) {
       const fetchServices = async () => {
-        // Query wash_services for valid UUIDs
         const { data, error } = await supabase
           .from('wash_services')
           .select('id, name, price')
@@ -84,112 +77,116 @@ export default function BookServicePage() {
     }
 
     const payload = {
-      customer_id: user.id, // Mandatory for logged in users
+      customer_id: user.id, // LOGGED IN: explicitly send user ID
       customer_name: user.user_metadata?.name || 'Customer',
       customer_whatsapp: user.phone || user.user_metadata?.whatsapp || 'No Phone',
       customer_email: user.email || null,
-      wash_service_id: selectedSvc, // MUST BE UUID from wash_services
+      wash_service_id: selectedSvc, // UUID from wash_services
       business_id: selectedBiz,
       seller_business_id: selectedBiz,
-      location: location,
+      location: location.trim(),
       booking_date: date,
       requested_time: `${date}T${time}:00`,
       status: 'pending_assignment'
     };
 
-    console.log("[DASHBOARD-BOOKING-DEBUG] Payload Submission:", {
-      wash_service_id: selectedSvc,
-      customer_id: user.id,
-      business_id: selectedBiz
-    });
+    console.log("[DASHBOARD-BOOKING] Submitting Payload:", payload);
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('wash_bookings').insert(payload);
+      const { error } = await supabase.from('wash_bookings').insert([payload]);
 
       if (error) throw error;
 
-      toast({ title: 'Success! ✅', description: 'Your wash request has been submitted.' });
-      router.push('/dashboard/customer/bookings');
+      toast({ title: 'Request Sent! ✅', description: 'Business owner will assign a detailer shortly.' });
+      router.push('/customer/bookings');
     } catch (e: any) {
-      console.error("Booking Error:", e);
+      console.error("[DASHBOARD-BOOKING] Error:", e);
       toast({ 
         variant: 'destructive', 
         title: 'Booking Failed', 
-        description: e.message || 'Check console for constraint details.' 
+        description: e.message || 'Check connection and try again.' 
       });
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (authLoading || loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>;
+  if (authLoading || loading) return (
+    <div className="flex flex-col items-center justify-center py-32 space-y-4">
+      <Loader2 className="animate-spin text-primary h-10 w-10" />
+      <p className="text-sm font-black uppercase tracking-widest text-muted-foreground animate-pulse">Loading Partners...</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-12">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild className="rounded-full">
-          <Link href="/dashboard/customer"><ArrowLeft className="h-5 w-5" /></Link>
+          <Link href="/customer/dashboard"><ArrowLeft className="h-5 w-5" /></Link>
         </Button>
-        <h1 className="text-3xl font-black uppercase italic tracking-tight text-slate-900">Request Wash</h1>
+        <h1 className="text-3xl font-black uppercase italic tracking-tight text-slate-900 leading-none">Book New Wash</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="rounded-[2.5rem] border-2 shadow-xl overflow-hidden">
+        <Card className="rounded-[2.5rem] border-2 shadow-2xl overflow-hidden bg-white">
           <CardHeader className="bg-slate-900 text-white p-8">
-            <CardTitle className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight">
+            <CardTitle className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight italic">
               <Droplets className="h-6 w-6 text-primary" />
-              Service Preferences
+              Service Options
             </CardTitle>
-            <CardDescription className="text-slate-400 font-bold">Select a verified partner and package.</CardDescription>
+            <CardDescription className="text-slate-400 font-bold">Configure your professional detailing session.</CardDescription>
           </CardHeader>
-          <CardContent className="p-8 space-y-6">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Select Professional Partner</Label>
-              <Select value={selectedBiz} onValueChange={setSelectedBiz}>
-                <SelectTrigger className="h-14 rounded-2xl border-2"><SelectValue placeholder="Choose a business" /></SelectTrigger>
-                <SelectContent>
-                  {businesses.map(b => <SelectItem key={b.id} value={b.id}>{b.name} ({b.city})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Wash Package</Label>
-              <Select value={selectedSvc} onValueChange={setSelectedSvc} disabled={!selectedBiz}>
-                <SelectTrigger className="h-14 rounded-2xl border-2">
-                  <SelectValue placeholder="Select service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map(s => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name} - P{s.price}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+          <CardContent className="p-8 space-y-8">
+            <div className="grid sm:grid-cols-2 gap-8">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Preferred Date</Label>
-                <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-14 rounded-2xl border-2" />
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">1. Choose Business</Label>
+                <Select value={selectedBiz} onValueChange={setSelectedBiz}>
+                  <SelectTrigger className="h-14 rounded-2xl border-2 bg-slate-50/50"><SelectValue placeholder="Verified partners..." /></SelectTrigger>
+                  <SelectContent>
+                    {businesses.map(b => <SelectItem key={b.id} value={b.id}>{b.name} ({b.city})</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
+
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Arrival Time</Label>
-                <Input type="time" value={time} onChange={e => setTime(e.target.value)} className="h-14 rounded-2xl border-2" />
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">2. Select Package</Label>
+                <Select value={selectedSvc} onValueChange={setSelectedSvc} disabled={!selectedBiz}>
+                  <SelectTrigger className="h-14 rounded-2xl border-2 bg-slate-50/50">
+                    <SelectValue placeholder="Pick a wash package..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map(s => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name} - P{s.price}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">3. Booking Date</Label>
+                <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-14 rounded-2xl border-2 bg-slate-50/50" required />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">4. Arrival Time</Label>
+                <Input type="time" value={time} onChange={e => setTime(e.target.value)} className="h-14 rounded-2xl border-2 bg-slate-50/50" required />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Location / Address</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">5. Location Details</Label>
               <div className="relative">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <Input 
-                  placeholder="Plot No, Street, City" 
+                  placeholder="Plot number, complex, or specific address..." 
                   value={location} 
                   onChange={e => setLocation(e.target.value)}
-                  className="h-14 rounded-2xl border-2 pl-12" 
+                  className="h-14 rounded-2xl border-2 pl-12 bg-slate-50/50" 
+                  required
                 />
               </div>
             </div>
@@ -199,15 +196,17 @@ export default function BookServicePage() {
         <div className="pt-4">
           <Button 
             type="submit" 
-            className="w-full h-16 rounded-2xl text-xl font-black uppercase shadow-2xl bg-primary group"
+            className="w-full h-16 rounded-[2rem] text-xl font-black uppercase shadow-2xl bg-primary group transition-all hover:scale-[1.01]"
             disabled={submitting}
           >
-            {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
-            Confirm Reservation
+            {submitting ? <Loader2 className="animate-spin mr-2 h-6 w-6" /> : <ShieldCheck className="mr-2 h-6 w-6" />}
+            Submit Request
           </Button>
-          <p className="text-center text-[10px] text-muted-foreground font-bold mt-4 uppercase tracking-widest">
-            Identity matched to: {user.email}
-          </p>
+          <div className="flex items-center justify-center gap-2 mt-6">
+            <div className="h-px bg-slate-200 flex-1" />
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Verified Session</p>
+            <div className="h-px bg-slate-200 flex-1" />
+          </div>
         </div>
       </form>
     </div>

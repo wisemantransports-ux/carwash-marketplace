@@ -14,98 +14,27 @@ import { useAuth } from "@/hooks/use-auth";
 interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  service: any; // Can be from listings or wash_services
+  service: any; 
 }
 
-/**
- * Robust error message extraction for Supabase and standard JS errors.
- */
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
-  
   const message = err.message || err.error_description || (err.error && err.error.message);
   const details = err.details || "";
   const code = err.code || "";
-  
   if (message) {
     let fullMessage = message;
     if (details && details !== message) fullMessage += ` (${details})`;
     if (code) fullMessage += ` [${code}]`;
     return fullMessage;
   }
-
-  try {
-    const stringified = JSON.stringify(err);
-    return stringified === '{}' ? String(err) : stringified;
-  } catch {
-    return String(err);
-  }
+  return String(err);
 };
-
-async function processBooking({
-  customerName,
-  whatsappNumber,
-  customerEmail,
-  service,
-  scheduledAt,
-  locationText
-}: {
-  customerName: string;
-  whatsappNumber: string;
-  customerEmail?: string;
-  service: any;
-  scheduledAt: Date;
-  locationText: string;
-}) {
-  try {
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-
-    const payload = {
-      customer_id: authUser?.id || null, // NULL triggers auto-account creation
-      business_id: service.business_id,
-      seller_business_id: service.business_id,
-      wash_service_id: service.id, // EXPECTS UUID
-      customer_name: customerName,
-      customer_whatsapp: whatsappNumber,
-      customer_email: customerEmail || null,
-      requested_time: scheduledAt.toISOString(),
-      booking_date: scheduledAt.toISOString().split('T')[0],
-      location: locationText,
-      status: 'pending_assignment'
-    };
-
-    console.log("[MODAL-BOOKING-DEBUG] Submission Payload:", {
-      wash_service_id: service.id,
-      customer_id: authUser?.id || 'ANONYMOUS (Triggering Auto-Account)'
-    });
-
-    const { data: bookingData, error: bookingError } = await supabase
-      .from('wash_bookings')
-      .insert([payload])
-      .select()
-      .single();
-
-    if (bookingError) throw bookingError;
-
-    return { booking: bookingData, error: null };
-
-  } catch (err: any) {
-    console.error("Booking Flow Error Detail:", {
-      message: err.message,
-      details: err.details,
-      code: err.code
-    });
-    return {
-      booking: null,
-      error: extractErrorMessage(err)
-    };
-  }
-}
 
 export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   const router = useRouter();
-  const { user: initialAuthUser } = useAuth();
+  const { user: authUser } = useAuth();
   
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -116,46 +45,68 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen && initialAuthUser) {
-      setName(initialAuthUser.user_metadata?.name || '');
-      const wa = initialAuthUser.phone || initialAuthUser.user_metadata?.whatsapp || '';
+    if (isOpen && authUser) {
+      setName(authUser.user_metadata?.name || '');
+      const wa = authUser.phone || authUser.user_metadata?.whatsapp || '';
       setWhatsapp(wa);
-      setEmail(initialAuthUser.email || '');
+      setEmail(authUser.email || '');
     }
-  }, [isOpen, initialAuthUser]);
+  }, [isOpen, authUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date || !time) {
-      toast({ variant: 'destructive', title: "Missing Schedule", description: "Please select a date and time." });
+      toast({ variant: 'destructive', title: "Schedule Missing", description: "Date and time are required." });
       return;
     }
 
     setLoading(true);
 
-    const result = await processBooking({
-      customerName: name,
-      whatsappNumber: whatsapp,
-      customerEmail: email,
-      service: service,
-      scheduledAt: new Date(`${date}T${time}`),
-      locationText: locationText
-    });
+    // DUAL-FLOW PAYLOAD
+    // 1. Authenticated: send authUser.id
+    // 2. Anonymous: send null (triggers DB auto-account creation)
+    const payload = {
+      customer_id: authUser?.id || null, 
+      customer_name: name.trim(),
+      customer_whatsapp: whatsapp.trim(),
+      customer_email: email.trim() || null,
+      wash_service_id: service.id, // Service UUID
+      business_id: service.business_id,
+      seller_business_id: service.business_id,
+      location: locationText.trim(),
+      booking_date: date,
+      requested_time: `${date}T${time}:00`,
+      status: 'pending_assignment'
+    };
 
-    if (result.error) {
+    console.log("[BOOKING-MODAL] Submitting Payload:", payload);
+
+    try {
+      const { data, error } = await supabase
+        .from('wash_bookings')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({ title: "Booking Successful! ✅", description: "Your request has been received." });
+      onClose();
+      
+      if (authUser) {
+        router.push("/customer/bookings");
+      } else {
+        router.push("/login"); // Encourage login to track the new auto-created account
+      }
+    } catch (err: any) {
+      console.error("[BOOKING-MODAL] Error:", err);
       toast({
         variant: "destructive",
         title: "Booking Failed",
-        description: result.error
+        description: extractErrorMessage(err)
       });
+    } finally {
       setLoading(false);
-    } else {
-      toast({ title: "Success! ✅", description: "Your booking has been requested." });
-      onClose();
-      // Redirect authenticated users to their tracker
-      if (initialAuthUser) {
-        router.push("/dashboard/customer/bookings");
-      }
     }
   };
 
@@ -165,69 +116,63 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg bg-slate-950 border-white/10 text-white">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-black text-primary flex items-center gap-2">
+          <DialogTitle className="text-2xl font-black text-primary flex items-center gap-2 uppercase italic">
             <Droplets className="h-6 w-6" />
-            Book Service
+            Reserve Service
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Professional wash for: <span className="text-white font-bold">{service.name}</span>
+            Booking for: <span className="text-white font-bold">{service.name}</span>
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Full Name</Label>
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                <Input value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">WhatsApp Number</Label>
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">WhatsApp Number</Label>
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required placeholder="26777123456" className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl" />
               </div>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Email (Optional)</Label>
+            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email Address (Optional)</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12" />
+              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl" />
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Service Date</Label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
-              </div>
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Date</Label>
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-white/5 border-white/10 h-12 rounded-xl" />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Preferred Time</Label>
-              <div className="relative">
-                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input type="time" value={time} onChange={e => setTime(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
-              </div>
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Time</Label>
+              <Input type="time" value={time} onChange={e => setTime(e.target.value)} required className="bg-white/5 border-white/10 h-12 rounded-xl" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Service Location / Address</Label>
+            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Service Location</Label>
             <div className="relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-              <Input value={locationText} onChange={e => setLocationText(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+              <Input value={locationText} onChange={e => setLocationText(e.target.value)} placeholder="Plot or Street Address" required className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl" />
             </div>
           </div>
 
-          <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter" disabled={loading}>
+          <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter rounded-2xl" disabled={loading}>
             {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <Sparkles className="mr-2 h-5 w-5" />}
-            Confirm Booking
+            Confirm Reservation
           </Button>
         </form>
       </DialogContent>
