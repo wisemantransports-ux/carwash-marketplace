@@ -43,12 +43,23 @@ export default function BookServicePage() {
 
   useEffect(() => {
     if (selectedBiz) {
-      supabase
-        .from('listings')
-        .select('id, name, price')
-        .eq('business_id', selectedBiz)
-        .eq('type', 'wash_service')
-        .then(({ data }) => setServices(data || []));
+      // 1. Load services correctly from wash_services table
+      const fetchServices = async () => {
+        const { data, error } = await supabase
+          .from('wash_services')
+          .select('id, name, price')
+          .eq('business_id', selectedBiz);
+        
+        if (error) {
+          console.error("Error fetching services:", error);
+          setServices([]);
+        } else {
+          setServices(data || []);
+        }
+      };
+      fetchServices();
+    } else {
+      setServices([]);
     }
   }, [selectedBiz]);
 
@@ -56,8 +67,7 @@ export default function BookServicePage() {
     e.preventDefault();
     
     // Ensure identity
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (!currentUser) {
+    if (!user) {
       toast({ variant: 'destructive', title: 'Session Expired', description: 'Please sign in again.' });
       router.push('/login');
       return;
@@ -68,14 +78,21 @@ export default function BookServicePage() {
       return;
     }
 
+    // 3. Add debug log before booking
+    console.log("Booking debug:", {
+      serviceId: selectedSvc,
+      businessId: selectedBiz
+    });
+
     setSubmitting(true);
     try {
+      // 4. Correct booking insert using wash_service_id UUID
       const { error } = await supabase.from('wash_bookings').insert({
-        customer_id: currentUser.id,
-        customer_name: currentUser.user_metadata?.name || 'Customer',
-        customer_whatsapp: currentUser.phone || currentUser.user_metadata?.whatsapp || 'No Phone',
-        customer_email: currentUser.email || null,
-        wash_service_id: selectedSvc,
+        customer_id: user.id,
+        customer_name: user.user_metadata?.name || 'Customer',
+        customer_whatsapp: user.phone || user.user_metadata?.whatsapp || 'No Phone',
+        customer_email: user.email || null,
+        wash_service_id: selectedSvc, // UUID from dropdown
         business_id: selectedBiz,
         seller_business_id: selectedBiz,
         location: location,
@@ -129,10 +146,15 @@ export default function BookServicePage() {
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Wash Package</Label>
+              {/* 2. Fix the service dropdown - stores service.id UUID */}
               <Select value={selectedSvc} onValueChange={setSelectedSvc} disabled={!selectedBiz}>
                 <SelectTrigger className="h-14 rounded-2xl border-2"><SelectValue placeholder="Select service" /></SelectTrigger>
                 <SelectContent>
-                  {services.map(s => <SelectItem key={s.id} value={s.id}>{s.name} - P{s.price}</SelectItem>)}
+                  {services.map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name} - P{s.price}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
