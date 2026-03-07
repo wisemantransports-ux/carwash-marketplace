@@ -17,9 +17,6 @@ interface BookingModalProps {
   service: any;
 }
 
-/**
- * Robust error message extraction for Supabase and standard JS errors.
- */
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
@@ -43,10 +40,6 @@ const extractErrorMessage = (err: any): string => {
   }
 };
 
-/**
- * processBooking
- * Rule: If logged in, send customer_id. If public, send null.
- */
 async function processBooking({
   customerName,
   whatsappNumber,
@@ -63,26 +56,27 @@ async function processBooking({
   locationText: string;
 }) {
   try {
-    // 1. Get Logged In User (if any)
     const { data: { user: authUser } } = await supabase.auth.getUser();
 
-    // 2. Create Booking
-    // We send wash_service_id as the service.id (UUID)
+    const payload = {
+      customer_id: authUser?.id || null, 
+      business_id: service.business_id,
+      seller_business_id: service.business_id,
+      wash_service_id: service.id, // Using service UUID
+      customer_name: customerName,
+      customer_whatsapp: whatsappNumber,
+      customer_email: customerEmail || null,
+      requested_time: scheduledAt.toISOString(),
+      booking_date: scheduledAt.toISOString().split('T')[0],
+      location: locationText,
+      status: 'pending_assignment'
+    };
+
+    console.log("[MODAL-BOOKING-DEBUG] Submission Payload:", payload);
+
     const { data: bookingData, error: bookingError } = await supabase
       .from('wash_bookings')
-      .insert([{
-        customer_id: authUser?.id || null, 
-        business_id: service.business_id,
-        seller_business_id: service.business_id,
-        wash_service_id: service.id,
-        customer_name: customerName,
-        customer_whatsapp: whatsappNumber,
-        customer_email: customerEmail || null,
-        requested_time: scheduledAt.toISOString(),
-        booking_date: scheduledAt.toISOString().split('T')[0],
-        location: locationText,
-        status: 'pending_assignment'
-      }])
+      .insert([payload])
       .select()
       .single();
 
@@ -94,8 +88,7 @@ async function processBooking({
     console.error("Booking Flow Error Detail:", {
       message: err.message,
       details: err.details,
-      code: err.code,
-      hint: err.hint
+      code: err.code
     });
     return {
       booking: null,
@@ -151,13 +144,10 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       });
       setLoading(false);
     } else {
-      toast({ title: "Booking Submitted Successfully!", description: "The partner has been notified." });
+      toast({ title: "Success! ✅", description: "Your booking has been requested." });
       onClose();
-      // Redirect based on whether user is logged in
       if (initialAuthUser) {
         router.push("/dashboard/customer/bookings");
-      } else {
-        router.push(`/find-wash/${service.business_id}`);
       }
     }
   };

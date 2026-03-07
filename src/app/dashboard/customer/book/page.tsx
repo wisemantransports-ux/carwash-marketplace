@@ -43,7 +43,6 @@ export default function BookServicePage() {
 
   useEffect(() => {
     if (selectedBiz) {
-      // 1. Load services correctly from wash_services table
       const fetchServices = async () => {
         const { data, error } = await supabase
           .from('wash_services')
@@ -66,7 +65,6 @@ export default function BookServicePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Ensure identity
     if (!user) {
       toast({ variant: 'destructive', title: 'Session Expired', description: 'Please sign in again.' });
       router.push('/login');
@@ -78,32 +76,29 @@ export default function BookServicePage() {
       return;
     }
 
-    // 3. Add debug log before booking
-    console.log("Booking debug:", {
-      serviceId: selectedSvc,
-      businessId: selectedBiz
-    });
+    const payload = {
+      customer_id: user.id,
+      customer_name: user.user_metadata?.name || 'Customer',
+      customer_whatsapp: user.phone || user.user_metadata?.whatsapp || 'No Phone',
+      customer_email: user.email || null,
+      wash_service_id: selectedSvc, 
+      business_id: selectedBiz,
+      seller_business_id: selectedBiz,
+      location: location,
+      booking_date: date,
+      requested_time: `${date}T${time}:00`,
+      status: 'pending_assignment'
+    };
+
+    console.log("[BOOKING-DEBUG] Submission Payload:", payload);
 
     setSubmitting(true);
     try {
-      // 4. Correct booking insert using wash_service_id UUID
-      const { error } = await supabase.from('wash_bookings').insert({
-        customer_id: user.id,
-        customer_name: user.user_metadata?.name || 'Customer',
-        customer_whatsapp: user.phone || user.user_metadata?.whatsapp || 'No Phone',
-        customer_email: user.email || null,
-        wash_service_id: selectedSvc, // UUID from dropdown
-        business_id: selectedBiz,
-        seller_business_id: selectedBiz,
-        location: location,
-        booking_date: date,
-        requested_time: `${date}T${time}:00`,
-        status: 'pending_assignment'
-      });
+      const { error } = await supabase.from('wash_bookings').insert(payload);
 
       if (error) throw error;
 
-      toast({ title: 'Your booking has been submitted successfully.', description: 'Connecting you with the partner.' });
+      toast({ title: 'Success', description: 'Your wash request has been submitted.' });
       router.push('/dashboard/customer/bookings');
     } catch (e: any) {
       console.error("Booking Error:", e);
@@ -113,10 +108,10 @@ export default function BookServicePage() {
     }
   };
 
-  if (authLoading || loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
+  if (authLoading || loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild className="rounded-full">
           <Link href="/dashboard/customer"><ArrowLeft className="h-5 w-5" /></Link>
@@ -146,7 +141,6 @@ export default function BookServicePage() {
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Wash Package</Label>
-              {/* 2. Fix the service dropdown - stores service.id UUID */}
               <Select value={selectedSvc} onValueChange={setSelectedSvc} disabled={!selectedBiz}>
                 <SelectTrigger className="h-14 rounded-2xl border-2"><SelectValue placeholder="Select service" /></SelectTrigger>
                 <SelectContent>
@@ -191,7 +185,7 @@ export default function BookServicePage() {
             className="w-full h-16 rounded-2xl text-xl font-black uppercase shadow-2xl bg-primary group"
             disabled={submitting}
           >
-            {submitting ? <Loader2 className="animate-spin mr-2" /> : <ShieldCheck className="mr-2" />}
+            {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
             Confirm Reservation
           </Button>
           <p className="text-center text-[10px] text-muted-foreground font-bold mt-4 uppercase tracking-widest">
