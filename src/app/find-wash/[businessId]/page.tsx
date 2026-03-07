@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -34,11 +35,11 @@ export default function PublicBusinessServicesPage() {
                 
                 if (bRec) {
                     setBizRecord(bRec as any);
+                    // Fetch services from the correct UUID source table
                     const { data: svcsData } = await supabase
-                        .from('listings')
+                        .from('wash_services')
                         .select('*')
-                        .eq('business_id', bRec.id)
-                        .eq('type', 'wash_service');
+                        .eq('business_id', bRec.id);
                     setServices(svcsData || []);
                 }
             } catch (e) {
@@ -56,7 +57,7 @@ export default function PublicBusinessServicesPage() {
     };
 
     if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-    if (!bizRecord) return <div className="text-center py-20">Business not found.</div>;
+    if (!bizRecord) return <div className="text-center py-20 italic">Business not found.</div>;
 
     return (
         <div className="min-h-screen bg-background pb-20">

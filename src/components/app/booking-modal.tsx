@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -63,14 +64,13 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     setLoading(true);
 
     // DUAL-FLOW PAYLOAD
-    // 1. Authenticated: send authUser.id
-    // 2. Anonymous: send null (triggers DB auto-account creation)
-    const payload = {
-      customer_id: authUser?.id || null, 
+    // 1. Authenticated: include customer_id
+    // 2. Anonymous: OMIT customer_id (triggers database trigger logic)
+    const payload: any = {
       customer_name: name.trim(),
       customer_whatsapp: whatsapp.trim(),
       customer_email: email.trim() || null,
-      wash_service_id: service.id, // Service UUID
+      wash_service_id: service.id, // UUID from wash_services
       business_id: service.business_id,
       seller_business_id: service.business_id,
       location: locationText.trim(),
@@ -79,14 +79,21 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       status: 'pending_assignment'
     };
 
-    console.log("[BOOKING-MODAL] Submitting Payload:", payload);
+    if (authUser?.id) {
+      payload.customer_id = authUser.id;
+    }
+
+    console.log("Booking debug (Modal):", {
+      serviceId: service.id,
+      businessId: service.business_id,
+      isAnonymous: !authUser?.id,
+      payload
+    });
 
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('wash_bookings')
-        .insert([payload])
-        .select()
-        .single();
+        .insert([payload]);
 
       if (error) throw error;
 
@@ -116,7 +123,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg bg-slate-950 border-white/10 text-white">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-black text-primary flex items-center gap-2 uppercase italic">
+          <DialogTitle className="text-2xl font-black text-primary flex items-center gap-2 uppercase italic text-white">
             <Droplets className="h-6 w-6" />
             Reserve Service
           </DialogTitle>
@@ -131,14 +138,14 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl" />
+                <Input value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl text-white" />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">WhatsApp Number</Label>
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required placeholder="26777123456" className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl" />
+                <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required placeholder="26777123456" className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl text-white" />
               </div>
             </div>
           </div>
@@ -147,18 +154,18 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
             <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email Address (Optional)</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl" />
+              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl text-white" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Date</Label>
-              <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-white/5 border-white/10 h-12 rounded-xl" />
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-white/5 border-white/10 h-12 rounded-xl text-white" />
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Time</Label>
-              <Input type="time" value={time} onChange={e => setTime(e.target.value)} required className="bg-white/5 border-white/10 h-12 rounded-xl" />
+              <Input type="time" value={time} onChange={e => setTime(e.target.value)} required className="bg-white/5 border-white/10 h-12 rounded-xl text-white" />
             </div>
           </div>
 
@@ -166,7 +173,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
             <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Service Location</Label>
             <div className="relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-              <Input value={locationText} onChange={e => setLocationText(e.target.value)} placeholder="Plot or Street Address" required className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl" />
+              <Input value={locationText} onChange={e => setLocationText(e.target.value)} placeholder="Plot or Street Address" required className="pl-10 bg-white/5 border-white/10 h-12 rounded-xl text-white" />
             </div>
           </div>
 

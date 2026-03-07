@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -44,6 +45,7 @@ export default function BookServicePage() {
   useEffect(() => {
     if (selectedBiz) {
       const fetchServices = async () => {
+        // Query from wash_services table directly to get correct UUID
         const { data, error } = await supabase
           .from('wash_services')
           .select('id, name, price')
@@ -77,7 +79,7 @@ export default function BookServicePage() {
     }
 
     const payload = {
-      customer_id: user.id, // LOGGED IN: explicitly send user ID
+      customer_id: user.id, // Authenticated: link to existing account
       customer_name: user.user_metadata?.name || 'Customer',
       customer_whatsapp: user.phone || user.user_metadata?.whatsapp || 'No Phone',
       customer_email: user.email || null,
@@ -90,7 +92,11 @@ export default function BookServicePage() {
       status: 'pending_assignment'
     };
 
-    console.log("[DASHBOARD-BOOKING] Submitting Payload:", payload);
+    console.log("Booking debug (Dashboard):", {
+      serviceId: selectedSvc,
+      businessId: selectedBiz,
+      payload
+    });
 
     setSubmitting(true);
     try {
@@ -99,7 +105,7 @@ export default function BookServicePage() {
       if (error) throw error;
 
       toast({ title: 'Request Sent! ✅', description: 'Business owner will assign a detailer shortly.' });
-      router.push('/customer/bookings');
+      router.push('/dashboard/customer/bookings');
     } catch (e: any) {
       console.error("[DASHBOARD-BOOKING] Error:", e);
       toast({ 
@@ -123,7 +129,7 @@ export default function BookServicePage() {
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild className="rounded-full">
-          <Link href="/customer/dashboard"><ArrowLeft className="h-5 w-5" /></Link>
+          <Link href="/dashboard/customer/dashboard"><ArrowLeft className="h-5 w-5" /></Link>
         </Button>
         <h1 className="text-3xl font-black uppercase italic tracking-tight text-slate-900 leading-none">Book New Wash</h1>
       </div>
@@ -131,7 +137,7 @@ export default function BookServicePage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="rounded-[2.5rem] border-2 shadow-2xl overflow-hidden bg-white">
           <CardHeader className="bg-slate-900 text-white p-8">
-            <CardTitle className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight italic">
+            <CardTitle className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight italic text-white">
               <Droplets className="h-6 w-6 text-primary" />
               Service Options
             </CardTitle>
