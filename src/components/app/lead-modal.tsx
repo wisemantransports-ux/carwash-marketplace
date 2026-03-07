@@ -113,7 +113,11 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       toast({ title: "Inquiry Sent! ✅", description: "Connecting you to the seller via WhatsApp..." });
       onClose();
     } catch (err: any) {
-      console.error("Lead Inquiry Error Detail:", err);
+      console.error("Lead Inquiry Error Detail:", {
+        message: err.message,
+        details: err.details,
+        code: err.code
+      });
       toast({ 
         variant: 'destructive', 
         title: 'Inquiry Failed', 

@@ -18,6 +18,32 @@ interface BookingModalProps {
 }
 
 /**
+ * Robust error message extraction for Supabase and standard JS errors.
+ */
+const extractErrorMessage = (err: any): string => {
+  if (!err) return "An unexpected error occurred.";
+  if (typeof err === 'string') return err;
+  
+  const message = err.message || err.error_description || (err.error && err.error.message);
+  const details = err.details || "";
+  const code = err.code || "";
+  
+  if (message) {
+    let fullMessage = message;
+    if (details && details !== message) fullMessage += ` (${details})`;
+    if (code) fullMessage += ` [${code}]`;
+    return fullMessage;
+  }
+
+  try {
+    const stringified = JSON.stringify(err);
+    return stringified === '{}' ? String(err) : stringified;
+  } catch {
+    return String(err);
+  }
+};
+
+/**
  * processBooking
  * Rule: If logged in, send customer_id. If public, send null.
  */
@@ -41,7 +67,7 @@ async function processBooking({
     const { data: { user: authUser } } = await supabase.auth.getUser();
 
     // 2. Create Booking
-    // If authUser is null, the trigger on wash_bookings will create the customer record
+    // We send wash_service_id as the service.id (UUID)
     const { data: bookingData, error: bookingError } = await supabase
       .from('wash_bookings')
       .insert([{
@@ -65,10 +91,15 @@ async function processBooking({
     return { booking: bookingData, error: null };
 
   } catch (err: any) {
-    console.error("Booking Flow Error:", err);
+    console.error("Booking Flow Error Detail:", {
+      message: err.message,
+      details: err.details,
+      code: err.code,
+      hint: err.hint
+    });
     return {
       booking: null,
-      error: err.message || 'Booking request failed'
+      error: extractErrorMessage(err)
     };
   }
 }
@@ -96,6 +127,11 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!date || !time) {
+      toast({ variant: 'destructive', title: "Missing Schedule", description: "Please select a date and time." });
+      return;
+    }
+
     setLoading(true);
 
     const result = await processBooking({
