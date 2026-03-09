@@ -1,11 +1,12 @@
+
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, Loader2, Smartphone, User, AlertCircle } from "lucide-react";
+import { MessageCircle, Loader2, Smartphone, User, Mail } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -17,24 +18,18 @@ interface LeadModalProps {
   listingTitle: string;
 }
 
-/**
- * Robust error message extraction for Supabase and standard JS errors.
- */
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
-  
   const message = err.message || err.error_description || (err.error && err.error.message);
   const details = err.details || "";
   const code = err.code || "";
-  
   if (message) {
     let fullMessage = message;
     if (details && details !== message) fullMessage += ` (${details})`;
     if (code) fullMessage += ` [${code}]`;
     return fullMessage;
   }
-
   try {
     const stringified = JSON.stringify(err);
     return stringified === '{}' ? String(err) : stringified;
@@ -45,9 +40,18 @@ const extractErrorMessage = (err: any): string => {
 
 export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModalProps) {
   const { user: authUser } = useAuth();
-  const [name, setName] = useState(authUser?.user_metadata?.name || '');
-  const [whatsapp, setWhatsapp] = useState(authUser?.phone || authUser?.user_metadata?.whatsapp || '');
+  const [name, setName] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && authUser) {
+      setName(authUser.user_metadata?.name || '');
+      setWhatsapp(authUser.phone || authUser.user_metadata?.whatsapp || '');
+      setEmail(authUser.email || '');
+    }
+  }, [isOpen, authUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +62,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
     setLoading(true);
     try {
-      // 1. Frictionless Identity Resolution
+      // 1. Resolve Identity
       let currentUserId = authUser?.id;
 
       if (!currentUserId) {
@@ -67,62 +71,49 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ whatsapp, name })
         });
-
-        const contentType = res.headers.get("content-type");
-        if (!res.ok || !contentType || !contentType.includes("application/json")) {
-          const errorMsg = !res.ok ? `Server error: ${res.status}` : "Invalid response format from server.";
-          throw new Error(errorMsg);
+        if (res.ok) {
+          const authResult = await res.json();
+          currentUserId = authResult.userId;
         }
-
-        const authResult = await res.json();
-        if (authResult.error) throw new Error(authResult.error);
-        currentUserId = authResult.userId;
       }
 
-      if (!currentUserId) throw new Error("Identity resolution failed. Please try again.");
-
-      // 2. Fetch Listing & Business Context
+      // 2. Fetch Listing Details for metadata
       const { data: listing, error: lErr } = await supabase
         .from('listings')
         .select('business_id, listing_type, business:business_id(whatsapp_number)')
         .eq('id', listingId)
         .single();
 
-      if (lErr) throw lErr;
-      if (!listing) throw new Error("This listing is no longer available.");
+      if (lErr || !listing) throw new Error("Listing data could not be retrieved.");
 
       const cleanWa = whatsapp.replace(/\D/g, '');
 
-      // 3. Log Lead
+      // 3. Log Lead in DB
       const { error: leadErr } = await supabase.from('leads').insert({
-        customer_id: currentUserId,
+        customer_id: currentUserId || null,
         seller_business_id: listing.business_id,
         listing_id: listingId,
+        listing_type: listing.listing_type,
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
+        customer_email: email.trim() || null,
         status: 'new'
       });
       
       if (leadErr) throw leadErr;
 
-      // 4. WhatsApp Connect
+      // 4. WhatsApp Redirect
       const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
-      const url = `https://wa.me/${bizPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name}.`)}`;
+      const cleanBizPhone = bizPhone.replace(/\D/g, '');
+      const message = `Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name}.`;
+      const url = `https://wa.me/${cleanBizPhone}?text=${encodeURIComponent(message)}`;
       
       window.open(url, '_blank');
-      toast({ title: "Inquiry Sent! ✅", description: "Connecting you to the seller via WhatsApp..." });
+      toast({ title: "Lead Sent! ✅", description: "Connecting you via WhatsApp..." });
       onClose();
     } catch (err: any) {
-      console.error("Lead Inquiry Error Detail:", {
-        message: err.message,
-        details: err.details,
-        code: err.code
-      });
-      toast({ 
-        variant: 'destructive', 
-        title: 'Inquiry Failed', 
-        description: extractErrorMessage(err) 
-      });
+      console.error("[LEAD-MODAL] Error:", err);
+      toast({ variant: 'destructive', title: 'Inquiry Failed', description: extractErrorMessage(err) });
     } finally {
       setLoading(false);
     }
@@ -137,7 +128,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
             Direct Inquiry
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Instant connection via WhatsApp. No account required.
+            Connect with the dealer instantly. Your details will be saved for tracking.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
@@ -154,6 +145,13 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email Address (Optional)</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                <Input type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12" />
               </div>
             </div>
           </div>

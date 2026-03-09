@@ -50,11 +50,13 @@ export type Lead = {
   listing_id: string;
   customer_name: string;
   customer_whatsapp: string;
+  customer_email?: string | null;
+  listing_type: ListingCategory;
   status: LeadStatus;
   created_at: string;
-  listing_type?: string;
-  listing?: { name: string };
-  business?: { name: string };
+  updated_at: string;
+  listing?: { name: string; price: number };
+  business?: { name: string; city: string; whatsapp_number: string };
 };
 
 export type BusinessType = 'individual' | 'registered';

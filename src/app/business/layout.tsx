@@ -1,6 +1,7 @@
+
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
-import { LayoutDashboard, Users, DollarSign, CreditCard, AlertCircle, Lock, UserCircle, Receipt, Package, Loader2, MapPin, CarFront, Droplets } from "lucide-react";
+import { LayoutDashboard, Users, DollarSign, CreditCard, AlertCircle, Lock, UserCircle, Receipt, Package, Loader2, MapPin, CarFront, Droplets, MessageSquare } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { Business } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -71,12 +72,14 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     "/business/spare-shop", 
     "/business/invoices", 
     "/business/employees", 
-    "/business/earnings"
+    "/business/earnings",
+    "/business/leads"
   ];
   const isBlocked = isRestricted && sensitivePaths.includes(pathname);
 
   const navItems = [
     { href: "/business/dashboard", label: "Operations", icon: LayoutDashboard },
+    { href: "/business/leads", label: "Sales Leads", icon: MessageSquare },
     { href: "/business/locations", label: "Branches", icon: MapPin },
     { href: "/business/services", label: "Services", icon: Droplets },
     { href: "/business/cars", label: "Inventory", icon: CarFront },
