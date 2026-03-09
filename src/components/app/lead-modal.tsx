@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -6,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, Loader2, Smartphone, User, Mail } from "lucide-react";
+import { MessageCircle, Loader2, Smartphone, User, Mail, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -62,25 +61,10 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
     setLoading(true);
     try {
-      // 1. Resolve Identity
-      let currentUserId = authUser?.id;
-
-      if (!currentUserId) {
-        const res = await fetch('/api/auth/frictionless', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ whatsapp, name })
-        });
-        if (res.ok) {
-          const authResult = await res.json();
-          currentUserId = authResult.userId;
-        }
-      }
-
-      // 2. Fetch Listing Details for metadata
+      // 1. Fetch Listing Details for metadata
       const { data: listing, error: lErr } = await supabase
         .from('listings')
-        .select('business_id, listing_type, business:business_id(whatsapp_number)')
+        .select('business_id, listing_type, business:business_id(whatsapp_number, name)')
         .eq('id', listingId)
         .single();
 
@@ -88,17 +72,27 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
       const cleanWa = whatsapp.replace(/\D/g, '');
 
-      // 3. Log Lead in DB
-      const { error: leadErr } = await supabase.from('leads').insert({
-        customer_id: currentUserId || null,
-        seller_business_id: listing.business_id,
-        listing_id: listingId,
-        listing_type: listing.listing_type,
+      // 2. Prepare Payload
+      // If customer is logged in, use their ID.
+      // If guest, the DB trigger auto_create_customer will handle it.
+      const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         customer_email: email.trim() || null,
+        seller_business_id: listing.business_id,
+        listing_id: listingId,
+        listing_type: listing.listing_type,
         status: 'new'
-      });
+      };
+
+      if (authUser?.id) {
+        payload.customer_id = authUser.id;
+      }
+
+      console.log("[LEAD-DEBUG] Submitting inquiry:", payload);
+
+      // 3. Log Lead in DB
+      const { error: leadErr } = await supabase.from('leads').insert(payload);
       
       if (leadErr) throw leadErr;
 
@@ -108,8 +102,8 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       const message = `Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name}.`;
       const url = `https://wa.me/${cleanBizPhone}?text=${encodeURIComponent(message)}`;
       
+      toast({ title: "Inquiry Logged! ✅", description: "Opening WhatsApp to connect with the dealer..." });
       window.open(url, '_blank');
-      toast({ title: "Lead Sent! ✅", description: "Connecting you via WhatsApp..." });
       onClose();
     } catch (err: any) {
       console.error("[LEAD-MODAL] Error:", err);
@@ -121,43 +115,43 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md bg-slate-900 border-white/10 text-white">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight">
+      <DialogContent className="sm:max-w-md bg-slate-900 border-white/10 text-white rounded-[2rem] overflow-hidden">
+        <DialogHeader className="space-y-3">
+          <DialogTitle className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight italic">
             <MessageCircle className="h-6 w-6 text-primary" />
-            Direct Inquiry
+            Dealer Inquiry
           </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Connect with the dealer instantly. Your details will be saved for tracking.
+          <DialogDescription className="text-slate-400 font-medium">
+            Contacting <span className="text-white font-bold">{listingTitle}</span>. Your inquiry will be saved to your personal dashboard.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Name</Label>
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Your Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="Enter your name" value={name} onChange={e => setName(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                <Input placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white" />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">WhatsApp Number</Label>
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 bg-white/5 border-white/10 h-12" />
+                <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white" />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email Address (Optional)</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 bg-white/5 border-white/10 h-12" />
+                <Input type="email" placeholder="john@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white" />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter" disabled={loading}>
-              {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <MessageCircle className="mr-2 h-5 w-5" />}
+            <Button type="submit" className="w-full h-16 text-lg font-black shadow-xl uppercase tracking-tighter rounded-2xl group" disabled={loading}>
+              {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <MessageCircle className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />}
               Connect on WhatsApp
             </Button>
           </DialogFooter>

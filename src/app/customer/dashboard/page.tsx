@@ -6,25 +6,25 @@ import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, ArrowRight, Droplets, MapPin, Calendar, Clock, Star, Zap, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, ArrowRight, Droplets, MapPin, Calendar, Clock, Star, Zap, ShieldCheck, AlertCircle, MessageSquare, ShoppingCart, CarFront } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
 /**
- * @fileOverview Customer Dashboard
- * Primary entry point for logged-in customers with quick actions.
+ * @fileOverview Refined Customer Dashboard Activity Hub
+ * Consolidates Wash Bookings and Marketplace Leads into a unified view.
  */
 export default function CustomerDashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [activeBooking, setActiveBooking] = useState<any>(null);
-  const [recentHistory, setRecentHistory] = useState<any[]>([]);
+  const [recentLeads, setRecentLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
-      // 1. Fetch Most Recent Active Booking (Priority to Pending/Assigned)
+      // 1. Fetch Most Recent Active Booking
       const { data: active } = await supabase
         .from('wash_bookings')
         .select('*')
@@ -35,7 +35,6 @@ export default function CustomerDashboardPage() {
         .maybeSingle();
       
       if (active) {
-        // Wire business and service info
         const { data: biz } = await supabase.from('businesses').select('name, city').eq('id', active.seller_business_id).maybeSingle();
         const { data: svc } = await supabase.from('listings').select('name').eq('id', active.wash_service_id).maybeSingle();
         setActiveBooking({ ...active, business_name: biz?.name || 'Partner', service_name: svc?.name || 'Wash' });
@@ -43,19 +42,18 @@ export default function CustomerDashboardPage() {
         setActiveBooking(null);
       }
 
-      // 2. Fetch Recent Completed
-      const { data: history } = await supabase
-        .from('wash_bookings')
-        .select('*')
+      // 2. Fetch Recent Marketplace Inquiries (Leads)
+      const { data: leads } = await supabase
+        .from('leads')
+        .select('*, listing:listing_id(name)')
         .eq('customer_id', user.id)
-        .eq('status', 'completed')
         .order('created_at', { ascending: false })
         .limit(3);
       
-      setRecentHistory(history || []);
+      setRecentLeads(leads || []);
 
     } catch (e) {
-      console.error("[CUSTOMER-HOME] Fetch error:", e);
+      console.error("[CUSTOMER-DASHBOARD] Fetch failure:", e);
     } finally {
       setLoading(false);
     }
@@ -66,126 +64,141 @@ export default function CustomerDashboardPage() {
   }, [authLoading, user, fetchData]);
 
   if (authLoading || loading) return (
-    <div className="flex flex-col items-center justify-center py-32 space-y-4">
+    <div className="flex flex-col items-center justify-center py-32 space-y-4 bg-slate-50">
       <Loader2 className="animate-spin h-10 w-10 text-primary" />
-      <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">Opening Dashboard...</p>
+      <p className="text-sm font-black uppercase tracking-widest text-slate-400 animate-pulse">Syncing your activity hub...</p>
     </div>
   );
 
   return (
-    <div className="space-y-8 pb-12 animate-in fade-in duration-500">
-      <header className="space-y-1 pt-4">
+    <div className="space-y-10 pb-12 animate-in fade-in duration-500">
+      <header className="space-y-2 pt-4">
         <h1 className="text-4xl font-black tracking-tight text-slate-900 uppercase italic">
           Hello, {user?.user_metadata?.name?.split(' ')[0] || 'Customer'}
         </h1>
-        <p className="text-muted-foreground font-medium text-lg">Manage your car wash requests and discovery.</p>
+        <p className="text-muted-foreground font-medium text-lg">Track your bookings and inquiries in real-time.</p>
       </header>
 
-      {/* PRIMARY CTA: Request a Wash */}
-      <div className="grid gap-6">
-        <Button asChild className="w-full h-24 rounded-[2rem] text-2xl font-black uppercase shadow-2xl shadow-primary/20 bg-primary hover:scale-[1.02] transition-transform overflow-hidden group">
+      {/* QUICK ACTION */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <Button asChild className="h-24 rounded-[2rem] text-xl font-black uppercase shadow-2xl bg-primary hover:scale-[1.02] transition-transform group">
           <Link href="/customer/home">
-            <Droplets className="mr-4 h-10 w-10 group-hover:rotate-12 transition-transform" />
-            Request a New Wash
-            <ArrowRight className="ml-auto h-8 w-8 opacity-30" />
+            <Droplets className="mr-4 h-8 w-8 group-hover:rotate-12 transition-transform" />
+            Book a New Wash
+            <ArrowRight className="ml-auto h-6 w-6 opacity-30" />
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-24 rounded-[2rem] text-xl font-black uppercase border-2 hover:bg-slate-50 transition-all group">
+          <Link href="/find-wash">
+            <ShoppingCart className="mr-4 h-8 w-8 text-primary group-hover:scale-110 transition-transform" />
+            Browse Inventory
+            <ArrowRight className="ml-auto h-6 w-6 opacity-30" />
           </Link>
         </Button>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* Active Tracking Card */}
-        <section className="space-y-4">
+      <div className="grid lg:grid-cols-3 gap-8">
+        {/* ACTIVE WASH TRACKER */}
+        <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Live Request</h2>
-            {activeBooking && (
-              <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 animate-pulse text-[9px] font-black uppercase">
-                Active Tracking
-              </Badge>
-            )}
+            <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Wash Activity</h2>
+            {activeBooking && <Badge className="bg-orange-100 text-orange-700 font-black text-[9px] uppercase animate-pulse">Live Tracker</Badge>}
           </div>
+          
           {activeBooking ? (
-            <Card className="border-2 border-primary/20 bg-white shadow-xl rounded-3xl overflow-hidden group hover:border-primary/40 transition-colors">
+            <Card className="border-2 border-primary/20 bg-white shadow-xl rounded-[2.5rem] overflow-hidden group hover:border-primary/40 transition-colors">
               <Link href="/customer/bookings">
-                <div className="p-6 flex items-start justify-between">
-                  <div className="space-y-3">
+                <div className="p-8 flex items-start justify-between">
+                  <div className="space-y-4">
                     <Badge className={cn(
-                        "border-none font-black text-[10px] uppercase px-3 py-1",
-                        (activeBooking.status === 'pending_assignment' || activeBooking.status === 'pending') ? "bg-orange-100 text-orange-700" : "bg-primary/10 text-primary"
+                        "border-none font-black text-[10px] uppercase px-4 py-1.5 rounded-full shadow-sm",
+                        ["pending_assignment", "pending"].includes(activeBooking.status) ? "bg-orange-100 text-orange-700" : "bg-primary/10 text-primary"
                     )}>
                       {activeBooking.status.replace('_', ' ')}
                     </Badge>
                     <div className="space-y-1">
-                      <h3 className="text-2xl font-black">{activeBooking.business_name}</h3>
-                      <p className="text-sm font-bold text-slate-500">{activeBooking.service_name}</p>
+                      <h3 className="text-3xl font-black tracking-tight">{activeBooking.business_name}</h3>
+                      <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{activeBooking.service_name}</p>
                     </div>
-                    <div className="flex items-center gap-4 text-xs font-bold text-slate-400 pt-2">
-                      <span className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> {new Date(activeBooking.requested_time).toLocaleDateString()}</span>
-                      <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {new Date(activeBooking.requested_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <div className="flex items-center gap-6 text-xs font-bold text-slate-400 pt-2">
+                      <span className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl"><Calendar className="h-4 w-4 text-primary" /> {new Date(activeBooking.requested_time).toLocaleDateString()}</span>
+                      <span className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl"><Clock className="h-4 w-4 text-primary" /> {new Date(activeBooking.requested_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
-                  <div className="bg-slate-50 p-4 rounded-2xl group-hover:bg-primary/5 transition-colors shrink-0">
-                    <Zap className={cn("h-8 w-8 text-primary", (activeBooking.status === 'pending_assignment' || activeBooking.status === 'pending') && "animate-pulse")} />
+                  <div className="bg-primary/5 p-6 rounded-[2rem] group-hover:bg-primary/10 transition-colors shrink-0">
+                    <Zap className={cn("h-10 w-10 text-primary", ["pending_assignment", "pending"].includes(activeBooking.status) && "animate-pulse")} />
                   </div>
                 </div>
-                <div className="bg-primary/5 p-4 flex items-center justify-center text-primary font-black text-[10px] uppercase tracking-widest border-t border-primary/5">
-                  Track Progress <ArrowRight className="ml-2 h-3 w-3" />
+                <div className="bg-primary/5 p-5 flex items-center justify-center text-primary font-black text-[10px] uppercase tracking-[0.2em] border-t border-primary/5">
+                  Open Activity Tracker <ArrowRight className="ml-2 h-3 w-3" />
                 </div>
               </Link>
             </Card>
           ) : (
-            <div className="py-12 border-2 border-dashed rounded-3xl text-center space-y-3 bg-white/50">
-              <div className="bg-muted p-4 rounded-full w-fit mx-auto">
-                <Clock className="h-6 w-6 text-muted-foreground opacity-40" />
+            <div className="py-20 border-2 border-dashed rounded-[2.5rem] text-center space-y-4 bg-white/50 backdrop-blur-sm">
+              <div className="bg-slate-100 p-5 rounded-full w-fit mx-auto border-2 border-white shadow-inner">
+                <Droplets className="h-8 w-8 text-slate-300" />
               </div>
-              <div className="space-y-1 px-6">
-                <p className="text-slate-400 font-bold italic">No active wash requests.</p>
-                <p className="text-[10px] text-muted-foreground uppercase font-black tracking-tighter">Your scheduled services will appear here.</p>
-              </div>
+              <p className="text-slate-400 font-bold italic">No active car wash sessions.</p>
+              <Button asChild size="sm" variant="ghost" className="font-black text-primary uppercase text-[10px] tracking-widest">
+                <Link href="/customer/home">Book your first wash</Link>
+              </Button>
             </div>
           )}
-        </section>
+        </div>
 
-        {/* Recent History */}
-        <section className="space-y-4">
+        {/* RECENT MARKETPLACE INQUIRIES */}
+        <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Recent Activity</h2>
-            <Link href="/customer/bookings" className="text-[10px] font-black uppercase text-primary hover:underline">View All</Link>
+            <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Marketplace Leads</h2>
+            <Link href="/customer/leads" className="text-[10px] font-black uppercase text-primary hover:underline">View All</Link>
           </div>
+          
           <div className="space-y-3">
-            {recentHistory.length > 0 ? recentHistory.map(item => (
-              <div key={item.id} className="bg-white border-2 p-4 rounded-2xl flex items-center justify-between shadow-sm hover:shadow-md transition-shadow group">
+            {recentLeads.length > 0 ? recentLeads.map(lead => (
+              <Card key={lead.id} className="bg-white border-2 p-5 rounded-3xl shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-center gap-4">
-                  <div className="bg-green-50 p-2 rounded-xl group-hover:bg-green-100 transition-colors">
-                    <Star className="h-5 w-5 text-green-600 fill-green-600" />
+                  <div className={cn(
+                    "p-3 rounded-2xl border-2 border-white shadow-sm",
+                    lead.listing_type === 'car' ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600"
+                  )}>
+                    {lead.listing_type === 'car' ? <CarFront className="h-5 w-5" /> : <ShoppingCart className="h-5 w-5" />}
                   </div>
-                  <div>
-                    <p className="font-bold text-sm">Completed Wash</p>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">{new Date(item.created_at).toLocaleDateString()}</p>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="font-black text-sm text-slate-900 truncate">{lead.listing?.name || 'Automotive Listing'}</p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[8px] font-black px-2 uppercase">{lead.status}</Badge>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase">{new Date(lead.created_at).toLocaleDateString()}</span>
+                    </div>
                   </div>
+                  <Button size="icon" variant="ghost" className="rounded-full h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors" asChild>
+                    <Link href="/customer/leads"><MessageSquare className="h-4 w-4" /></Link>
+                  </Button>
                 </div>
-                <Badge variant="outline" className="text-[9px] font-black bg-green-50 text-green-700 border-green-100">VERIFIED</Badge>
-              </div>
+              </Card>
             )) : (
-              <div className="py-12 text-center text-xs font-bold text-slate-300 italic bg-white/30 rounded-3xl border-2 border-dashed">
-                No historical records found.
+              <div className="py-12 text-center bg-white/30 rounded-[2rem] border-2 border-dashed flex flex-col items-center gap-3">
+                <MessageSquare className="h-6 w-6 text-slate-200" />
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">No inquiries sent</p>
               </div>
             )}
           </div>
-        </section>
-      </div>
 
-      {/* Support Card */}
-      <Card className="rounded-[2rem] border-2 bg-slate-900 text-white overflow-hidden mt-8 shadow-2xl">
-        <CardContent className="p-10 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="space-y-2 text-center md:text-left">
-            <h3 className="text-2xl font-black uppercase italic italic tracking-tight">Partner with the best</h3>
-            <p className="text-slate-400 text-sm font-medium max-w-md">Every business on AutoLink is verified by our admins. Enjoy professional service at competitive Botswana rates.</p>
-          </div>
-          <Button variant="outline" className="rounded-full h-12 px-8 font-black border-white/20 text-white hover:bg-white/10" asChild>
-            <Link href="/customer/home">Discover Partners</Link>
-          </Button>
-        </CardContent>
-      </Card>
+          <Card className="bg-slate-900 border-none rounded-[2rem] p-6 shadow-2xl mt-6">
+            <div className="flex items-start gap-4">
+              <div className="bg-primary/20 p-3 rounded-2xl shadow-lg border border-primary/10">
+                <ShieldCheck className="h-6 w-6 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-white font-black uppercase italic tracking-tight text-lg">Verified Network</p>
+                <p className="text-slate-400 text-[10px] leading-relaxed font-medium">
+                  Every inquiry is handled via WhatsApp for your security. Shop with confidence.
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ShieldCheck, ArrowLeft, MessageCircle, Mail, AlertCircle } from "lucide-react";
+import { Loader2, ShieldCheck, ArrowLeft, MessageCircle, Mail, AlertCircle, Smartphone } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import Link from 'next/link';
@@ -66,29 +66,22 @@ export default function LoginPage() {
         body: JSON.stringify({ whatsapp })
       });
 
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const errorText = await response.text();
-        console.error("[LOGIN-API] Invalid Response format:", errorText);
-        throw new Error("Server returned an invalid format. Please try again later.");
-      }
-
       const result = await response.json();
 
       if (!result.success) {
-        throw new Error(result.error || 'Authentication failed');
+        throw new Error(result.error);
       }
 
-      // Success flow
+      // In this flow, we simulate the session by storing the ID
+      // Real Supabase Auth can be linked via Anonymouse sign-in for persistence
       localStorage.setItem('customer_id', result.customer_id);
       
-      // Ensure an active Supabase session exists so RLS doesn't block connection
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         await supabase.auth.signInAnonymously();
       }
       
-      toast({ title: "Welcome Back!", description: "Opening your tracker dashboard..." });
+      toast({ title: "Welcome Back!", description: "Accessing your dashboard..." });
       router.push('/customer/dashboard');
     } catch (error: any) {
       console.error("[LOGIN-CLIENT] Error:", error);
@@ -115,8 +108,8 @@ export default function LoginPage() {
               <ShieldCheck className="h-8 w-8 text-white" />
             </div>
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-white uppercase italic">AutoLink Africa</h1>
-          <p className="text-slate-400 font-medium">Platform Authentication Center</p>
+          <h1 className="text-3xl font-black tracking-tight text-white uppercase italic text-center">AutoLink Africa</h1>
+          <p className="text-slate-400 font-medium text-center">Marketplace Authentication</p>
         </div>
 
         <Tabs defaultValue="customer" className="w-full">
@@ -129,11 +122,11 @@ export default function LoginPage() {
             <Card className="border-white/5 bg-slate-900 shadow-2xl rounded-3xl overflow-hidden">
               <CardHeader className="bg-white/5 border-b border-white/5">
                 <CardTitle className="text-white text-xl flex items-center gap-2">
-                  <MessageCircle className="h-5 w-5 text-green-500" />
-                  Instant Access
+                  <Smartphone className="h-5 w-5 text-green-500" />
+                  WhatsApp Access
                 </CardTitle>
                 <CardDescription className="text-slate-400">
-                  Enter your number to view your carwash status.
+                  Enter your number to access your inquiries and bookings.
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-8">
@@ -152,10 +145,12 @@ export default function LoginPage() {
                   <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter" disabled={loading}>
                     {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Sign In to Dashboard"}
                   </Button>
-                  <p className="text-[10px] text-center text-slate-500 font-medium">
-                    <AlertCircle className="h-3 w-3 inline mr-1" />
-                    First-time user? An account will be created automatically.
-                  </p>
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex gap-3">
+                    <AlertCircle className="h-5 w-5 text-primary shrink-0" />
+                    <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                      First time? Just book a wash or inquire about a car to automatically create your account.
+                    </p>
+                  </div>
                 </form>
               </CardContent>
             </Card>

@@ -3,10 +3,10 @@ import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase-admin';
 import { supabase } from '@/lib/supabase';
 
 /**
- * @fileOverview Resilient Customer Login API
+ * @fileOverview Refined Customer Login API (WhatsApp Only)
  * Priority 1: Find existing user in public.users via standard client.
- * Priority 2: Create new user via Admin client (if configured).
- * Priority 3: Fallback to Prototype success (if unconfigured) to prevent UI block.
+ * Priority 2: Use Admin client to retrieve Auth ID.
+ * Priority 3: Fallback to Prototype success.
  */
 
 export async function POST(req: Request) {
@@ -24,69 +24,51 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Invalid WhatsApp number format.' }, { status: 400 });
     }
 
-    // 1. Try to find user in public.users via standard client (Works without Service Key)
-    const { data: existingProfile, error: profileError } = await supabase
+    // 1. Try to find user in public.users
+    const { data: existingProfile } = await supabase
       .from('users')
-      .select('id, name')
+      .select('id, name, role')
       .eq('whatsapp_number', cleanWa)
       .maybeSingle();
 
     if (existingProfile) {
-      // Return existing bookings
-      const { data: bookings } = await supabase
-        .from('wash_bookings')
-        .select('id, status, wash_service_id, assigned_employee_id, requested_time, booking_date, location')
-        .eq('customer_id', existingProfile.id)
-        .order('requested_time', { ascending: false });
-
       return NextResponse.json({ 
         success: true,
         customer_id: existingProfile.id,
-        active_bookings: bookings || []
+        name: existingProfile.name,
+        role: existingProfile.role
       });
     }
 
-    // 2. If user not found, try to auto-create via Admin API
+    // 2. If not in public.users, check Supabase Auth directly (if Admin configured)
     if (isSupabaseAdminConfigured) {
-      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        phone: cleanWa,
-        phone_confirm: true,
-        user_metadata: { role: 'customer', whatsapp: cleanWa, name: 'Customer' },
-        password: Math.random().toString(36).slice(-16) 
-      });
+      const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+      if (!listError) {
+        const authUser = users.find((u: any) => u.phone === cleanWa || u.user_metadata?.whatsapp === cleanWa);
+        if (authUser) {
+          // Sync to public if missing
+          await supabaseAdmin.from('users').upsert({
+            id: authUser.id,
+            name: authUser.user_metadata?.name || 'Customer',
+            whatsapp_number: cleanWa,
+            role: 'customer'
+          });
 
-      if (createError && !createError.message.includes('already registered')) {
-        return NextResponse.json({ success: false, error: createError.message }, { status: 500 });
-      }
-
-      const customerId = newUser?.user?.id || (await supabaseAdmin.auth.admin.listUsers()).data.users.find((u: any) => u.phone === cleanWa)?.id;
-
-      if (customerId) {
-        await supabaseAdmin.from('users').upsert({
-          id: customerId,
-          name: 'Customer',
-          full_name: 'Anonymous Customer',
-          whatsapp_number: cleanWa,
-          role: 'customer',
-          is_anonymous: true,
-          created_at: new Date().toISOString()
-        });
-
-        return NextResponse.json({ success: true, customer_id: customerId, active_bookings: [] });
+          return NextResponse.json({ 
+            success: true, 
+            customer_id: authUser.id,
+            name: authUser.user_metadata?.name || 'Customer'
+          });
+        }
       }
     }
 
-    // 3. PROTOTYPE FALLBACK: If unconfigured, allow login with a virtual ID
-    // This allows the user to see the dashboard/UI flow working.
-    console.warn('[LOGIN-API] Running in Prototype Fallback mode. Please provide SUPABASE_SERVICE_ROLE_KEY for real user persistence.');
-    
+    // 3. If user doesn't exist at all, return failure 
+    // They will be created automatically on their first Booking or Lead submission.
     return NextResponse.json({ 
-      success: true,
-      customer_id: '00000000-0000-0000-0000-000000000000', // Deterministic mock ID
-      active_bookings: [],
-      is_mock: true,
-      message: 'Running in Prototype Mode (Service Key missing)'
-    });
+      success: false, 
+      error: 'Account not found. Your account will be created automatically when you make your first booking or inquiry.' 
+    }, { status: 404 });
 
   } catch (err: any) {
     console.error('[LOGIN-API] Fatal Error:', err);
