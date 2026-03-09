@@ -18,19 +18,30 @@ interface BookingModalProps {
   service: any; 
 }
 
+/**
+ * Robust error message extraction for Supabase and standard JS errors.
+ */
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
+  
+  // Extract from PostgrestError or standard Error
   const message = err.message || err.error_description || (err.error && err.error.message);
   const details = err.details || "";
   const code = err.code || "";
+  
   if (message) {
     let fullMessage = message;
     if (details && details !== message) fullMessage += ` (${details})`;
-    if (code) fullMessage += ` [${code}]`;
+    if (code) fullMessage += ` [Code: ${code}]`;
     return fullMessage;
   }
-  return String(err);
+
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 };
 
 export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
@@ -63,9 +74,9 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
 
     setLoading(true);
 
-    // DUAL-FLOW PAYLOAD
-    // 1. Authenticated: include customer_id
-    // 2. Anonymous: OMIT customer_id (triggers database trigger logic)
+    // PAYLOAD CONSTRUCTION (Marketplace Double-Flow)
+    // Send customer_id only if authenticated to link history.
+    // Send null/omit for anonymous to trigger DB account creation.
     const payload: any = {
       customer_name: name.trim(),
       customer_whatsapp: whatsapp.trim(),
@@ -83,12 +94,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       payload.customer_id = authUser.id;
     }
 
-    console.log("Booking debug (Modal):", {
-      serviceId: service.id,
-      businessId: service.business_id,
-      isAnonymous: !authUser?.id,
-      payload
-    });
+    console.log("[BOOKING-DEBUG] Submitting payload:", payload);
 
     try {
       const { error } = await supabase
@@ -103,14 +109,15 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       if (authUser) {
         router.push("/customer/bookings");
       } else {
-        router.push("/login"); // Encourage login to track the new auto-created account
+        router.push("/login");
       }
     } catch (err: any) {
-      console.error("[BOOKING-MODAL] Error:", err);
+      const errorMsg = extractErrorMessage(err);
+      console.error("[BOOKING-MODAL] Fatal Error Details:", errorMsg);
       toast({
         variant: "destructive",
         title: "Booking Failed",
-        description: extractErrorMessage(err)
+        description: errorMsg
       });
     } finally {
       setLoading(false);
