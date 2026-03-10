@@ -55,7 +55,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !whatsapp.trim()) {
-      toast({ variant: 'destructive', title: 'Details Required' });
+      toast({ variant: 'destructive', title: 'Details Required', description: 'Name and WhatsApp are mandatory.' });
       return;
     }
 
@@ -68,7 +68,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
           id,
           business_id,
           listing_type,
-          business:business_id(owner_id, whatsapp_number, name)
+          business:business_id(whatsapp_number, name)
         `)
         .eq('id', listingId)
         .single();
@@ -85,35 +85,43 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         customer_whatsapp: cleanWa,
         customer_email: email.trim() || null,
         seller_business_id: listing.business_id,
-        seller_id: listing.business_id, // FK to businesses table
+        seller_id: listing.business_id, // Satisfy fk_leads_seller (FK to businesses)
         listing_id: listing.id,
         listing_type: mappedType,
-        lead_type: mappedType,
+        lead_type: mappedType, // Critical NOT NULL field in DB
         status: 'new'
       };
 
-      // Handle authenticated identity resolution
+      // Handle identity linkage
       if (authUser?.id) {
         payload.customer_id = authUser.id;
         payload.user_id = authUser.id;
       }
 
-      console.log("[LEAD-CAPTURE] Submitting:", payload);
+      console.log("[LEAD-CAPTURE] Submitting Payload:", payload);
       const { error: leadErr } = await supabase.from('leads').insert(payload);
 
-      if (leadErr) throw leadErr;
+      if (leadErr) {
+        console.error("[LEAD-MODAL] Database Insert Error:", {
+            message: leadErr.message,
+            details: leadErr.details,
+            code: leadErr.code,
+            hint: leadErr.hint
+        });
+        throw leadErr;
+      }
 
-      // 3. WhatsApp Redirect
+      // 3. WhatsApp Redirect (Using correct template literals)
       const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
       const cleanBizPhone = bizPhone.replace(/\D/g, '');
       const message = `Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name.trim()}.`;
       const url = `https://wa.me/${cleanBizPhone}?text=${encodeURIComponent(message)}`;
 
-      toast({ title: "Inquiry Sent! ✅", description: "Redirecting to dealer..." });
+      toast({ title: "Inquiry Sent! ✅", description: "Opening dealer chat..." });
       window.open(url, '_blank');
       onClose();
     } catch (err: any) {
-      console.error("[LEAD-CAPTURE] Error Details:", err);
+      console.error("[LEAD-CAPTURE] Fatal Error:", err);
       toast({ 
         variant: 'destructive', 
         title: 'Submission Failed', 
@@ -133,7 +141,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
             Product Inquiry
           </DialogTitle>
           <DialogDescription className="text-slate-400 font-medium">
-            Contacting <span className="text-white font-bold">{listingTitle}</span>. Your inquiry will be synced to your WhatsApp dashboard.
+            Contacting <span className="text-white font-bold">{listingTitle}</span>. Your inquiry will be synced to your activity hub.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
@@ -142,21 +150,21 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white" />
+                <Input placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white focus:border-primary" />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">WhatsApp Number</Label>
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white" />
+                <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white focus:border-primary" />
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email (Optional)</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input type="email" placeholder="john@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white" />
+                <Input type="email" placeholder="john@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white focus:border-primary" />
               </div>
             </div>
           </div>

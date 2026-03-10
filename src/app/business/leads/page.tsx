@@ -10,11 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import type { Lead } from "@/lib/types";
 
 /**
  * @fileOverview Business Leads Management Page
- * Resolved ambiguity by using Manual Wiring for listings.
+ * Uses Manual Wiring for listings to avoid ambiguity.
  */
 
 export default function BusinessLeadsPage() {
@@ -44,16 +43,7 @@ export default function BusinessLeadsPage() {
             // 2. STAGE 1: Fetch flat leads (avoiding ambiguous listing join)
             const { data: leadData, error } = await supabase
                 .from('leads')
-                .select(`
-                    id,
-                    customer_name,
-                    customer_whatsapp,
-                    customer_email,
-                    listing_id,
-                    listing_type,
-                    status,
-                    created_at
-                `)
+                .select('id, customer_name, customer_whatsapp, customer_email, listing_id, listing_type, status, created_at')
                 .eq('seller_business_id', biz.id)
                 .order('created_at', { ascending: false });
 
@@ -65,11 +55,12 @@ export default function BusinessLeadsPage() {
                 
                 let listingMap: Record<string, any> = {};
                 if (listingIds.length > 0) {
-                    const { data: listData } = await supabase
+                    const { data: listData, error: listErr } = await supabase
                         .from('listings')
                         .select('id, name, price')
                         .in('id', listingIds);
                     
+                    if (listErr) throw listErr;
                     listingMap = (listData || []).reduce((acc: any, l: any) => ({ ...acc, [l.id]: l }), {});
                 }
 
@@ -84,7 +75,12 @@ export default function BusinessLeadsPage() {
                 setLeads([]);
             }
         } catch (e: any) {
-            console.error("[BUSINESS-LEADS] Fetch failure:", e);
+            console.error("[BUSINESS-LEADS] Fetch failure:", {
+                message: e?.message,
+                details: e?.details,
+                code: e?.code,
+                hint: e?.hint
+            });
             const message = e?.message || "Could not load your leads.";
             toast({ 
                 variant: 'destructive', 
@@ -102,7 +98,7 @@ export default function BusinessLeadsPage() {
             fetchLeads();
             
             const channel = supabase
-                .channel(`business-leads-${user.id}`)
+                .channel(`business-leads-realtime-${user.id}`)
                 .on('postgres_changes', { 
                     event: '*', 
                     schema: 'public', 
@@ -126,10 +122,10 @@ export default function BusinessLeadsPage() {
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary uppercase italic flex items-center gap-3">
-                        <MessageCircle className="h-10 w-10" />
+                        <MessageSquare className="h-10 w-10" />
                         Sales Leads
                     </h1>
-                    <p className="text-muted-foreground font-medium">Manage marketplace inquiries for your cars and parts.</p>
+                    <p className="text-muted-foreground font-medium text-lg">Manage marketplace inquiries for your cars and parts.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => fetchLeads(true)} className="rounded-full h-10 px-6 border-primary/20 bg-white shadow-sm">
                     <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Leads

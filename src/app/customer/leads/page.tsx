@@ -4,17 +4,16 @@ import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, MessageCircle, MapPin, Tag, Calendar, History, ShoppingCart, CarFront } from "lucide-react";
+import { Loader2, RefreshCw, MessageCircle, MapPin, Tag, Calendar, History, ShoppingCart, CarFront, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import type { Lead } from "@/lib/types";
 import Link from "next/link";
 
 /**
- * @fileOverview Refined Customer Leads Activity Hub
- * Fixed ambiguity error by using Manual Wiring Pattern for listings.
+ * @fileOverview Customer Leads Activity Hub (Manual Wiring Pattern)
+ * Resolves "more than one relationship found" error by using join-free fetches.
  */
 
 export default function CustomerLeadsPage() {
@@ -34,51 +33,36 @@ export default function CustomerLeadsPage() {
         else setRefreshing(true);
 
         try {
-            // 1. STAGE 1: Fetch Leads with flat fields and Business metadata
-            // Avoiding ambiguous 'listing:listing_id' join
+            // 1. STAGE 1: Fetch Flat Leads (No Joins to avoid ambiguity)
             const { data: leadData, error: leadError } = await supabase
                 .from('leads')
-                .select(`
-                    id,
-                    customer_name,
-                    customer_whatsapp,
-                    customer_email,
-                    status,
-                    listing_id,
-                    listing_type,
-                    created_at,
-                    seller_business_id,
-                    business:seller_business_id ( 
-                        name, 
-                        city, 
-                        whatsapp_number 
-                    )
-                `)
+                .select('id, customer_name, customer_whatsapp, customer_email, status, listing_id, listing_type, created_at, seller_business_id')
                 .eq('customer_id', authUser.id)
                 .order('created_at', { ascending: false });
 
             if (leadError) throw leadError;
 
             if (leadData && leadData.length > 0) {
-                // 2. STAGE 2: Manual Wiring - Fetch Listing metadata in parallel
+                // 2. STAGE 2: Parallel Metadata Fetching
                 const listingIds = [...new Set(leadData.map(l => l.listing_id).filter(Boolean))];
+                const businessIds = [...new Set(leadData.map(l => l.seller_business_id).filter(Boolean))];
                 
-                let listingMap: Record<string, any> = {};
-                if (listingIds.length > 0) {
-                    const { data: listingData, error: lErr } = await supabase
-                        .from('listings')
-                        .select('id, name, price')
-                        .in('id', listingIds);
-                    
-                    if (!lErr && listingData) {
-                        listingMap = listingData.reduce((acc: any, l: any) => ({ ...acc, [l.id]: l }), {});
-                    }
-                }
+                const [listingRes, businessRes] = await Promise.all([
+                    listingIds.length > 0 ? supabase.from('listings').select('id, name, price').in('id', listingIds) : Promise.resolve({ data: [] }),
+                    businessIds.length > 0 ? supabase.from('businesses').select('id, name, city, whatsapp_number').in('id', businessIds) : Promise.resolve({ data: [] })
+                ]);
+
+                if (listingRes.error) throw listingRes.error;
+                if (businessRes.error) throw businessRes.error;
+
+                const listingMap = (listingRes.data || []).reduce((acc: any, l: any) => ({ ...acc, [l.id]: l }), {});
+                const businessMap = (businessRes.data || []).reduce((acc: any, b: any) => ({ ...acc, [b.id]: b }), {});
 
                 // 3. STAGE 3: In-Memory Merge
                 const enriched = leadData.map(l => ({
                     ...l,
-                    listing: listingMap[l.listing_id] || null
+                    listing: listingMap[l.listing_id] || null,
+                    business: businessMap[l.seller_business_id] || { name: 'Verified Dealer', city: 'Botswana' }
                 }));
 
                 setLeads(enriched);
@@ -86,7 +70,14 @@ export default function CustomerLeadsPage() {
                 setLeads([]);
             }
         } catch (e: any) {
-            console.error("[CUSTOMER-LEADS] Fetch failure:", e);
+            // Detailed error extraction to fix the {} console issue
+            console.error("[CUSTOMER-LEADS] Fetch failure:", {
+                message: e?.message,
+                details: e?.details,
+                code: e?.code,
+                hint: e?.hint,
+                full: e
+            });
             const message = e?.message || "Could not load your inquiries. Please try again.";
             toast({ 
                 variant: 'destructive', 
@@ -103,9 +94,8 @@ export default function CustomerLeadsPage() {
         if (!authLoading && authUser) {
             fetchLeads();
             
-            // Real-time subscription for instant lead status updates
             const channel = supabase
-                .channel(`customer-leads-${authUser.id}`)
+                .channel(`customer-leads-realtime-${authUser.id}`)
                 .on('postgres_changes', { 
                     event: '*', 
                     schema: 'public', 
@@ -121,7 +111,7 @@ export default function CustomerLeadsPage() {
     const handleReconnect = (lead: any) => {
         const phone = lead.business?.whatsapp_number?.replace(/\D/g, '') || '26777491261';
         const listingName = lead.listing?.name || 'Automotive Listing';
-        const message = `Hi! 👋 I'm following up on my inquiry for *${listingName}*.`;
+        const message = `Hi! 👋 I'm following up on my inquiry for *${listingName}*. My name is ${lead.customer_name}.`;
         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
@@ -140,7 +130,7 @@ export default function CustomerLeadsPage() {
                         <MessageCircle className="h-10 w-10" />
                         My Inquiries
                     </h1>
-                    <p className="text-muted-foreground font-medium">Track your marketplace leads and dealer connections.</p>
+                    <p className="text-muted-foreground font-medium text-lg">Track your marketplace leads and dealer connections.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => fetchLeads(true)} className="rounded-full h-10 px-6 border-primary/20 bg-white shadow-sm">
                     <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} /> Sync Live
@@ -158,10 +148,10 @@ export default function CustomerLeadsPage() {
                                 )}>
                                     {lead.listing_type === 'car' ? <CarFront className="h-8 w-8" /> : <ShoppingCart className="h-8 w-8" />}
                                 </div>
-                                <div className="space-y-1">
+                                <div className="space-y-1 overflow-hidden">
                                     <div className="flex items-center gap-2">
                                         <Badge className={cn(
-                                            "font-black uppercase text-[9px] px-3 py-1",
+                                            "font-black uppercase text-[9px] px-3 py-1 shadow-sm",
                                             lead.status === 'new' ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"
                                         )}>
                                             {lead.status}
@@ -170,12 +160,12 @@ export default function CustomerLeadsPage() {
                                             {lead.listing_type?.replace('_', ' ')}
                                         </span>
                                     </div>
-                                    <h3 className="text-xl font-black text-slate-900">{lead.listing?.name || 'Unknown Listing'}</h3>
+                                    <h3 className="text-xl font-black text-slate-900 truncate">{lead.listing?.name || 'Unknown Listing'}</h3>
                                     <p className="text-sm font-bold text-primary italic">{lead.business?.name || 'Verified Dealer'}</p>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 md:flex md:items-center gap-8">
+                            <div className="grid grid-cols-2 md:flex md:items-center gap-8 border-t md:border-t-0 pt-4 md:pt-0">
                                 <div className="space-y-1">
                                     <p className="text-[10px] font-black uppercase text-slate-400">Interested Price</p>
                                     <div className="flex items-center gap-2 text-sm font-black text-slate-900">
@@ -203,7 +193,7 @@ export default function CustomerLeadsPage() {
                                 onClick={() => handleReconnect(lead)}
                                 className="rounded-2xl h-12 px-6 font-black uppercase text-xs shadow-xl shadow-primary/10 group"
                             >
-                                <MessageCircle className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
+                                <MessageCircle className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform text-green-400" />
                                 Contact Dealer
                             </Button>
                         </div>
