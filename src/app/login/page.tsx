@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ShieldCheck, ArrowLeft, MessageCircle, Mail, AlertCircle, Smartphone } from "lucide-react";
+import { Loader2, ShieldCheck, ArrowLeft, Mail, AlertCircle, Smartphone } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import Link from 'next/link';
@@ -16,10 +16,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   
-  // WhatsApp State
   const [whatsapp, setWhatsapp] = useState('');
-
-  // Email State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -38,12 +35,15 @@ export default function LoginPage() {
         .from('users')
         .select('role')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
 
       toast({ title: "Welcome Back", description: "Accessing your dashboard..." });
       
-      if (profile?.role === 'admin') router.push('/admin/dashboard');
-      else router.push('/business/dashboard');
+      if (profile?.role === 'admin') {
+        router.push('/admin/dashboard');
+      } else {
+        router.push('/business/dashboard');
+      }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Login Failed", description: error.message });
     } finally {
@@ -51,7 +51,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleCustomerLogin = async (e: React.FormEvent) => {
+  const handleCustomerLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!whatsapp.trim()) {
       toast({ variant: 'destructive', title: 'Input Required', description: 'Please enter your WhatsApp number.' });
@@ -72,10 +72,7 @@ export default function LoginPage() {
         throw new Error(result.error);
       }
 
-      // Store the customer ID for profile matching
-      localStorage.setItem('customer_id', result.customer_id);
-      
-      // Ensure we have an active Supabase session for RLS
+      // Ensure we have a valid session before redirecting
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         await supabase.auth.signInAnonymously();
@@ -93,7 +90,7 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [whatsapp, router]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-950 px-4">
@@ -134,7 +131,6 @@ export default function LoginPage() {
                   <div className="space-y-2">
                     <Label className="text-slate-300 font-bold uppercase text-[10px] tracking-widest ml-1">WhatsApp Number</Label>
                     <Input 
-                      id="whatsapp"
                       placeholder="26770000000" 
                       className="h-14 bg-white/5 border-white/10 text-white text-lg rounded-2xl" 
                       value={whatsapp}

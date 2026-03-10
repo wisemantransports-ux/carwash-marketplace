@@ -56,25 +56,39 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     setLoading(true);
     const cleanWa = whatsapp.replace(/\D/g, '');
 
-    // Payload logic: Omit customer_id for guest to trigger DB auto-auth lookup by phone
-    const payload: any = {
-      customer_name: name.trim(),
-      customer_whatsapp: cleanWa,
-      customer_email: email.trim() || null,
-      wash_service_id: service.id,
-      business_id: service.business_id,
-      seller_business_id: service.business_id,
-      location: locationText.trim(),
-      booking_date: date,
-      requested_time: `${date}T${time}:00`,
-      status: 'pending_assignment'
-    };
-
-    if (authUser?.id) {
-      payload.customer_id = authUser.id;
-    }
-
     try {
+      let resolvedUserId = authUser?.id;
+      
+      if (!resolvedUserId) {
+        const identRes = await fetch('/api/auth/frictionless', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ whatsapp: cleanWa, name: name.trim() })
+        });
+        const identData = await identRes.json();
+        if (!identData.success || !identData.userId) {
+          throw new Error(identData.error || "Could not verify your identity.");
+        }
+        resolvedUserId = identData.userId;
+      }
+
+      if (!resolvedUserId) throw new Error("Identity resolution failed. Please try again.");
+
+      const payload: any = {
+        customer_name: name.trim(),
+        customer_whatsapp: cleanWa,
+        customer_email: email.trim() || null,
+        wash_service_id: service.id,
+        business_id: service.business_id,
+        seller_business_id: service.business_id,
+        location: locationText.trim(),
+        booking_date: date,
+        requested_time: `${date}T${time}:00`,
+        status: 'pending_assignment',
+        customer_id: resolvedUserId,
+        user_id: resolvedUserId
+      };
+
       const { error } = await supabase.from('wash_bookings').insert(payload);
       if (error) throw error;
 
