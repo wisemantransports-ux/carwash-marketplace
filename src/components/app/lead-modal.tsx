@@ -20,15 +20,19 @@ interface LeadModalProps {
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
+  
+  // Extract from Supabase error object
   const message = err.message || err.error_description || (err.error && err.error.message);
   const details = err.details || "";
   const code = err.code || "";
+  
   if (message) {
     let fullMessage = message;
     if (details && details !== message) fullMessage += ` (${details})`;
     if (code) fullMessage += ` [${code}]`;
     return fullMessage;
   }
+  
   try {
     const stringified = JSON.stringify(err);
     return stringified === '{}' ? String(err) : stringified;
@@ -72,16 +76,21 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
       const cleanWa = whatsapp.replace(/\D/g, '');
 
+      // Map listing_type to DB constraint if necessary ('wash_service' -> 'wash')
+      const typeMapping: Record<string, string> = {
+        'wash_service': 'wash',
+        'car': 'car',
+        'spare_part': 'spare_part'
+      };
+
       // 2. Prepare Payload
-      // If customer is logged in, use their ID.
-      // If guest, the DB trigger auto_create_customer will handle it.
       const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         customer_email: email.trim() || null,
         seller_business_id: listing.business_id,
         listing_id: listingId,
-        listing_type: listing.listing_type,
+        listing_type: typeMapping[listing.listing_type] || listing.listing_type,
         status: 'new'
       };
 
@@ -94,7 +103,10 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       // 3. Log Lead in DB
       const { error: leadErr } = await supabase.from('leads').insert(payload);
       
-      if (leadErr) throw leadErr;
+      if (leadErr) {
+        console.error("[LEAD-MODAL] Database Insert Error:", leadErr);
+        throw leadErr;
+      }
 
       // 4. WhatsApp Redirect
       const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
@@ -106,8 +118,18 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       window.open(url, '_blank');
       onClose();
     } catch (err: any) {
-      console.error("[LEAD-MODAL] Error:", err);
-      toast({ variant: 'destructive', title: 'Inquiry Failed', description: extractErrorMessage(err) });
+      console.error("[LEAD-MODAL] Error Details:", {
+        message: err.message,
+        details: err.details,
+        code: err.code,
+        hint: err.hint,
+        error: err
+      });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Inquiry Failed', 
+        description: extractErrorMessage(err) 
+      });
     } finally {
       setLoading(false);
     }

@@ -20,15 +20,18 @@ interface BookingModalProps {
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
+  
   const message = err.message || err.error_description || (err.error && err.error.message);
   const details = err.details || "";
   const code = err.code || "";
+  
   if (message) {
     let fullMessage = message;
     if (details && details !== message) fullMessage += ` (${details})`;
     if (code) fullMessage += ` [${code}]`;
     return fullMessage;
   }
+  
   try {
     const stringified = JSON.stringify(err);
     return stringified === '{}' ? String(err) : stringified;
@@ -93,7 +96,10 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     try {
       const { error } = await supabase.from('wash_bookings').insert(payload);
 
-      if (error) throw error;
+      if (error) {
+        console.error("[BOOKING-MODAL] Database Insert Error:", error);
+        throw error;
+      }
 
       toast({ title: "Request Received! ✅", description: "Your wash is being coordinated. Redirecting to your dashboard..." });
       onClose();
@@ -102,7 +108,13 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       router.push("/customer/dashboard");
     } catch (err: any) {
       const errorMsg = extractErrorMessage(err);
-      console.error("[BOOKING-MODAL] Fatal Error Details:", errorMsg);
+      console.error("[BOOKING-MODAL] Error Details:", {
+        message: err.message,
+        details: err.details,
+        code: err.code,
+        hint: err.hint,
+        error: err
+      });
       toast({
         variant: "destructive",
         title: "Booking Failed",
