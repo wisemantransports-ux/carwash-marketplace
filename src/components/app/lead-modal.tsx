@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { MessageCircle, Loader2, Smartphone, User, Mail, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 
 interface LeadModalProps {
@@ -46,6 +47,7 @@ const extractErrorMessage = (err: any): string => {
 };
 
 export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModalProps) {
+  const router = useRouter();
   const { user: authUser } = useAuth();
 
   const [name, setName] = useState('');
@@ -57,7 +59,8 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
   useEffect(() => {
     if (isOpen && authUser) {
       setName(authUser.user_metadata?.name || '');
-      setWhatsapp(authUser.phone || authUser.user_metadata?.whatsapp || '');
+      const wa = authUser.phone || authUser.user_metadata?.whatsapp || '';
+      setWhatsapp(wa);
       setEmail(authUser.email || '');
     }
   }, [isOpen, authUser]);
@@ -84,7 +87,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
           id,
           business_id,
           listing_type,
-          business:business_id(owner_id, whatsapp_number, name)
+          business:business_id(whatsapp_number, name)
         `)
         .eq('id', listingId)
         .single();
@@ -105,24 +108,24 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       const mappedType = typeMapping[listing.listing_type] || listing.listing_type;
 
       // 2. Construct Payload
+      // Note: seller_id must be a valid business ID to satisfy fk_leads_seller if it targets businesses table
       const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         customer_email: email.trim() || null,
         seller_business_id: listing.business_id,
-        seller_id: (listing.business as any).owner_id, // Satisfies seller_id NOT NULL constraint
+        seller_id: listing.business_id, 
         listing_id: listing.id,
         listing_type: mappedType,
-        lead_type: mappedType, // Satisfies lead_type NOT NULL constraint
+        lead_type: mappedType,
         status: 'new'
       };
 
       // 3. Handle Identity (Auth vs Anonymous)
-      // If anonymous, customer_id and user_id remain NULL, 
-      // triggering the Supabase 'auto_create_customer' BEFORE INSERT function.
+      // If anonymous, customer_id and user_id remain NULL to trigger backend resolution
       if (authUser?.id) {
         payload.customer_id = authUser.id;
-        payload.user_id = authUser.id; // Satisfies user_id NOT NULL for auth flows
+        payload.user_id = authUser.id;
       }
 
       console.log("[LEAD-CAPTURE] Dispatched Payload:", payload);
