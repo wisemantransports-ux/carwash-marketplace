@@ -9,16 +9,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, CheckCircle2, User, Upload, MapPin, Smartphone, Tag } from 'lucide-react';
+import { Loader2, Store, CheckCircle2, User, Upload, MapPin, Smartphone, Tag, ListFilter } from 'lucide-react';
 import Image from 'next/image';
 import { cn, normalizePhone } from '@/lib/utils';
-import { Business, BusinessType } from '@/lib/types';
+import { Business, BusinessType, BusinessCategory } from '@/lib/types';
 
 /**
  * @fileOverview Safe Business Profile Management
- * - Only writes to businesses table
- * - Owner name in auth.users is not modified from client
- * - Whitelisted editable fields enforced
+ * - Only writes to "businesses" table.
+ * - Respects RLS (owner_id = auth.uid()).
+ * - Excludes restricted platform-controlled fields.
+ * - Does not touch "auth.users" or "users" tables.
  */
 
 export default function BusinessProfilePage() {
@@ -32,11 +33,12 @@ export default function BusinessProfilePage() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
-  const [bizType, setBizType] = useState<BusinessType>('individual');
+  const [category, setCategory] = useState<BusinessCategory>('Wash');
   const [specialTag, setSpecialTag] = useState('');
   const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
 
-  const [ownerName, setOwnerName] = useState(''); // purely display, not updated in auth.users
+  // Display-only fields (Source of truth is Auth metadata)
+  const [ownerName, setOwnerName] = useState('');
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -48,6 +50,7 @@ export default function BusinessProfilePage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
+      // Identity source: Auth metadata (read-only for app)
       setOwnerName(session.user.user_metadata?.name || '');
 
       const { data: biz, error } = await supabase
@@ -65,7 +68,7 @@ export default function BusinessProfilePage() {
         setAddress(biz.address || '');
         setCity(biz.city || '');
         setLogoUrl(biz.logo_url || '');
-        setBizType(biz.business_type || 'individual');
+        setCategory(biz.category || 'Wash');
         setSpecialTag(biz.special_tag || '');
         setDeliveryType(biz.type || 'station');
       }
@@ -79,7 +82,7 @@ export default function BusinessProfilePage() {
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
-  // Logo upload
+  // Logo upload to Supabase Storage
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0] || !profile) return;
 
@@ -108,7 +111,7 @@ export default function BusinessProfilePage() {
     }
   };
 
-  // Save business profile (no auth.users modification)
+  // Save business profile (strictly "businesses" table only)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -118,34 +121,48 @@ export default function BusinessProfilePage() {
       if (!session?.user) throw new Error('Session expired. Please log in again.');
 
       if (!name.trim() || !whatsapp.trim()) throw new Error('Business name and WhatsApp are required.');
+      
+      // Validation: normalizePhone ensures "+" prefix and international format
       const cleanWa = normalizePhone(whatsapp);
+
+      // MINIMAL PAYLOAD: Only whitelisted editable fields
+      const payload = {
+        name: name.trim(),
+        whatsapp_number: cleanWa,
+        address: address.trim(),
+        city: city.trim(),
+        logo_url: logoUrl,
+        category: category,
+        special_tag: specialTag.trim(),
+        type: deliveryType
+      };
+
+      // DEBUG LOGGING (Point 5 of instructions)
+      console.log("[PROFILE-UPDATE] Authenticated User ID:", session.user.id);
+      console.log("[PROFILE-UPDATE] Payload Sent:", payload);
 
       const { error: bizError } = await supabase
         .from('businesses')
-        .update({
-          name: name.trim(),
-          whatsapp_number: cleanWa,
-          address: address.trim(),
-          city: city.trim(),
-          logo_url: logoUrl,
-          business_type: bizType,
-          special_tag: specialTag.trim(),
-          type: deliveryType
-        })
+        .update(payload)
         .eq('owner_id', session.user.id);
 
-      if (bizError) throw bizError;
+      if (bizError) {
+        // Detailed error extraction for debugging
+        const errorDetails = {
+          message: bizError.message,
+          details: bizError.details,
+          hint: bizError.hint,
+          code: bizError.code
+        };
+        console.error("[PROFILE-UPDATE] Database Error:", errorDetails);
+        throw new Error(bizError.message);
+      }
 
       toast({ title: 'Profile Updated', description: 'Your business credentials have been saved.' });
       await fetchProfile();
 
     } catch (err: any) {
-      console.error("[PROFILE-UPDATE] Error Details:", {
-        message: err.message,
-        details: err.details,
-        code: err.code,
-        hint: err.hint
-      });
+      console.error("[PROFILE-UPDATE] Fatal Error:", err);
       toast({
         variant: 'destructive',
         title: 'Update Failed',
@@ -192,22 +209,26 @@ export default function BusinessProfilePage() {
                   </div>
                 </div>
 
-                {/* Owner & Type */}
+                {/* Owner & Category */}
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Owner Full Name (Display Only)</Label>
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Owner Full Name (Identity)</Label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input value={ownerName} readOnly className="pl-10 bg-muted/50" placeholder="Identity Name" />
+                      <Input value={ownerName} readOnly className="pl-10 bg-muted/50 cursor-not-allowed" placeholder="Managed in Account Settings" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Business Structure</Label>
-                    <Select value={bizType} onValueChange={(v: any) => setBizType(v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Business Category</Label>
+                    <Select value={category} onValueChange={(v: any) => setCategory(v)}>
+                      <SelectTrigger className="relative">
+                        <ListFilter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                        <div className="pl-6"><SelectValue /></div>
+                      </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="individual">Individual</SelectItem>
-                        <SelectItem value="registered">Registered Entity (CIPA)</SelectItem>
+                        <SelectItem value="Wash">Wash Service</SelectItem>
+                        <SelectItem value="Spare">Spare Parts</SelectItem>
+                        <SelectItem value="Cars">Car Showroom</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -221,7 +242,7 @@ export default function BusinessProfilePage() {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="station">Fixed Station</SelectItem>
-                        <SelectItem value="mobile">Mobile</SelectItem>
+                        <SelectItem value="mobile">Mobile / On-Site</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -246,7 +267,7 @@ export default function BusinessProfilePage() {
                   </div>
                   <div className="relative">
                     <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="Interior Specialist" />
+                    <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="Interior Specialist / Ceramic Coating" />
                   </div>
                 </div>
 
