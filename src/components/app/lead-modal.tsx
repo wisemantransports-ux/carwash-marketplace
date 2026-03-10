@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -21,18 +20,18 @@ interface LeadModalProps {
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
-
+  
   const message = err.message || err.error_description || (err.error && err.error.message);
   const details = err.details || "";
   const code = err.code || "";
-
+  
   if (message) {
     let fullMessage = message;
     if (details && details !== message) fullMessage += ` (${details})`;
     if (code) fullMessage += ` [${code}]`;
     return fullMessage;
   }
-
+  
   try {
     const stringified = JSON.stringify(err);
     return stringified === '{}' ? String(err) : stringified;
@@ -92,6 +91,8 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         'car': 'car', 
         'spare_part': 'spare_part' 
       };
+      
+      const mappedType = typeMapping[listing.listing_type] || listing.listing_type;
 
       // 2. Prepare payload
       const payload: any = {
@@ -101,7 +102,8 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         seller_business_id: listing.business_id,
         seller_id: (listing.business as any).owner_id,
         listing_id: listing.id,
-        listing_type: typeMapping[listing.listing_type] || listing.listing_type,
+        listing_type: mappedType,
+        lead_type: mappedType, // Satisfies database NOT NULL constraint
         status: 'new'
       };
 
@@ -119,12 +121,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         .insert(payload);
 
       if (leadErr) {
-        console.error("[LEAD-MODAL] Database Insert Error:", {
-          message: leadErr.message,
-          details: leadErr.details,
-          code: leadErr.code,
-          hint: leadErr.hint
-        });
+        console.error("[LEAD-MODAL] Database Insert Error:", leadErr);
         throw leadErr;
       }
 
