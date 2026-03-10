@@ -18,6 +18,7 @@ import Image from 'next/image';
  * @fileOverview Business Profile Management
  * Strictly isolates updates to public.businesses table.
  * Enforces RLS ownership and whitelists authorized editable columns.
+ * NEVER attempts to update auth.users or public.users from this client context.
  */
 
 export default function BusinessProfilePage() {
@@ -48,7 +49,7 @@ export default function BusinessProfilePage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      // Identity source of truth is auth metadata (Read Only for this form)
+      // Identity source of truth is auth metadata (READ ONLY)
       setOwnerName(session.user.user_metadata?.name || 'Authorized Partner');
 
       const { data: biz, error } = await supabase
@@ -143,12 +144,13 @@ export default function BusinessProfilePage() {
         .eq('owner_id', session.user.id);
 
       if (bizError) {
-        // Construct detailed error for the catch block
-        const errorToThrow = new Error(bizError.message);
-        (errorToThrow as any).details = bizError.details;
-        (errorToThrow as any).code = bizError.code;
-        (errorToThrow as any).hint = bizError.hint;
-        throw errorToThrow;
+        console.error("[PROFILE-UPDATE] Supabase Error:", {
+          message: bizError.message,
+          details: bizError.details,
+          hint: bizError.hint,
+          code: bizError.code
+        });
+        throw new Error(bizError.message);
       }
 
       toast({ 
@@ -158,7 +160,6 @@ export default function BusinessProfilePage() {
       
       await fetchProfile();
     } catch (error: any) {
-      // Robust error logging to console
       console.error("[PROFILE-UPDATE] Fatal Error:", error);
       
       toast({ 
