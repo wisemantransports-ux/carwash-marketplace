@@ -75,10 +75,20 @@ export default function BusinessProfilePage() {
     e.preventDefault();
     setSaving(true);
     try {
+      // Get the active session to retrieve the JWT token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+
       // Use the Secure API Route to bypass Postgres permission issues on 'users' and 'businesses' tables
       const response = await fetch('/api/business/update-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({
           name,
           address,

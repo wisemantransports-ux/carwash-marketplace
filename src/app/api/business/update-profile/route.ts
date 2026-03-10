@@ -5,13 +5,23 @@ import { supabase } from '@/lib/supabase';
 /**
  * @fileOverview Secure Business Profile Update API
  * Uses supabaseAdmin to bypass Postgres "Permission Denied" errors on restricted tables.
+ * Authenticates via Authorization header token.
  */
 
 export async function POST(req: Request) {
   try {
-    // 1. Verify Session (Security)
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    // 1. Verify Token (Security)
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader?.split(' ')[1];
+
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized session.' }, { status: 401 });
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error('[PROFILE-UPDATE-AUTH-ERROR]', authError);
       return NextResponse.json({ success: false, error: 'Unauthorized session.' }, { status: 401 });
     }
 
@@ -43,7 +53,7 @@ export async function POST(req: Request) {
         category,
         id_number: id_number?.trim()
       })
-      .eq('owner_id', session.user.id);
+      .eq('owner_id', user.id);
 
     if (bizError) throw bizError;
 
@@ -54,7 +64,7 @@ export async function POST(req: Request) {
         .update({
           name: owner_name.trim()
         })
-        .eq('id', session.user.id);
+        .eq('id', user.id);
       
       if (userError) throw userError;
     }
