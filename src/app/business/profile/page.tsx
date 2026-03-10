@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, ShieldCheck, CheckCircle2, User, Upload, MapPin, Smartphone } from 'lucide-react';
+import { Loader2, Store, ShieldCheck, CheckCircle2, User, Upload, MapPin, Smartphone, Tag } from 'lucide-react';
 import { Business, BusinessType } from '@/lib/types';
 import { cn, normalizePhone } from '@/lib/utils';
 import Image from 'next/image';
@@ -17,6 +17,7 @@ import Image from 'next/image';
  * @fileOverview Business Profile Page
  * Refactored to strictly update ONLY editable columns in public.businesses.
  * Enforces ownership filtering and respects RLS by excluding restricted fields.
+ * Includes detailed error logging for Supabase issues.
  */
 
 export default function BusinessProfilePage() {
@@ -24,19 +25,20 @@ export default function BusinessProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // Editable Application Fields
+  // State for editable columns per requirement:
+  // name, whatsapp_number, address, city, logo_url, business_type, special_tag, type
   const [name, setName] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
-  const [whatsapp, setWhatsapp] = useState('');
-  const [bizType, setBizType] = useState<BusinessType>('individual');
-  const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
   const [logoUrl, setLogoUrl] = useState('');
+  const [bizType, setBizType] = useState<BusinessType>('individual');
+  const [specialTag, setSpecialTag] = useState('');
+  const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
 
-  // Read-only info from session/record
+  // Display-only info
   const [ownerName, setOwnerName] = useState('');
   const [idNumberDisplay, setIdNumberDisplay] = useState('');
-  const [specialTagDisplay, setSpecialTagDisplay] = useState('');
 
   // Logo Upload
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -45,16 +47,16 @@ export default function BusinessProfilePage() {
   const fetchProfile = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
 
-      setOwnerName(user.user_metadata?.name || 'Authorized Owner');
+      setOwnerName(session.user.user_metadata?.name || 'Authorized Owner');
 
       // Fetch Business Record
       const { data: biz, error } = await supabase
         .from('businesses')
         .select('*')
-        .eq('owner_id', user.id)
+        .eq('owner_id', session.user.id)
         .maybeSingle();
 
       if (error) throw error;
@@ -62,14 +64,17 @@ export default function BusinessProfilePage() {
       if (biz) {
         const typed = biz as Business;
         setProfile(typed);
+        
+        // Sync states with fetched data
         setName(typed.name || '');
+        setWhatsapp(typed.whatsapp_number || '');
         setAddress(typed.address || '');
         setCity(typed.city || '');
-        setWhatsapp(typed.whatsapp_number || '');
-        setBizType(typed.business_type || 'individual');
-        setDeliveryType(typed.type || 'station');
         setLogoUrl(typed.logo_url || '');
-        setSpecialTagDisplay(typed.special_tag || '');
+        setBizType(typed.business_type || 'individual');
+        setSpecialTag(typed.special_tag || '');
+        setDeliveryType(typed.type || 'station');
+        
         setIdNumberDisplay(typed.id_number || '');
       }
     } catch (error: any) {
@@ -116,6 +121,7 @@ export default function BusinessProfilePage() {
     e.preventDefault();
     if (!profile) return;
 
+    // Frontend validation for required fields
     if (!name.trim() || !whatsapp.trim()) {
       toast({ variant: 'destructive', title: 'Required Fields', description: 'Business name and WhatsApp are mandatory.' });
       return;
@@ -123,33 +129,42 @@ export default function BusinessProfilePage() {
 
     setSaving(true);
     try {
+      // Ensure we have a valid session before update
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) throw new Error('Session expired. Please log in again.');
 
-      // Validate and Normalize Phone
-      const cleanWa = normalizePhone(whatsapp);
+      // Validate and Normalize Phone per requirement: +<country_code><number>
+      let cleanWa = whatsapp.trim();
+      try {
+        cleanWa = normalizePhone(whatsapp);
+      } catch (err: any) {
+        throw new Error(err.message || "Invalid WhatsApp number format.");
+      }
 
       /**
-       * CORRECT DATABASE UPDATE:
-       * 1. Only include editable columns as per business logic requirements.
-       * 2. Exclude restricted fields (special_tag, status, verification_status).
-       * 3. Enforce ownership filter matching owner_id to current auth session.
+       * STRICT DATABASE UPDATE:
+       * Only include editable columns: name, whatsapp_number, address, city, logo_url, business_type, special_tag, type
+       * Do NOT include restricted columns: verification_status, sub_end_date, etc.
        */
+      const payload = {
+        name: name.trim(),
+        whatsapp_number: cleanWa,
+        address: address.trim(),
+        city: city.trim(),
+        logo_url: logoUrl,
+        business_type: bizType,
+        special_tag: specialTag.trim(),
+        type: deliveryType
+      };
+
       const { error } = await supabase
         .from('businesses')
-        .update({
-          name: name.trim(),
-          whatsapp_number: cleanWa,
-          address: address.trim(),
-          city: city.trim(),
-          logo_url: logoUrl,
-          business_type: bizType,
-          type: deliveryType
-        })
+        .update(payload)
         .eq('id', profile.id)
-        .eq('owner_id', session.user.id);
+        .eq('owner_id', session.user.id); // Enforce ownership filter via authenticated ID
 
       if (error) {
+        // Log detailed Supabase error for debugging
         console.error("[PROFILE-UPDATE] Supabase Error:", {
           message: error.message,
           details: error.details,
@@ -261,6 +276,14 @@ export default function BusinessProfilePage() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Special Tag (e.g. CIPA Verified)</Label>
+                  <div className="relative">
+                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="Verification Status Badge" />
+                  </div>
+                </div>
+
                 <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter" disabled={saving}>
                   {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
                   Save Credentials
@@ -322,7 +345,7 @@ export default function BusinessProfilePage() {
                       <>
                         <CheckCircle2 className="h-10 w-10 text-green-600" />
                         <p className="font-black text-green-800 uppercase text-xs">Fully Verified</p>
-                        {specialTagDisplay && <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 font-bold text-[9px] uppercase">{specialTagDisplay}</Badge>}
+                        {profile?.special_tag && <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 font-bold text-[9px] uppercase">{profile.special_tag}</Badge>}
                       </>
                     ) : (
                       <>
