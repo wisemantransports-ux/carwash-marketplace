@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, RefreshCw, MessageCircle, MapPin, Tag, Calendar, History, ShoppingCart, CarFront } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,12 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import type { Lead } from "@/lib/types";
+import Link from "next/link";
+
+/**
+ * @fileOverview Refined Customer Leads Activity Hub
+ * Consolidates Marketplace Inquiries with robust error handling and identity resolution.
+ */
 
 export default function CustomerLeadsPage() {
     const { user, loading: authLoading } = useAuth();
@@ -19,7 +24,12 @@ export default function CustomerLeadsPage() {
     const [refreshing, setRefreshing] = useState(false);
 
     const fetchLeads = useCallback(async (silent = false) => {
-        if (!user) return;
+        if (!user?.id) {
+            setLeads([]);
+            if (!authLoading) setLoading(false);
+            return;
+        }
+
         if (!silent) setLoading(true);
         else setRefreshing(true);
 
@@ -37,29 +47,24 @@ export default function CustomerLeadsPage() {
             if (error) throw error;
             setLeads(data as any[] || []);
         } catch (e: any) {
-            const errorMsg = e?.message || "Could not load your inquiries.";
-            console.error("[CUSTOMER-LEADS] Fetch failure:", {
-                message: e?.message,
-                details: e?.details,
-                code: e?.code,
-                hint: e?.hint,
-                error: e
-            });
+            console.error("[CUSTOMER-LEADS] Fetch failure:", e);
+            const message = e?.message || e?.error_description || "Could not load your inquiries. Please try again.";
             toast({ 
                 variant: 'destructive', 
                 title: 'Sync Error', 
-                description: errorMsg 
+                description: message 
             });
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [user]);
+    }, [user?.id, authLoading]);
 
     useEffect(() => {
         if (!authLoading && user) {
             fetchLeads();
             
+            // Real-time subscription for instant lead status updates
             const channel = supabase
                 .channel(`customer-leads-${user.id}`)
                 .on('postgres_changes', { 
@@ -126,7 +131,7 @@ export default function CustomerLeadsPage() {
                                         </span>
                                     </div>
                                     <h3 className="text-xl font-black text-slate-900">{lead.listing?.name || 'Unknown Listing'}</h3>
-                                    <p className="text-sm font-bold text-primary italic">{lead.business?.name}</p>
+                                    <p className="text-sm font-bold text-primary italic">{lead.business?.name || 'Verified Dealer'}</p>
                                 </div>
                             </div>
 
@@ -142,7 +147,7 @@ export default function CustomerLeadsPage() {
                                     <p className="text-[10px] font-black uppercase text-slate-400">Location</p>
                                     <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
                                         <MapPin className="h-3.5 w-3.5 text-primary" />
-                                        {lead.business?.city}
+                                        {lead.business?.city || 'Botswana'}
                                     </div>
                                 </div>
                                 <div className="space-y-1">
@@ -171,7 +176,7 @@ export default function CustomerLeadsPage() {
                             <p className="text-slate-400 font-medium">Browse our marketplace to connect with verified dealers.</p>
                         </div>
                         <Button asChild className="rounded-full px-10 font-black uppercase h-12 shadow-lg">
-                            <a href="/find-wash">Browse Marketplace</a>
+                            <Link href="/find-wash">Browse Marketplace</Link>
                         </Button>
                     </div>
                 )}
