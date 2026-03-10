@@ -16,8 +16,8 @@ import Image from 'next/image';
 
 /**
  * @fileOverview Business Profile Management
- * Corrected to update ONLY the public.businesses table.
- * Strictly adheres to Arnold's whitelisted editable fields.
+ * Strictly isolates updates to public.businesses table.
+ * Enforces RLS ownership and whitelists authorized editable columns.
  */
 
 export default function BusinessProfilePage() {
@@ -123,11 +123,12 @@ export default function BusinessProfilePage() {
       if (!name.trim() || !whatsapp.trim()) {
         throw new Error('Business name and WhatsApp number are required.');
       }
+      
       const cleanWa = normalizePhone(whatsapp);
 
       // 2. Target public.businesses ONLY
-      // Strictly using the whitelisted editable fields from Arnold's spec.
-      // We use .eq('owner_id', session.user.id) to respect RLS policies.
+      // Strictly using the whitelisted editable fields.
+      // Filtered by owner_id to respect RLS policies.
       const { error: bizError } = await supabase
         .from('businesses')
         .update({
@@ -142,9 +143,7 @@ export default function BusinessProfilePage() {
         })
         .eq('owner_id', session.user.id);
 
-      if (bizError) {
-        throw bizError; // Let the catch block handle formatting
-      }
+      if (bizError) throw bizError;
 
       toast({ 
         title: 'Profile Updated ✅', 
@@ -153,7 +152,7 @@ export default function BusinessProfilePage() {
       
       await fetchProfile();
     } catch (error: any) {
-      // Enhanced error details extraction to avoid empty {} logs
+      // Enhanced error details extraction
       const errorDetails = {
         message: error.message || 'An unexpected database violation occurred.',
         details: error.details || '',
@@ -216,7 +215,7 @@ export default function BusinessProfilePage() {
 
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name (Managed in Auth)</Label>
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name (Auth Metadata)</Label>
                     <div className="relative opacity-60">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input value={ownerName} readOnly className="pl-10 bg-slate-50 cursor-not-allowed" />
