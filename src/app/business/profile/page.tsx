@@ -16,6 +16,7 @@ import Image from 'next/image';
 /**
  * @fileOverview Business Profile Page
  * Strictly updates public.businesses table via standard Supabase client.
+ * Enforces security by matching both business id and owner_id.
  * Does NOT attempt to modify restricted auth.users fields or platform-controlled columns.
  */
 
@@ -121,7 +122,8 @@ export default function BusinessProfilePage() {
       if (!user) throw new Error('Session expired. Please log in again.');
 
       // 2. CORRECT BEHAVIOR: Update only public.businesses table
-      // Targeting only application columns, avoiding restricted auth.users and public.users fields.
+      // Targeting only application columns, matching business ID and owner ID.
+      // Explicitly excluding platform-controlled fields and auth schema fields.
       const { error } = await supabase
         .from('businesses')
         .update({
@@ -134,7 +136,8 @@ export default function BusinessProfilePage() {
           id_number: idNumber.trim(),
           logo_url: logoUrl
         })
-        .eq('owner_id', user.id); // Enforce ownership via RLS policy (owner_id = auth.uid())
+        .eq('id', profile.id)
+        .eq('owner_id', user.id); 
 
       if (error) throw error;
 
@@ -143,14 +146,22 @@ export default function BusinessProfilePage() {
         description: 'Your changes have been saved to the marketplace.' 
       });
       
-      // 3. Refresh only local profile state, do NOT refresh authentication session
+      // 3. Refresh only local profile state
       await fetchProfile();
     } catch (error: any) {
-      console.error("[PROFILE-UPDATE] Error:", error);
+      // Improved error reporting to handle Non-enumerable properties in console
+      console.error("[PROFILE-UPDATE] Error report:", {
+        message: error.message || "Unknown error",
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        fullError: error
+      });
+      
       toast({ 
         variant: 'destructive', 
         title: 'Update Failed', 
-        description: error.message 
+        description: error.message || 'Database rejected the update. Check required fields.' 
       });
     } finally {
       setSaving(false);
