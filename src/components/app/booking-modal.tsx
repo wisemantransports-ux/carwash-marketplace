@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -97,7 +98,12 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       const { error } = await supabase.from('wash_bookings').insert(payload);
 
       if (error) {
-        console.error("[BOOKING-MODAL] Database Insert Error:", error);
+        console.error("[BOOKING-MODAL] Database Insert Error:", {
+          message: error.message,
+          details: error.details,
+          code: error.code,
+          hint: error.hint
+        });
         throw error;
       }
 

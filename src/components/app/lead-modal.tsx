@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -85,7 +86,28 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
       const cleanWa = whatsapp.replace(/\D/g, '');
 
-      // 2️⃣ Map types
+      // 2️⃣ Resolve Identity (Frictionless Auto-Auth for anonymous users)
+      let finalCustomerId = authUser?.id || null;
+      let finalUserId = authUser?.id || null;
+
+      if (!finalCustomerId) {
+        try {
+          const res = await fetch('/api/auth/frictionless', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ whatsapp: cleanWa, name: name.trim() })
+          });
+          const authResult = await res.json();
+          if (authResult.success) {
+            finalCustomerId = authResult.userId;
+            finalUserId = authResult.userId;
+          }
+        } catch (e) {
+          console.warn("[LEAD-MODAL] Frictionless identity resolution failed, attempting direct insert.", e);
+        }
+      }
+
+      // 3️⃣ Map types
       const typeMapping: Record<string, string> = {
         wash_service: 'wash',
         car: 'car',
@@ -94,7 +116,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
       const mappedType = typeMapping[listing.listing_type] || listing.listing_type;
 
-      // 3️⃣ Prepare payload including seller_id to satisfy DB constraint
+      // 4️⃣ Prepare payload
       const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
@@ -104,27 +126,30 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         listing_id: listingId,
         listing_type: mappedType,
         lead_type: mappedType,
-        status: 'new'
+        status: 'new',
+        customer_id: finalCustomerId,
+        user_id: finalUserId
       };
-
-      if (authUser?.id) {
-        payload.customer_id = authUser.id;
-        payload.user_id = authUser.id;
-      }
 
       console.log("[LEAD-DEBUG] Submitting inquiry:", payload);
 
-      // 4️⃣ Insert lead
+      // 5️⃣ Insert lead
       const { error: leadErr } = await supabase
         .from('leads')
         .insert(payload);
 
       if (leadErr) {
-        console.error("[LEAD-MODAL] Database Insert Error:", leadErr);
+        // Log descriptive error properties to avoid logging empty object {}
+        console.error("[LEAD-MODAL] Database Insert Error:", {
+          message: leadErr.message,
+          details: leadErr.details,
+          code: leadErr.code,
+          hint: leadErr.hint
+        });
         throw leadErr;
       }
 
-      // 5️⃣ WhatsApp redirect
+      // 6️⃣ WhatsApp redirect
       const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
       const cleanBizPhone = bizPhone.replace(/\D/g, '');
 
