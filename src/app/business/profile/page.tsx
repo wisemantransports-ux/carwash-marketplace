@@ -8,15 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, MapPin, ShieldCheck, CheckCircle2, Phone, User, Camera, Upload } from 'lucide-react';
+import { Loader2, Store, ShieldCheck, CheckCircle2, User, Upload } from 'lucide-react';
 import { Business, BusinessType, BusinessCategory } from '@/lib/types';
 import { cn, normalizePhone } from '@/lib/utils';
 import Image from 'next/image';
 
 /**
  * @fileOverview Business Profile Page
- * Optimized to update ONLY public.businesses table.
- * Restricted auth/platform fields are excluded to prevent security violations.
+ * Strictly updates public.businesses table via standard Supabase client.
+ * Does NOT attempt to modify restricted auth.users fields or platform-controlled columns.
  */
 
 export default function BusinessProfilePage() {
@@ -24,7 +24,7 @@ export default function BusinessProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // Form fields
+  // Form fields (Application Data)
   const [ownerName, setOwnerName] = useState('');
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -36,7 +36,7 @@ export default function BusinessProfilePage() {
   const [logoUrl, setLogoUrl] = useState('');
 
   // Logo Upload
-  const [uploadingLogo, setUploadingUploadingLogo] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const fetchProfile = useCallback(async () => {
@@ -45,7 +45,7 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch Owner Name from metadata for display only
+      // Display Owner Name from metadata (Read-only in this context)
       setOwnerName(user.user_metadata?.name || '');
 
       // Fetch Business Record
@@ -83,7 +83,7 @@ export default function BusinessProfilePage() {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || !profile) return;
     
-    setUploadingUploadingLogo(true);
+    setUploadingLogo(true);
     try {
       const file = e.target.files[0];
       const fileExt = file.name.split('.').pop();
@@ -100,11 +100,11 @@ export default function BusinessProfilePage() {
         .getPublicUrl(filePath);
 
       setLogoUrl(publicUrl);
-      toast({ title: 'Logo Uploaded', description: 'Save profile to persist changes.' });
+      toast({ title: 'Logo Uploaded', description: 'Save credentials to persist your branding.' });
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Upload Failed', description: error.message });
     } finally {
-      setUploadingUploadingLogo(false);
+      setUploadingLogo(false);
     }
   };
 
@@ -120,8 +120,8 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Session expired. Please log in again.');
 
-      // 2. Update ONLY the businesses table via standard Supabase client
-      // We explicitly exclude: owner_name (users table), special_tag (restricted), updated_at (schema mismatch)
+      // 2. Direct update to businesses table (Application Data Only)
+      // Strictly avoid restricted fields (status, verification_status, special_tag, updated_at)
       const { error } = await supabase
         .from('businesses')
         .update({
@@ -134,14 +134,16 @@ export default function BusinessProfilePage() {
           id_number: idNumber.trim(),
           logo_url: logoUrl
         })
-        .eq('id', profile.id)
-        .eq('owner_id', user.id);
+        .eq('owner_id', user.id); // Enforcement of ownership via RLS
 
       if (error) throw error;
 
-      toast({ title: 'Profile Updated ✅', description: 'Business credentials saved successfully.' });
+      toast({ 
+        title: 'Business profile updated successfully', 
+        description: 'Your changes have been saved to the marketplace.' 
+      });
       
-      // Refresh local state to confirm changes
+      // 3. Refresh the local state to confirm changes without auth side-effects
       await fetchProfile();
     } catch (error: any) {
       console.error("[PROFILE-UPDATE] Error:", error);
@@ -182,7 +184,7 @@ export default function BusinessProfilePage() {
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input className="pl-10 bg-slate-50 cursor-not-allowed" value={ownerName} disabled />
                   </div>
-                  <p className="text-[9px] text-muted-foreground italic">Contact person is fixed to your registration name.</p>
+                  <p className="text-[9px] text-muted-foreground italic">Owner name is managed by platform security.</p>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-6">
