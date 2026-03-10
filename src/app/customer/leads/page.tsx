@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, RefreshCw, MessageCircle, MapPin, Tag, Calendar, History, ShoppingCart, CarFront } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,17 +14,17 @@ import Link from "next/link";
 
 /**
  * @fileOverview Refined Customer Leads Activity Hub
- * Consolidates Marketplace Inquiries with robust error handling and identity resolution.
+ * Updated with robust identity resolution and descriptive error extraction.
  */
 
 export default function CustomerLeadsPage() {
-    const { user, loading: authLoading } = useAuth();
-    const [leads, setLeads] = useState<Lead[]>([]);
+    const { user: authUser, loading: authLoading } = useAuth();
+    const [leads, setLeads] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
     const fetchLeads = useCallback(async (silent = false) => {
-        if (!user?.id) {
+        if (!authUser?.id) {
             setLeads([]);
             if (!authLoading) setLoading(false);
             return;
@@ -38,50 +38,59 @@ export default function CustomerLeadsPage() {
                 .from('leads')
                 .select(`
                     *,
-                    listing:listing_id ( name, price ),
-                    business:seller_business_id ( name, city, whatsapp_number )
+                    listing:listing_id ( 
+                        name, 
+                        price,
+                        listing_type
+                    ),
+                    business:seller_business_id ( 
+                        name, 
+                        city, 
+                        whatsapp_number 
+                    )
                 `)
-                .eq('customer_id', user.id)
+                .eq('customer_id', authUser.id)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            setLeads(data as any[] || []);
+            setLeads(data || []);
         } catch (e: any) {
             console.error("[CUSTOMER-LEADS] Fetch failure:", e);
             const message = e?.message || e?.error_description || "Could not load your inquiries. Please try again.";
             toast({ 
                 variant: 'destructive', 
-                title: 'Sync Error', 
+                title: 'Fetch Failed', 
                 description: message 
             });
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [user?.id, authLoading]);
+    }, [authUser?.id, authLoading]);
 
     useEffect(() => {
-        if (!authLoading && user) {
+        if (!authLoading && authUser) {
             fetchLeads();
             
             // Real-time subscription for instant lead status updates
             const channel = supabase
-                .channel(`customer-leads-${user.id}`)
+                .channel(`customer-leads-${authUser.id}`)
                 .on('postgres_changes', { 
                     event: '*', 
                     schema: 'public', 
                     table: 'leads',
-                    filter: `customer_id=eq.${user.id}`
+                    filter: `customer_id=eq.${authUser.id}`
                 }, () => fetchLeads(true))
                 .subscribe();
 
             return () => { supabase.removeChannel(channel); };
         }
-    }, [authLoading, user, fetchLeads]);
+    }, [authLoading, authUser, fetchLeads]);
 
-    const handleReconnect = (lead: Lead) => {
+    const handleReconnect = (lead: any) => {
         const phone = lead.business?.whatsapp_number?.replace(/\D/g, '') || '26777491261';
-        const message = `Hi! 👋 I'm following up on my inquiry for *${lead.listing?.name}*.`;
+        const listingName = lead.listing?.name || 'Automotive Listing';
+        const message = `Hi! 👋 I'm following up on my inquiry for *${listingName}*.`;
         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
