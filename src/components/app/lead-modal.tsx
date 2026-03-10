@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, Loader2, Smartphone, User, Mail, ShieldCheck } from "lucide-react";
+import { MessageCircle, Loader2, Smartphone, User, Mail } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -71,7 +71,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
     setLoading(true);
 
     try {
-      // 1. Fetch listing details including the owner (seller_id)
+      // 1. Fetch listing details including the owner (owner_id)
       const { data: listing, error: lErr } = await supabase
         .from('listings')
         .select(`
@@ -103,11 +103,12 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         seller_id: (listing.business as any).owner_id,
         listing_id: listing.id,
         listing_type: mappedType,
-        lead_type: mappedType, // Satisfies database NOT NULL constraint
+        lead_type: mappedType,
         status: 'new'
       };
 
-      // If user is authenticated, explicitly link the identity
+      // 3. Identity logic: Only include IDs if authenticated
+      // If anonymous, database trigger auto_create_customer handles creation
       if (authUser?.id) {
         payload.customer_id = authUser.id;
         payload.user_id = authUser.id;
@@ -115,13 +116,17 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
       console.log("[LEAD-DEBUG] Submitting inquiry:", payload);
 
-      // 3. Insert lead
       const { error: leadErr } = await supabase
         .from('leads')
         .insert(payload);
 
       if (leadErr) {
-        console.error("[LEAD-MODAL] Database Insert Error:", leadErr);
+        console.error("[LEAD-MODAL] Database Insert Error:", {
+          message: leadErr.message,
+          details: leadErr.details,
+          code: leadErr.code,
+          hint: leadErr.hint
+        });
         throw leadErr;
       }
 
