@@ -16,10 +16,10 @@ import { Business, BusinessType, BusinessCategory } from '@/lib/types';
 
 /**
  * @fileOverview Safe Business Profile Management
- * - Only writes to "businesses" table.
+ * - Only writes to businesses table.
+ * - Owner name in auth.users is not modified from client.
+ * - Whitelisted editable fields enforced.
  * - Respects RLS (owner_id = auth.uid()).
- * - Excludes restricted platform-controlled fields.
- * - Does not touch "auth.users" or "users" tables.
  */
 
 export default function BusinessProfilePage() {
@@ -34,6 +34,7 @@ export default function BusinessProfilePage() {
   const [city, setCity] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [category, setCategory] = useState<BusinessCategory>('Wash');
+  const [bizType, setBizType] = useState<BusinessType>('individual');
   const [specialTag, setSpecialTag] = useState('');
   const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
 
@@ -69,6 +70,7 @@ export default function BusinessProfilePage() {
         setCity(biz.city || '');
         setLogoUrl(biz.logo_url || '');
         setCategory(biz.category || 'Wash');
+        setBizType(biz.business_type || 'individual');
         setSpecialTag(biz.special_tag || '');
         setDeliveryType(biz.type || 'station');
       }
@@ -111,21 +113,27 @@ export default function BusinessProfilePage() {
     }
   };
 
-  // Save business profile (strictly "businesses" table only)
+  // Save business profile (strictly businesses table only)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) throw new Error('Session expired. Please log in again.');
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log("Logged user:", user);
 
-      if (!name.trim() || !whatsapp.trim()) throw new Error('Business name and WhatsApp are required.');
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      if (!name.trim() || !whatsapp.trim()) {
+        throw new Error('Business name and WhatsApp are required.');
+      }
       
       // Validation: normalizePhone ensures "+" prefix and international format
       const cleanWa = normalizePhone(whatsapp);
 
-      // MINIMAL PAYLOAD: Only whitelisted editable fields
+      // MINIMAL PAYLOAD: Only whitelisted editable fields from businesses table
       const payload = {
         name: name.trim(),
         whatsapp_number: cleanWa,
@@ -134,28 +142,20 @@ export default function BusinessProfilePage() {
         logo_url: logoUrl,
         category: category,
         special_tag: specialTag.trim(),
-        type: deliveryType
+        type: deliveryType,
+        business_type: bizType
       };
 
-      // DEBUG LOGGING (Point 5 of instructions)
-      console.log("[PROFILE-UPDATE] Authenticated User ID:", session.user.id);
       console.log("[PROFILE-UPDATE] Payload Sent:", payload);
 
       const { error: bizError } = await supabase
         .from('businesses')
         .update(payload)
-        .eq('owner_id', session.user.id);
+        .eq('owner_id', user.id);
 
       if (bizError) {
-        // Detailed error extraction for debugging
-        const errorDetails = {
-          message: bizError.message,
-          details: bizError.details,
-          hint: bizError.hint,
-          code: bizError.code
-        };
-        console.error("[PROFILE-UPDATE] Database Error:", errorDetails);
-        throw new Error(bizError.message);
+        console.error("Business update error:", bizError);
+        throw bizError;
       }
 
       toast({ title: 'Profile Updated', description: 'Your business credentials have been saved.' });
@@ -260,14 +260,26 @@ export default function BusinessProfilePage() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Special Tag (e.g., Specialization)</Label>
-                    <Badge variant="ghost" className="text-[8px] h-4 px-1 opacity-50 border">Descriptive Only</Badge>
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Business Structure</Label>
+                    <Select value={bizType} onValueChange={(v: any) => setBizType(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="individual">Individual / Micro</SelectItem>
+                        <SelectItem value="registered">Registered Entity (CIPA)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="relative">
-                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="Interior Specialist / Ceramic Coating" />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Special Tag</Label>
+                      <Badge variant="ghost" className="text-[8px] h-4 px-1 opacity-50 border">Descriptive Only</Badge>
+                    </div>
+                    <div className="relative">
+                      <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="Interior Specialist" />
+                    </div>
                   </div>
                 </div>
 
