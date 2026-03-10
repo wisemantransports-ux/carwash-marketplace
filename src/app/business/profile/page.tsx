@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Store, CheckCircle2, User, Upload, MapPin, Smartphone, Tag, ShieldAlert } from 'lucide-react';
@@ -142,7 +143,7 @@ export default function BusinessProfilePage() {
         .eq('owner_id', session.user.id);
 
       if (bizError) {
-        throw new Error(`[DB] ${bizError.message} (${bizError.code})`);
+        throw bizError; // Let the catch block handle formatting
       }
 
       toast({ 
@@ -152,15 +153,20 @@ export default function BusinessProfilePage() {
       
       await fetchProfile();
     } catch (error: any) {
-      console.error("[PROFILE-UPDATE] Fatal Error:", error);
+      // Enhanced error details extraction to avoid empty {} logs
+      const errorDetails = {
+        message: error.message || 'An unexpected database violation occurred.',
+        details: error.details || '',
+        hint: error.hint || '',
+        code: error.code || ''
+      };
       
-      // Extraction of actual error details to avoid empty {} logs
-      const details = error.message || "An unexpected database violation occurred.";
+      console.error("[PROFILE-UPDATE] Fatal Error:", errorDetails);
       
       toast({ 
         variant: 'destructive', 
         title: 'Save Failed', 
-        description: details
+        description: errorDetails.message
       });
     } finally {
       setSaving(false);
