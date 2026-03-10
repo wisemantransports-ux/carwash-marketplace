@@ -15,9 +15,8 @@ import Image from 'next/image';
 
 /**
  * @fileOverview Business Profile Page
- * Refactored to strictly update ONLY editable columns in public.businesses.
- * Enforces ownership filtering and respects RLS by excluding restricted fields.
- * Includes detailed error logging for Supabase issues.
+ * Refactored to strictly update authorized columns in public.businesses.
+ * Enforces ownership filtering and handles auth metadata via auth.updateUser.
  */
 
 export default function BusinessProfilePage() {
@@ -25,8 +24,7 @@ export default function BusinessProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // State for editable columns per requirement:
-  // name, whatsapp_number, address, city, logo_url, business_type, special_tag, type
+  // State for editable columns in businesses table
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [address, setAddress] = useState('');
@@ -36,7 +34,7 @@ export default function BusinessProfilePage() {
   const [specialTag, setSpecialTag] = useState('');
   const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
 
-  // Display-only info
+  // Auth metadata fields
   const [ownerName, setOwnerName] = useState('');
   const [idNumberDisplay, setIdNumberDisplay] = useState('');
 
@@ -52,7 +50,6 @@ export default function BusinessProfilePage() {
 
       setOwnerName(session.user.user_metadata?.name || 'Authorized Owner');
 
-      // Fetch Business Record
       const { data: biz, error } = await supabase
         .from('businesses')
         .select('*')
@@ -65,7 +62,6 @@ export default function BusinessProfilePage() {
         const typed = biz as Business;
         setProfile(typed);
         
-        // Sync states with fetched data
         setName(typed.name || '');
         setWhatsapp(typed.whatsapp_number || '');
         setAddress(typed.address || '');
@@ -74,12 +70,11 @@ export default function BusinessProfilePage() {
         setBizType(typed.business_type || 'individual');
         setSpecialTag(typed.special_tag || '');
         setDeliveryType(typed.type || 'station');
-        
         setIdNumberDisplay(typed.id_number || '');
       }
     } catch (error: any) {
       console.error("[PROFILE-LOAD] Error:", error.message || error);
-      toast({ variant: 'destructive', title: 'Load Error', description: error.message || 'Unable to retrieve profile.' });
+      toast({ variant: 'destructive', title: 'Load Error', description: 'Unable to retrieve profile particulars.' });
     } finally {
       setLoading(false);
     }
@@ -121,7 +116,6 @@ export default function BusinessProfilePage() {
     e.preventDefault();
     if (!profile) return;
 
-    // Frontend validation for required fields
     if (!name.trim() || !whatsapp.trim()) {
       toast({ variant: 'destructive', title: 'Required Fields', description: 'Business name and WhatsApp are mandatory.' });
       return;
@@ -129,11 +123,10 @@ export default function BusinessProfilePage() {
 
     setSaving(true);
     try {
-      // Ensure we have a valid session before update
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) throw new Error('Session expired. Please log in again.');
 
-      // Validate and Normalize Phone per requirement: +<country_code><number>
+      // 1. Validate and Normalize WhatsApp Number
       let cleanWa = whatsapp.trim();
       try {
         cleanWa = normalizePhone(whatsapp);
@@ -141,37 +134,34 @@ export default function BusinessProfilePage() {
         throw new Error(err.message || "Invalid WhatsApp number format.");
       }
 
-      /**
-       * STRICT DATABASE UPDATE:
-       * Only include editable columns: name, whatsapp_number, address, city, logo_url, business_type, special_tag, type
-       * Do NOT include restricted columns: verification_status, sub_end_date, etc.
-       */
-      const payload = {
-        name: name.trim(),
-        whatsapp_number: cleanWa,
-        address: address.trim(),
-        city: city.trim(),
-        logo_url: logoUrl,
-        business_type: bizType,
-        special_tag: specialTag.trim(),
-        type: deliveryType
-      };
-
-      const { error } = await supabase
-        .from('businesses')
-        .update(payload)
-        .eq('id', profile.id)
-        .eq('owner_id', session.user.id); // Enforce ownership filter via authenticated ID
-
-      if (error) {
-        // Log detailed Supabase error for debugging
-        console.error("[PROFILE-UPDATE] Supabase Error:", {
-          message: error.message,
-          details: error.details,
-          code: error.code,
-          hint: error.hint
+      // 2. Update Auth Metadata (separately from businesses table)
+      if (ownerName.trim() !== (session.user.user_metadata?.name || '')) {
+        const { error: authError } = await supabase.auth.updateUser({
+          data: { name: ownerName.trim() }
         });
-        throw new Error(error.message || 'Update rejected by database security.');
+        if (authError) console.warn("[PROFILE-UPDATE] Auth sync failed:", authError.message);
+      }
+
+      /**
+       * 3. STRICT BUSINESS TABLE UPDATE:
+       * Targets ONLY allowed columns. Excludes id, owner_id, verification_status, status, etc.
+       */
+      const { error: bizError } = await supabase
+        .from('businesses')
+        .update({
+          name: name.trim(),
+          whatsapp_number: cleanWa,
+          address: address.trim(),
+          city: city.trim(),
+          logo_url: logoUrl,
+          business_type: bizType,
+          special_tag: specialTag.trim(),
+          type: deliveryType
+        })
+        .eq('owner_id', session.user.id); // Enforce RLS via owner_id filter
+
+      if (bizError) {
+        throw new Error(`${bizError.message} (Code: ${bizError.code})`);
       }
 
       toast({ 
@@ -185,7 +175,7 @@ export default function BusinessProfilePage() {
       toast({ 
         variant: 'destructive', 
         title: 'Save Failed', 
-        description: error.message || 'Check your internet connection and try again.' 
+        description: error.message || 'Check your database permissions and connection.' 
       });
     } finally {
       setSaving(false);
@@ -235,6 +225,13 @@ export default function BusinessProfilePage() {
 
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name (Auth)</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input value={ownerName} onChange={e => setOwnerName(e.target.value)} className="pl-10" placeholder="Owner Name" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
                     <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Business Structure</Label>
                     <Select value={bizType} onValueChange={(v: any) => setBizType(v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
@@ -244,6 +241,9 @@ export default function BusinessProfilePage() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Service Delivery Model</Label>
                     <Select value={deliveryType} onValueChange={(v: any) => setDeliveryType(v)}>
@@ -253,6 +253,10 @@ export default function BusinessProfilePage() {
                         <SelectItem value="mobile">Mobile (On-Site)</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">City</Label>
+                    <Input value={city} onChange={e => setCity(e.target.value)} placeholder="Gaborone / Francistown" />
                   </div>
                 </div>
 
@@ -266,21 +270,16 @@ export default function BusinessProfilePage() {
 
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">City</Label>
-                    <Input value={city} onChange={e => setCity(e.target.value)} placeholder="Gaborone / Francistown" />
-                  </div>
-                  <div className="space-y-2">
                     <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Special Identification (ReadOnly)</Label>
                     <Input value={idNumberDisplay} disabled className="bg-slate-50 cursor-not-allowed opacity-60" />
-                    <p className="text-[9px] text-muted-foreground italic">Verification credentials cannot be modified after initial review.</p>
+                    <p className="text-[9px] text-muted-foreground italic">Verification credentials are platform-managed.</p>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Special Tag (e.g. CIPA Verified)</Label>
-                  <div className="relative">
-                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="Verification Status Badge" />
+                  <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Special Tag</Label>
+                    <div className="relative">
+                      <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="e.g. CIPA Verified" />
+                    </div>
                   </div>
                 </div>
 
@@ -345,7 +344,6 @@ export default function BusinessProfilePage() {
                       <>
                         <CheckCircle2 className="h-10 w-10 text-green-600" />
                         <p className="font-black text-green-800 uppercase text-xs">Fully Verified</p>
-                        {profile?.special_tag && <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 font-bold text-[9px] uppercase">{profile.special_tag}</Badge>}
                       </>
                     ) : (
                       <>
@@ -354,14 +352,6 @@ export default function BusinessProfilePage() {
                       </>
                     )}
                   </div>
-                </div>
-                
-                <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <User className="h-3 w-3 text-slate-400" />
-                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Owner Record</span>
-                  </div>
-                  <p className="text-xs font-bold text-slate-600">{ownerName}</p>
                 </div>
               </div>
             </CardContent>
