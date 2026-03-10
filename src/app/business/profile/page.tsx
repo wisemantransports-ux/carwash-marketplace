@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -10,14 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Store, ShieldCheck, CheckCircle2, User, Upload, MapPin, Smartphone } from 'lucide-react';
-import { Business, BusinessType, BusinessCategory } from '@/lib/types';
+import { Business, BusinessType } from '@/lib/types';
 import { cn, normalizePhone } from '@/lib/utils';
 import Image from 'next/image';
 
 /**
  * @fileOverview Business Profile Page
  * Refactored to strictly update ONLY editable columns in public.businesses.
- * Enforces ownership filtering and respects RLS.
+ * Enforces ownership filtering and respects RLS by excluding restricted fields.
  */
 
 export default function BusinessProfilePage() {
@@ -33,11 +32,11 @@ export default function BusinessProfilePage() {
   const [bizType, setBizType] = useState<BusinessType>('individual');
   const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
   const [logoUrl, setLogoUrl] = useState('');
-  const [specialTag, setSpecialTag] = useState('');
 
-  // Read-only info from session
+  // Read-only info from session/record
   const [ownerName, setOwnerName] = useState('');
-  const [idNumberDisplay, setIdNumberDisplay] = useState(''); // Read-only view of ID number
+  const [idNumberDisplay, setIdNumberDisplay] = useState('');
+  const [specialTagDisplay, setSpecialTagDisplay] = useState('');
 
   // Logo Upload
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -70,12 +69,12 @@ export default function BusinessProfilePage() {
         setBizType(typed.business_type || 'individual');
         setDeliveryType(typed.type || 'station');
         setLogoUrl(typed.logo_url || '');
-        setSpecialTag(typed.special_tag || '');
+        setSpecialTagDisplay(typed.special_tag || '');
         setIdNumberDisplay(typed.id_number || '');
       }
     } catch (error: any) {
-      console.error("[PROFILE-LOAD] Error:", error);
-      toast({ variant: 'destructive', title: 'Load Error', description: error.message });
+      console.error("[PROFILE-LOAD] Error:", error.message || error);
+      toast({ variant: 'destructive', title: 'Load Error', description: error.message || 'Unable to retrieve profile.' });
     } finally {
       setLoading(false);
     }
@@ -132,9 +131,9 @@ export default function BusinessProfilePage() {
 
       /**
        * CORRECT DATABASE UPDATE:
-       * 1. Only include editable columns as per requirements.
-       * 2. Enforce ownership filter matching owner_id to current auth session.
-       * 3. Respect RLS policies.
+       * 1. Only include editable columns as per business logic requirements.
+       * 2. Exclude restricted fields (special_tag, status, verification_status).
+       * 3. Enforce ownership filter matching owner_id to current auth session.
        */
       const { error } = await supabase
         .from('businesses')
@@ -145,17 +144,24 @@ export default function BusinessProfilePage() {
           city: city.trim(),
           logo_url: logoUrl,
           business_type: bizType,
-          special_tag: specialTag,
           type: deliveryType
         })
         .eq('id', profile.id)
         .eq('owner_id', session.user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error("[PROFILE-UPDATE] Supabase Error:", {
+          message: error.message,
+          details: error.details,
+          code: error.code,
+          hint: error.hint
+        });
+        throw new Error(error.message || 'Update rejected by database security.');
+      }
 
       toast({ 
-        title: 'Profile Updated ✅', 
-        description: 'Your business particulars have been saved successfully.' 
+        title: 'Profile Updated Successfully', 
+        description: 'Your business particulars have been saved.' 
       });
       
       await fetchProfile();
@@ -316,7 +322,7 @@ export default function BusinessProfilePage() {
                       <>
                         <CheckCircle2 className="h-10 w-10 text-green-600" />
                         <p className="font-black text-green-800 uppercase text-xs">Fully Verified</p>
-                        {specialTag && <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 font-bold text-[9px] uppercase">{specialTag}</Badge>}
+                        {specialTagDisplay && <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 font-bold text-[9px] uppercase">{specialTagDisplay}</Badge>}
                       </>
                     ) : (
                       <>
