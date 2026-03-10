@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 /**
  * @fileOverview Secure Business Profile Update API
  * Handles administrative bypass for restricted tables and synchronizes auth metadata.
- * Explicitly excludes platform-controlled fields from updates.
+ * Explicitly excludes platform-controlled fields and non-existent columns from updates.
  */
 
 export async function POST(req: Request) {
@@ -46,6 +46,7 @@ export async function POST(req: Request) {
     // 1. Update the Business Record via Admin Client
     // We explicitly only allow updating standard profile fields.
     // Platform-controlled fields like status, verification_status, and special_tag are OMITTED.
+    // 'updated_at' is OMITTED as it does not exist in the current businesses table schema.
     const { error: bizError } = await supabaseAdmin
       .from('businesses')
       .update({
@@ -56,8 +57,7 @@ export async function POST(req: Request) {
         business_type,
         category,
         id_number: id_number?.trim(),
-        logo_url,
-        updated_at: new Date().toISOString()
+        logo_url
       })
       .eq('id', business_id)
       .eq('owner_id', user.id);
