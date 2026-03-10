@@ -61,7 +61,6 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      // 1. Validate and Normalize Phone
       const cleanWa = normalizePhone(whatsapp);
 
       const response = await fetch('/api/customer-login', {
@@ -72,13 +71,24 @@ export default function LoginPage() {
 
       const result = await response.json();
 
-      if (!result.success) {
-        throw new Error(result.error);
+      if (response.status === 404) {
+        toast({
+          variant: "destructive",
+          title: "Account Not Found",
+          description: "Submit an inquiry to a business first to create your customer account."
+        });
+        setLoading(false);
+        return;
       }
 
-      // Ensure we have a valid session before redirecting
+      if (!result.success) {
+        throw new Error(result.error || result.message || 'Verification failed');
+      }
+
+      // Existing user found: authenticate session for RLS access
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
+        // Authenticate as anonymous to allow RLS policies based on customer_id lookup
         await supabase.auth.signInAnonymously();
       }
       
@@ -148,7 +158,7 @@ export default function LoginPage() {
                   <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex gap-3">
                     <AlertCircle className="h-5 w-5 text-primary shrink-0" />
                     <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                      First time? We'll automatically set up your dashboard so you can track your automotive needs in real-time.
+                      First time? Submission of an inquiry form creates your account automatically. Accounts cannot be created from this login screen.
                     </p>
                   </div>
                 </form>

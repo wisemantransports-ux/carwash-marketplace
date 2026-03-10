@@ -3,9 +3,15 @@ import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase-admin';
 import { supabase } from '@/lib/supabase';
 
 /**
- * @fileOverview Audit-Compliant Customer Login API
- * Implements "Lookup First" identity resolution to prevent duplicate accounts.
+ * @fileOverview Strictly Identity-Verification Customer Login API
+ * Enforces that accounts must be created via the lead inquiry trigger.
+ * Does NOT create new users.
  */
+
+function normalizePhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  return `+${digits}`;
+}
 
 export async function POST(req: Request) {
   try {
@@ -16,14 +22,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'WhatsApp number is required.' }, { status: 400 });
     }
 
-    // Normalize phone number for consistent lookup
-    const cleanWa = whatsapp.trim().replace(/\D/g, '');
+    const cleanWa = normalizePhone(whatsapp);
     
-    if (cleanWa.length < 7) {
+    if (cleanWa.length < 10) {
       return NextResponse.json({ success: false, error: 'Invalid WhatsApp number format.' }, { status: 400 });
     }
 
-    // 1. Check existing Profile in public.users (FASTEST)
+    // 1. Check existing Profile in public.users (Primary lookup)
     const { data: existingProfile } = await supabase
       .from('users')
       .select('id, name, role')
@@ -39,30 +44,24 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. Check Auth layer via Admin Client (Fallback for synced accounts)
+    // 2. Secondary check in Auth layer via Admin Client (for accounts created via trigger but not yet synced)
     if (isSupabaseAdminConfigured) {
-      try {
-        const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-        if (listError) throw listError;
-
-        // Try to find a user with this phone number or whatsapp metadata
+      const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+      if (!listError) {
         const authUser = users.find((u: any) => 
           u.phone === cleanWa || 
-          u.phone === `+${cleanWa}` ||
+          u.phone === cleanWa.replace('+', '') ||
           u.user_metadata?.whatsapp === cleanWa
         );
 
         if (authUser) {
-          // SYNC FOUND USER: Account exists in Auth but missing in public.users
-          const { error: syncError } = await supabaseAdmin.from('users').upsert({
+          // Sync found user to public table before allowing entry
+          await supabaseAdmin.from('users').upsert({
             id: authUser.id,
             name: authUser.user_metadata?.name || 'Customer',
             whatsapp_number: cleanWa,
-            role: 'customer',
-            created_at: new Date().toISOString()
+            role: 'customer'
           });
-          
-          if (syncError) throw syncError;
 
           return NextResponse.json({ 
             success: true, 
@@ -71,53 +70,17 @@ export async function POST(req: Request) {
             role: 'customer'
           });
         }
-
-        // 3. NO ACCOUNT EXISTS: Create New
-        const { data: newAuth, error: createError } = await supabaseAdmin.auth.admin.createUser({
-          phone: cleanWa,
-          phone_confirm: true,
-          user_metadata: { 
-            name: 'Customer', 
-            role: 'customer', 
-            whatsapp: cleanWa 
-          },
-          password: Math.random().toString(36).slice(-16)
-        });
-
-        if (createError) throw createError;
-
-        if (newAuth.user) {
-          await supabaseAdmin.from('users').upsert({
-            id: newAuth.user.id,
-            name: 'Customer',
-            whatsapp_number: cleanWa,
-            role: 'customer',
-            created_at: new Date().toISOString()
-          });
-          
-          return NextResponse.json({ 
-            success: true, 
-            customer_id: newAuth.user.id,
-            name: 'Customer',
-            role: 'customer'
-          });
-        }
-      } catch (adminError: any) {
-        console.error('[IDENTITY-AUDIT] Admin resolution failure:', adminError.message);
       }
     }
 
-    // 4. PROTOTYPE FALLBACK
+    // 3. ACCOUNT NOT FOUND: Return 404 as per business logic requirements
     return NextResponse.json({ 
-      success: true, 
-      customer_id: '00000000-0000-0000-0000-000000000000',
-      name: 'Guest Customer',
-      role: 'customer',
-      is_mock: true
-    });
+      success: false, 
+      message: 'Account not found. Please submit an inquiry to a business first to create your account.' 
+    }, { status: 404 });
 
   } catch (err: any) {
-    console.error('[IDENTITY-AUDIT] Fatal Error:', err);
+    console.error('[IDENTITY-VERIFICATION] Fatal Error:', err);
     return NextResponse.json({ 
       success: false, 
       error: 'Identity verification failed.' 
