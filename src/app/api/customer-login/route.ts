@@ -3,11 +3,8 @@ import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase-admin';
 import { supabase } from '@/lib/supabase';
 
 /**
- * @fileOverview Refined Customer Login API (WhatsApp Only)
- * Implements "Login or Create" frictionless flow.
- * Priority 1: Find existing user in public.users.
- * Priority 2: Use Admin client to retrieve or create Auth ID.
- * Priority 3: Fallback to Prototype success.
+ * @fileOverview Audit-Compliant Customer Login API
+ * Implements "Lookup First" identity resolution to prevent duplicate accounts.
  */
 
 export async function POST(req: Request) {
@@ -19,13 +16,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'WhatsApp number is required.' }, { status: 400 });
     }
 
+    // Normalize phone number for consistent lookup
     const cleanWa = whatsapp.trim().replace(/\D/g, '');
     
-    if (cleanWa.length < 8) {
+    if (cleanWa.length < 7) {
       return NextResponse.json({ success: false, error: 'Invalid WhatsApp number format.' }, { status: 400 });
     }
 
-    // 1. Try to find user in public.users via standard client
+    // 1. Check existing Profile in public.users (FASTEST)
     const { data: existingProfile } = await supabase
       .from('users')
       .select('id, name, role')
@@ -41,36 +39,24 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. If not found, perform auto-creation (Frictionless Flow)
+    // 2. Check Auth layer via Admin Client (Fallback for synced accounts)
     if (isSupabaseAdminConfigured) {
       try {
-        // A. Check if they exist in Supabase Auth but not public.users
         const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
         if (listError) throw listError;
 
-        let authUser = users.find((u: any) => u.phone === cleanWa || u.user_metadata?.whatsapp === cleanWa);
+        // Try to find a user with this phone number or whatsapp metadata
+        const authUser = users.find((u: any) => 
+          u.phone === cleanWa || 
+          u.phone === `+${cleanWa}` ||
+          u.user_metadata?.whatsapp === cleanWa
+        );
 
-        // B. If not in Auth, create them
-        if (!authUser) {
-          const { data: newAuth, error: createError } = await supabaseAdmin.auth.admin.createUser({
-            phone: cleanWa,
-            phone_confirm: true,
-            user_metadata: { 
-              name: 'New Customer', 
-              role: 'customer', 
-              whatsapp: cleanWa 
-            },
-            password: Math.random().toString(36).slice(-16) // Random password for security
-          });
-          if (createError) throw createError;
-          authUser = newAuth.user;
-        }
-
-        // C. Sync/Upsert to public.users table
         if (authUser) {
+          // SYNC FOUND USER: Account exists in Auth but missing in public.users
           const { error: syncError } = await supabaseAdmin.from('users').upsert({
             id: authUser.id,
-            name: 'New Customer',
+            name: authUser.user_metadata?.name || 'Customer',
             whatsapp_number: cleanWa,
             role: 'customer',
             created_at: new Date().toISOString()
@@ -81,18 +67,47 @@ export async function POST(req: Request) {
           return NextResponse.json({ 
             success: true, 
             customer_id: authUser.id,
-            name: 'New Customer',
+            name: authUser.user_metadata?.name || 'Customer',
+            role: 'customer'
+          });
+        }
+
+        // 3. NO ACCOUNT EXISTS: Create New
+        const { data: newAuth, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          phone: cleanWa,
+          phone_confirm: true,
+          user_metadata: { 
+            name: 'Customer', 
+            role: 'customer', 
+            whatsapp: cleanWa 
+          },
+          password: Math.random().toString(36).slice(-16)
+        });
+
+        if (createError) throw createError;
+
+        if (newAuth.user) {
+          await supabaseAdmin.from('users').upsert({
+            id: newAuth.user.id,
+            name: 'Customer',
+            whatsapp_number: cleanWa,
+            role: 'customer',
+            created_at: new Date().toISOString()
+          });
+          
+          return NextResponse.json({ 
+            success: true, 
+            customer_id: newAuth.user.id,
+            name: 'Customer',
             role: 'customer'
           });
         }
       } catch (adminError: any) {
-        console.error('[LOGIN-API] Admin resolution failed:', adminError.message);
-        // Continue to fallback if admin creation hits limits or errors
+        console.error('[IDENTITY-AUDIT] Admin resolution failure:', adminError.message);
       }
     }
 
-    // 3. PROTOTYPE FALLBACK (Enables login in dev/local environments without service keys)
-    console.warn('[LOGIN-API] Running in Prototype Fallback mode.');
+    // 4. PROTOTYPE FALLBACK
     return NextResponse.json({ 
       success: true, 
       customer_id: '00000000-0000-0000-0000-000000000000',
@@ -102,10 +117,10 @@ export async function POST(req: Request) {
     });
 
   } catch (err: any) {
-    console.error('[LOGIN-API] Fatal Error:', err);
+    console.error('[IDENTITY-AUDIT] Fatal Error:', err);
     return NextResponse.json({ 
       success: false, 
-      error: 'Unable to process login. Please try again.' 
+      error: 'Identity verification failed.' 
     }, { status: 500 });
   }
 }

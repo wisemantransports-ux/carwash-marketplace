@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -20,25 +19,11 @@ interface BookingModalProps {
 
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
-  if (typeof err === 'string') return err;
-  
   const message = err.message || err.error_description || (err.error && err.error.message);
   const details = err.details || "";
   const code = err.code || "";
-  
-  if (message) {
-    let fullMessage = message;
-    if (details && details !== message) fullMessage += ` (${details})`;
-    if (code) fullMessage += ` [${code}]`;
-    return fullMessage;
-  }
-  
-  try {
-    const stringified = JSON.stringify(err);
-    return stringified === '{}' ? String(err) : stringified;
-  } catch {
-    return String(err);
-  }
+  if (message) return `${message} ${details ? `(${details})` : ''} ${code ? `[${code}]` : ''}`;
+  try { return JSON.stringify(err); } catch { return String(err); }
 };
 
 export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
@@ -56,8 +41,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   useEffect(() => {
     if (isOpen && authUser) {
       setName(authUser.user_metadata?.name || '');
-      const wa = authUser.phone || authUser.user_metadata?.whatsapp || '';
-      setWhatsapp(wa);
+      setWhatsapp(authUser.phone || authUser.user_metadata?.whatsapp || '');
       setEmail(authUser.email || '');
     }
   }, [isOpen, authUser]);
@@ -65,16 +49,14 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date || !time) {
-      toast({ variant: 'destructive', title: "Schedule Missing", description: "Date and time are required." });
+      toast({ variant: 'destructive', title: "Details Missing" });
       return;
     }
 
     setLoading(true);
-
     const cleanWa = whatsapp.replace(/\D/g, '');
 
-    // Payload logic: If logged in, send customer_id. 
-    // If not, omit customer_id to trigger backend auto-auth.
+    // Payload logic: Omit customer_id for guest to trigger DB auto-auth lookup by phone
     const payload: any = {
       customer_name: name.trim(),
       customer_whatsapp: cleanWa,
@@ -92,39 +74,19 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       payload.customer_id = authUser.id;
     }
 
-    console.log("[BOOKING-DEBUG] Submitting wash request:", payload);
-
     try {
       const { error } = await supabase.from('wash_bookings').insert(payload);
+      if (error) throw error;
 
-      if (error) {
-        console.error("[BOOKING-MODAL] Database Insert Error:", {
-          message: error.message,
-          details: error.details,
-          code: error.code,
-          hint: error.hint
-        });
-        throw error;
-      }
-
-      toast({ title: "Request Received! ✅", description: "Your wash is being coordinated. Redirecting to your dashboard..." });
+      toast({ title: "Booking Requested! ✅", description: "Tracking now available in your dashboard." });
       onClose();
-      
-      // Navigate to tracker
       router.push("/customer/dashboard");
     } catch (err: any) {
-      const errorMsg = extractErrorMessage(err);
-      console.error("[BOOKING-MODAL] Error Details:", {
-        message: err.message,
-        details: err.details,
-        code: err.code,
-        hint: err.hint,
-        error: err
-      });
+      console.error("[BOOKING-CAPTURE] Error:", err);
       toast({
         variant: "destructive",
         title: "Booking Failed",
-        description: errorMsg
+        description: extractErrorMessage(err)
       });
     } finally {
       setLoading(false);
@@ -142,7 +104,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
             Reserve Your Wash
           </DialogTitle>
           <DialogDescription className="text-slate-400 font-medium">
-            Booking <span className="text-white font-bold">{service.name}</span>. We'll automatically link this to your WhatsApp dashboard.
+            Booking <span className="text-white font-bold">{service.name}</span>. Your activity tracker will be linked to your WhatsApp number.
           </DialogDescription>
         </DialogHeader>
 

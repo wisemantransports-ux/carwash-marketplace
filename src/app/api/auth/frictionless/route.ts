@@ -3,10 +3,8 @@ import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase-admin';
 import { supabase } from '@/lib/supabase';
 
 /**
- * @fileOverview Frictionless Identity Resolver (Updated for Resiliency)
- * Priority 1: Check existing profile in public.users via standard client.
- * Priority 2: Use Admin client for creation if configured.
- * Priority 3: Provide a mock identity for prototype continuity.
+ * @fileOverview Frictionless Identity Resolver (Updated for Single-Account Audit)
+ * Ensures inquiries are linked to existing accounts by phone lookup.
  */
 
 export async function POST(req: Request) {
@@ -20,7 +18,7 @@ export async function POST(req: Request) {
 
     const cleanWa = whatsapp.trim().replace(/\D/g, '');
 
-    // 1. Try finding existing user via Standard Client
+    // 1. Lookup existing profile
     const { data: existingUser } = await supabase
       .from('users')
       .select('id, name')
@@ -31,8 +29,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, userId: existingUser.id, name: existingUser.name });
     }
 
-    // 2. Try Admin Creation
+    // 2. Lookup existing Auth User via Admin (to prevent duplicate phone errors)
     if (isSupabaseAdminConfigured) {
+      const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+      const authUser = users.find((u: any) => u.phone === cleanWa || u.phone === `+${cleanWa}`);
+
+      if (authUser) {
+        // Sync existing Auth user to Profile table
+        await supabaseAdmin.from('users').upsert({
+          id: authUser.id,
+          name: (name || 'Customer').trim(),
+          whatsapp_number: cleanWa,
+          role: 'customer'
+        });
+        return NextResponse.json({ success: true, userId: authUser.id, name });
+      }
+
+      // 3. Truly new user: Create in Auth
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         phone: cleanWa,
         phone_confirm: true,
@@ -40,33 +53,23 @@ export async function POST(req: Request) {
         password: Math.random().toString(36).slice(-16)
       });
 
-      if (authError && !authError.message.includes('already registered')) {
+      if (authError) {
         return NextResponse.json({ error: authError.message }, { status: 500 });
       }
 
-      let targetUserId = authData?.user?.id;
-      if (authError?.message.includes('already registered')) {
-        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
-        targetUserId = users.find((u: any) => u.phone === cleanWa)?.id;
-      }
-
-      if (targetUserId) {
+      if (authData?.user) {
         await supabaseAdmin.from('users').upsert({
-          id: targetUserId,
-          name: (name || 'New Customer').trim(),
-          full_name: (name || 'New Customer').trim(),
+          id: authData.user.id,
+          name: (name || 'Customer').trim(),
           whatsapp_number: cleanWa,
           role: 'customer',
-          is_anonymous: true,
           created_at: new Date().toISOString()
         });
         
-        return NextResponse.json({ success: true, userId: targetUserId, name });
+        return NextResponse.json({ success: true, userId: authData.user.id, name });
       }
     }
 
-    // 3. PROTOTYPE FALLBACK
-    console.warn('[FRICTIONLESS-AUTH] Running in Prototype Fallback mode (Service Key missing).');
     return NextResponse.json({ 
       success: true, 
       userId: '00000000-0000-0000-0000-000000000000',
@@ -75,7 +78,7 @@ export async function POST(req: Request) {
     });
 
   } catch (err: any) {
-    console.error('[FRICTIONLESS-AUTH] Fatal Error:', err);
-    return NextResponse.json({ error: 'Frictionless authentication failed.' }, { status: 500 });
+    console.error('[FRICTIONLESS-AUDIT] Fatal Error:', err);
+    return NextResponse.json({ error: 'Frictionless resolution failed.' }, { status: 500 });
   }
 }
