@@ -33,7 +33,6 @@ export default function BusinessProfilePage() {
   const [category, setCategory] = useState<BusinessCategory>('Wash');
   const [idNumber, setIdNumber] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
-  const [specialTag, setSpecialTag] = useState('');
 
   // Logo Upload
   const [uploadingLogo, setUploadingUploadingLogo] = useState(false);
@@ -66,7 +65,6 @@ export default function BusinessProfilePage() {
         setCategory(typed.category || 'Wash');
         setIdNumber(typed.id_number || '');
         setLogoUrl(typed.logo_url || '');
-        setSpecialTag(typed.special_tag || '');
       }
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Load Error', description: error.message });
@@ -123,6 +121,7 @@ export default function BusinessProfilePage() {
       }
 
       // Use the Secure API Route to update restricted fields
+      // NOTE: special_tag is omitted because it is platform-controlled
       const response = await fetch('/api/business/update-profile', {
         method: 'POST',
         headers: { 
@@ -139,8 +138,7 @@ export default function BusinessProfilePage() {
           category,
           id_number: idNumber,
           owner_name: ownerName,
-          logo_url: logoUrl,
-          special_tag: specialTag
+          logo_url: logoUrl
         })
       });
 
