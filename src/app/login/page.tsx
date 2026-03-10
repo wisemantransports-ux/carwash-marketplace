@@ -72,23 +72,23 @@ export default function LoginPage() {
         throw new Error(result.error);
       }
 
-      // In this flow, we simulate the session by storing the ID
-      // Real Supabase Auth can be linked via Anonymouse sign-in for persistence
+      // Store the customer ID for profile matching
       localStorage.setItem('customer_id', result.customer_id);
       
+      // Ensure we have an active Supabase session for RLS
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         await supabase.auth.signInAnonymously();
       }
       
-      toast({ title: "Welcome Back!", description: "Accessing your dashboard..." });
+      toast({ title: "Authenticated!", description: "Opening your activity hub..." });
       router.push('/customer/dashboard');
     } catch (error: any) {
       console.error("[LOGIN-CLIENT] Error:", error);
       toast({ 
         variant: "destructive", 
         title: "Access Denied", 
-        description: error.message 
+        description: error.message || 'Verification failed. Please try again.'
       });
     } finally {
       setLoading(false);
@@ -126,7 +126,7 @@ export default function LoginPage() {
                   WhatsApp Access
                 </CardTitle>
                 <CardDescription className="text-slate-400">
-                  Enter your number to access your inquiries and bookings.
+                  Access your inquiries and bookings instantly.
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-8">
@@ -148,7 +148,7 @@ export default function LoginPage() {
                   <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex gap-3">
                     <AlertCircle className="h-5 w-5 text-primary shrink-0" />
                     <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                      First time? Just book a wash or inquire about a car to automatically create your account.
+                      First time? We'll automatically set up your dashboard so you can track your automotive needs in real-time.
                     </p>
                   </div>
                 </form>
