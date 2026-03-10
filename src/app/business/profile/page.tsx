@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Store, MapPin, ShieldCheck, CheckCircle2, Phone, User, Camera, Upload } from 'lucide-react';
 import { Business, BusinessType, BusinessCategory } from '@/lib/types';
-import { cn } from '@/lib/utils';
+import { cn, normalizePhone } from '@/lib/utils';
 import Image from 'next/image';
 
 /**
@@ -113,6 +113,9 @@ export default function BusinessProfilePage() {
 
     setSaving(true);
     try {
+      // 1. Validate and Normalize Phone
+      const cleanWa = normalizePhone(whatsapp);
+
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -131,7 +134,7 @@ export default function BusinessProfilePage() {
           name,
           address,
           city,
-          whatsapp_number: whatsapp,
+          whatsapp_number: cleanWa,
           business_type: bizType,
           category,
           id_number: idNumber,

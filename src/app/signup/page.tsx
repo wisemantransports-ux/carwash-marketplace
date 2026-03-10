@@ -16,7 +16,7 @@ import { Loader2, ShieldCheck, User, Store, ArrowLeft, Mail, Lock, Building2 } f
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { cn, normalizePhone } from '@/lib/utils';
 
 const signupSchema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters"),
@@ -48,9 +48,10 @@ export default function SignupPage() {
   const onSubmit = async (values: SignupFormValues) => {
     setLoading(true);
     try {
-      const cleanWa = values.whatsapp.trim().replace(/\D/g, '');
+      // 1. Validate and Normalize Phone
+      const cleanWa = normalizePhone(values.whatsapp);
       
-      // 1. Auth Signup
+      // 2. Auth Signup
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
@@ -66,7 +67,7 @@ export default function SignupPage() {
       if (authError) throw authError;
 
       if (authData.user) {
-        // 2. Sync to public users table
+        // 3. Sync to public users table
         const { error: userError } = await supabase.from('users').insert({
           id: authData.user.id,
           name: values.fullName,
@@ -79,7 +80,7 @@ export default function SignupPage() {
 
         if (userError) throw userError;
 
-        // 3. Initial Business Profile with tiered type
+        // 4. Initial Business Profile with tiered type
         await supabase.from('businesses').insert({
           owner_id: authData.user.id,
           name: `${values.fullName}'s Professional Service`,

@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { normalizePhone } from "@/lib/utils";
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -54,9 +55,10 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     }
 
     setLoading(true);
-    const cleanWa = whatsapp.replace(/\D/g, '');
-
     try {
+      // 1. Validate and Normalize Phone
+      const cleanWa = normalizePhone(whatsapp);
+
       let resolvedUserId = authUser?.id;
       
       if (!resolvedUserId) {

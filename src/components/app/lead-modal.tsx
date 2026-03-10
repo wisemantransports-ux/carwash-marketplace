@@ -9,6 +9,7 @@ import { MessageCircle, Loader2, Smartphone, User, Mail, ShieldCheck } from "luc
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { normalizePhone } from "@/lib/utils";
 
 interface LeadModalProps {
   isOpen: boolean;
@@ -58,6 +59,9 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
     setLoading(true);
     try {
+      // 1. Validate and Normalize Phone
+      const cleanWa = normalizePhone(whatsapp);
+
       const { data: listing, error: lErr } = await supabase
         .from('listings')
         .select(`
@@ -71,8 +75,6 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
       if (lErr || !listing) throw new Error("Item information is currently unavailable.");
 
-      const cleanWa = whatsapp.replace(/\D/g, '');
-      
       let resolvedUserId = authUser?.id;
       
       if (!resolvedUserId) {
@@ -93,6 +95,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       const typeMapping: Record<string, string> = { 'wash_service': 'wash', 'car': 'car', 'spare_part': 'spare_part' };
       const mappedType = typeMapping[listing.listing_type] || listing.listing_type;
 
+      // Ensure seller_id and user_id are correctly populated for constraints
       const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
@@ -101,10 +104,10 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         seller_id: listing.business_id,
         listing_id: listing.id,
         listing_type: mappedType,
-        lead_type: mappedType, 
+        lead_type: mappedType,
         status: 'new',
         customer_id: resolvedUserId,
-        user_id: resolvedUserId 
+        user_id: resolvedUserId
       };
 
       const { error: leadErr } = await supabase.from('leads').insert(payload);

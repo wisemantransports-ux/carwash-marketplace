@@ -11,6 +11,7 @@ import { Loader2, ShieldCheck, ArrowLeft, Mail, AlertCircle, Smartphone } from "
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import Link from 'next/link';
+import { normalizePhone } from '@/lib/utils';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -60,10 +61,13 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
+      // 1. Validate and Normalize Phone
+      const cleanWa = normalizePhone(whatsapp);
+
       const response = await fetch('/api/customer-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ whatsapp })
+        body: JSON.stringify({ whatsapp: cleanWa })
       });
 
       const result = await response.json();
