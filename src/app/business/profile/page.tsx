@@ -8,15 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, ShieldCheck, CheckCircle2, User, Upload, MapPin, Smartphone, Tag } from 'lucide-react';
+import { Loader2, Store, CheckCircle2, User, Upload, MapPin, Smartphone, Tag } from 'lucide-react';
 import { Business, BusinessType } from '@/lib/types';
 import { cn, normalizePhone } from '@/lib/utils';
 import Image from 'next/image';
 
 /**
- * @fileOverview Refactored Business Profile Page
- * Targets ONLY editable columns in public.businesses.
- * Synchronizes identity data via auth.updateUser().
+ * @fileOverview Business Profile Management
+ * Strictly isolates application data (businesses table) from authentication data (auth.users).
  * Enforces RLS ownership via owner_id filter.
  */
 
@@ -25,7 +24,7 @@ export default function BusinessProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // State for editable columns in businesses table
+  // Whitelisted Editable Fields (businesses table)
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [address, setAddress] = useState('');
@@ -35,7 +34,7 @@ export default function BusinessProfilePage() {
   const [specialTag, setSpecialTag] = useState('');
   const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
 
-  // Identity field (handled via auth.updateUser)
+  // Identity field (Auth Metadata)
   const [ownerName, setOwnerName] = useState('');
 
   // Logo Upload
@@ -114,35 +113,30 @@ export default function BusinessProfilePage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
-
-    if (!name.trim() || !whatsapp.trim()) {
-      toast({ variant: 'destructive', title: 'Required Fields', description: 'Business name and WhatsApp are mandatory.' });
-      return;
-    }
-
     setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) throw new Error('Session expired. Please log in again.');
 
-      // 1. GLOBAL WHATSAPP VALIDATION (+ required)
-      let cleanWa = whatsapp.trim();
-      try {
-        cleanWa = normalizePhone(whatsapp);
-      } catch (err: any) {
-        throw new Error(err.message || "Invalid WhatsApp number format.");
+      // 1. Validation & Normalization
+      if (!name.trim() || !whatsapp.trim()) {
+        throw new Error('Business name and WhatsApp number are mandatory.');
       }
+      const cleanWa = normalizePhone(whatsapp);
 
-      // 2. IDENTITY UPDATE (Auth Metadata)
+      // 2. Identity Sync (Auth Metadata)
+      // We update the name here to avoid direct writes to the restricted users table
       if (ownerName.trim()) {
         const { error: authError } = await supabase.auth.updateUser({
           data: { name: ownerName.trim() }
         });
-        if (authError) console.warn("[PROFILE-UPDATE] Identity sync issue:", authError.message);
+        if (authError) {
+          console.warn("[PROFILE-UPDATE] Auth Metadata Warning:", authError.message);
+        }
       }
 
-      // 3. BUSINESS TABLE UPDATE (Whitelist Only + RLS Respect)
+      // 3. Application Data Update (businesses table)
+      // Payload is strictly whitelisted to authorized editable columns
       const { error: bizError } = await supabase
         .from('businesses')
         .update({
@@ -157,27 +151,23 @@ export default function BusinessProfilePage() {
         })
         .eq('owner_id', session.user.id);
 
-      if (bizError) {
-        throw new Error(`${bizError.message} (Code: ${bizError.code})`);
-      }
+      if (bizError) throw bizError;
 
       toast({ 
-        title: 'Business profile updated successfully', 
-        description: 'Your business particulars have been saved.' 
+        title: 'Profile Saved Successfully', 
+        description: 'Your business credentials have been updated.' 
       });
       
       await fetchProfile();
     } catch (error: any) {
-      console.error("[PROFILE-UPDATE] Error Details:", {
-        message: error.message,
-        details: error.details,
-        code: error.code,
-        hint: error.hint
-      });
+      console.error("[PROFILE-UPDATE] Fatal error:", error);
+      // Detailed error breakdown for the toast
+      const errorMessage = error?.message || error?.error_description || (typeof error === 'string' ? error : "Check your permissions and try again.");
+      
       toast({ 
         variant: 'destructive', 
-        title: 'Save Failed', 
-        description: error.message || 'Check your database permissions and connection.' 
+        title: 'Update Failed', 
+        description: errorMessage 
       });
     } finally {
       setSaving(false);
@@ -271,10 +261,10 @@ export default function BusinessProfilePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Special Tag (e.g. CIPA Verified)</Label>
+                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Special Tag (e.g. Specialization)</Label>
                   <div className="relative">
                     <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="Trust Seal or Specialization" />
+                    <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="e.g. Interior Specialist" />
                   </div>
                 </div>
 
