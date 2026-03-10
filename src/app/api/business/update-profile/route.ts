@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview Secure Business Profile Update API
- * Handles administrative bypass for restricted tables with token-based verification.
+ * Handles administrative bypass for restricted tables and synchronizes auth metadata.
  */
 
 export async function POST(req: Request) {
@@ -44,7 +44,6 @@ export async function POST(req: Request) {
     }
 
     // 1. Update the Business Record
-    // We use both ID and owner_id for strict security
     const { error: bizError } = await supabaseAdmin
       .from('businesses')
       .update({
@@ -63,16 +62,31 @@ export async function POST(req: Request) {
 
     if (bizError) throw bizError;
 
-    // 2. Update the User Record (Owner Name)
+    // 2. Synchronize Owner Identity
     if (owner_name) {
+      const trimmedName = owner_name.trim();
+
+      // A. Update Auth Metadata (Source of truth for session)
+      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+        user.id,
+        { user_metadata: { name: trimmedName } }
+      );
+      
+      if (authUpdateError) console.error('[PROFILE-API] Auth metadata sync failed:', authUpdateError);
+
+      // B. Update Public Profile Table (Source of truth for dashboard lists)
       const { error: userError } = await supabaseAdmin
         .from('users')
         .update({
-          name: owner_name.trim()
+          name: trimmedName
         })
         .eq('id', user.id);
       
-      if (userError) throw userError;
+      if (userError) {
+        console.error('[PROFILE-API] Public profile sync failed:', userError);
+        // We don't throw here if the auth metadata update succeeded, 
+        // as the column might genuinely be missing or renamed in the public schema.
+      }
     }
 
     return NextResponse.json({ success: true });

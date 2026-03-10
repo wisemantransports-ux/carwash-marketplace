@@ -13,6 +13,11 @@ import { Business, BusinessType, BusinessCategory } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 
+/**
+ * @fileOverview Business Profile Page
+ * Handles credential updates through a secure server-side bridge.
+ */
+
 export default function BusinessProfilePage() {
   const [profile, setProfile] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,14 +45,8 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch User Name
-      const { data: userRecord } = await supabase
-        .from('users')
-        .select('name')
-        .eq('id', user.id)
-        .maybeSingle();
-      
-      if (userRecord) setOwnerName(userRecord.name || '');
+      // Fetch User Name (Priority to metadata for live updates)
+      setOwnerName(user.user_metadata?.name || '');
 
       // Fetch Business Record
       const { data: biz } = await supabase
@@ -147,6 +146,9 @@ export default function BusinessProfilePage() {
       if (!result.success) {
         throw new Error(result.error || 'Server rejected the update.');
       }
+
+      // Refresh the local session metadata to reflect the name change
+      await supabase.auth.refreshSession();
 
       toast({ title: 'Profile Updated ✅', description: 'Changes saved to your business credentials.' });
       await fetchProfile();
