@@ -109,6 +109,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
       if (authUser?.id) {
         payload.customer_id = authUser.id;
+        payload.user_id = authUser.id;
       }
 
       console.log("[LEAD-DEBUG] Submitting inquiry:", payload);
