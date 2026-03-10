@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Store, CheckCircle2, User, Upload, MapPin, Smartphone, Tag } from 'lucide-react';
 import Image from 'next/image';
@@ -95,7 +96,8 @@ export default function BusinessProfilePage() {
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('business-assets').getPublicUrl(filePath);
+        .from('business-assets')
+        .getPublicUrl(filePath);
 
       setLogoUrl(publicUrl);
       toast({ title: 'Logo Uploaded', description: 'Save profile to finalize changes.' });
@@ -233,7 +235,10 @@ export default function BusinessProfilePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Special Tag (e.g., Specialization)</Label>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Special Tag (e.g., Specialization)</Label>
+                    <Badge variant="ghost" className="text-[8px] h-4 px-1 opacity-50 border">Descriptive Only</Badge>
+                  </div>
                   <div className="relative">
                     <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="Interior Specialist" />
