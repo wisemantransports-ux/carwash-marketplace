@@ -1,4 +1,3 @@
-
 'use client';
 import SharedLayout from "@/components/app/shared-layout";
 import { LayoutDashboard, Users, DollarSign, CreditCard, AlertCircle, Lock, UserCircle, Receipt, Package, Loader2, MapPin, CarFront, Droplets, MessageSquare } from "lucide-react";
@@ -7,7 +6,7 @@ import { Business } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -59,23 +58,10 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   }, [user]);
 
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && user) {
       fetchData();
     }
-  }, [authLoading, fetchData]);
-
-  const sensitivePaths = [
-    "/business/dashboard", 
-    "/business/locations", 
-    "/business/services", 
-    "/business/cars", 
-    "/business/spare-shop", 
-    "/business/invoices", 
-    "/business/employees", 
-    "/business/earnings",
-    "/business/leads"
-  ];
-  const isBlocked = isRestricted && sensitivePaths.includes(pathname);
+  }, [authLoading, user, fetchData]);
 
   const navItems = [
     { href: "/business/dashboard", label: "Operations", icon: LayoutDashboard },
@@ -91,6 +77,20 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     { href: "/business/profile", label: "Credentials", icon: UserCircle },
   ];
 
+  const sensitivePaths = [
+    "/business/dashboard", 
+    "/business/locations", 
+    "/business/services", 
+    "/business/cars", 
+    "/business/spare-shop", 
+    "/business/invoices", 
+    "/business/employees", 
+    "/business/earnings",
+    "/business/leads"
+  ];
+
+  const isBlocked = isRestricted && sensitivePaths.some(path => pathname.startsWith(path));
+
   const filteredNavItems = !isRestricted 
     ? navItems 
     : navItems.filter(item => ["/business/subscription", "/business/profile"].includes(item.href));
@@ -98,7 +98,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   if (authLoading || loading) return (
     <div className="flex flex-col items-center justify-center min-h-screen space-y-4 bg-slate-50">
       <Loader2 className="animate-spin h-10 w-10 text-primary" />
-      <p className="text-sm text-muted-foreground animate-pulse font-black tracking-widest uppercase">ALM Partner Gating</p>
+      <p className="text-sm text-muted-foreground animate-pulse font-black tracking-widest uppercase">Securing Session...</p>
     </div>
   );
 
@@ -106,13 +106,13 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
     <SharedLayout navItems={filteredNavItems} role="business-owner">
       <div className="space-y-6">
         {isRestricted && (
-          <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800 shadow-lg rounded-2xl animate-in slide-in-from-top duration-500">
+          <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800 shadow-lg rounded-2xl">
             <AlertCircle className="h-5 w-5 text-red-600" />
-            <AlertTitle className="font-black uppercase tracking-tight text-sm">Action Required: Subscription Expired</AlertTitle>
+            <AlertTitle className="font-black uppercase tracking-tight text-sm">Subscription Expired</AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
-              <span className="font-medium text-xs">Your professional tools are currently locked. Upgrade to an active tier to resume managing bookings and sales.</span>
+              <span className="font-medium text-xs">Your professional tools are locked. Upgrade to resume managing bookings.</span>
               <Button size="sm" variant="destructive" className="font-black text-[10px] uppercase px-6 h-9 rounded-xl shadow-xl" asChild>
-                <Link href="/business/subscription">Select Active Tier</Link>
+                <Link href="/business/subscription">Restore Access</Link>
               </Button>
             </AlertDescription>
           </Alert>
@@ -126,11 +126,11 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
             <div className="space-y-3 max-w-md">
               <h2 className="text-4xl font-black uppercase italic tracking-tighter text-slate-900 leading-none">Access Restricted</h2>
               <p className="text-muted-foreground font-bold text-sm leading-relaxed px-4">
-                Operations, staff management, and inventory tracking are locked. Choose a growth plan to unlock your partner dashboard.
+                Operations and inventory tracking are locked. Choose a growth plan to unlock your partner dashboard.
               </p>
             </div>
-            <Button size="lg" asChild className="h-16 shadow-[0_20px_50px_rgba(32,128,223,0.3)] rounded-2xl px-12 font-black text-xl uppercase tracking-tighter">
-              <Link href="/business/subscription">Restore Full Access</Link>
+            <Button size="lg" asChild className="h-16 shadow-xl rounded-2xl px-12 font-black text-xl uppercase tracking-tighter">
+              <Link href="/business/subscription">Unlock Dashboard</Link>
             </Button>
           </div>
         ) : (

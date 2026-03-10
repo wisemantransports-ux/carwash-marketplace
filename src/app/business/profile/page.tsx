@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, MapPin, ShieldCheck, FileText, CheckCircle2, Phone, User, Camera, Upload, Trash2 } from 'lucide-react';
+import { Loader2, Store, MapPin, ShieldCheck, CheckCircle2, Phone, User, Camera, Upload } from 'lucide-react';
 import { Business, BusinessType, BusinessCategory } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -147,7 +147,7 @@ export default function BusinessProfilePage() {
         throw new Error(result.error || 'Server rejected the update.');
       }
 
-      // Refresh the local session metadata to reflect the name change
+      // Refresh the local session metadata to reflect the name change instantly
       await supabase.auth.refreshSession();
 
       toast({ title: 'Profile Updated ✅', description: 'Changes saved to your business credentials.' });
@@ -314,7 +314,7 @@ export default function BusinessProfilePage() {
                   )}
                 </div>
                 <p className="text-[10px] font-bold text-muted-foreground leading-relaxed text-center px-2">
-                  Admins manually inspect your {bizType === 'individual' ? 'Omang' : 'CIPA'} documents to confirm marketplace integrity.
+                  Admins manually inspect your credentials to confirm marketplace integrity.
                 </p>
               </div>
             </CardContent>

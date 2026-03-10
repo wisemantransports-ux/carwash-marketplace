@@ -16,12 +16,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Authorization token missing.' }, { status: 401 });
     }
 
-    // Verify user session via standard Supabase client
+    // Verify user session via standard Supabase client to ensure auth validity
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
       console.error('[PROFILE-API] Auth verification failed:', authError);
-      return NextResponse.json({ success: false, error: 'Unauthorized session or invalid token.' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized session.' }, { status: 401 });
     }
 
     const body = await req.json();
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       throw new Error('Supabase Admin Client is not configured on the server.');
     }
 
-    // 1. Update the Business Record
+    // 1. Update the Business Record via Admin Client (Source of Truth for Dashboard)
     const { error: bizError } = await supabaseAdmin
       .from('businesses')
       .update({
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     if (owner_name) {
       const trimmedName = owner_name.trim();
 
-      // A. Update Auth Metadata (Source of truth for session)
+      // A. Update Auth Metadata (Source of truth for session and "Hello, Name" headers)
       const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
         user.id,
         { user_metadata: { name: trimmedName } }
@@ -74,18 +74,15 @@ export async function POST(req: Request) {
       
       if (authUpdateError) console.error('[PROFILE-API] Auth metadata sync failed:', authUpdateError);
 
-      // B. Update Public Profile Table (Source of truth for dashboard lists)
-      const { error: userError } = await supabaseAdmin
+      // B. Attempt to sync public profile table (Bypass permission denied via Admin)
+      // We wrap this in a try-catch style check since the column name might vary in some environments
+      const { error: userUpdateError } = await supabaseAdmin
         .from('users')
-        .update({
-          name: trimmedName
-        })
+        .update({ name: trimmedName })
         .eq('id', user.id);
       
-      if (userError) {
-        console.error('[PROFILE-API] Public profile sync failed:', userError);
-        // We don't throw here if the auth metadata update succeeded, 
-        // as the column might genuinely be missing or renamed in the public schema.
+      if (userUpdateError) {
+        console.warn('[PROFILE-API] Public profile sync warning (Expected if name column differs):', userUpdateError.message);
       }
     }
 
