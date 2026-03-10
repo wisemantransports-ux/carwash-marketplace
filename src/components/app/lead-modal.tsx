@@ -77,21 +77,22 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
       const cleanWa = whatsapp.replace(/\D/g, '');
       const typeMapping: Record<string, string> = { 'wash_service': 'wash', 'car': 'car', 'spare_part': 'spare_part' };
+      const mappedType = typeMapping[listing.listing_type] || listing.listing_type;
 
       // 2. Construct Payload
-      // We omit customer_id/user_id for anonymous to trigger the DB auto-account resolution
       const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         customer_email: email.trim() || null,
         seller_business_id: listing.business_id,
-        seller_id: listing.business_id,
+        seller_id: listing.business_id, // FK to businesses table
         listing_id: listing.id,
-        listing_type: typeMapping[listing.listing_type] || listing.listing_type,
-        lead_type: typeMapping[listing.listing_type] || listing.listing_type,
+        listing_type: mappedType,
+        lead_type: mappedType,
         status: 'new'
       };
 
+      // Handle authenticated identity resolution
       if (authUser?.id) {
         payload.customer_id = authUser.id;
         payload.user_id = authUser.id;
@@ -105,7 +106,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       // 3. WhatsApp Redirect
       const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
       const cleanBizPhone = bizPhone.replace(/\D/g, '');
-      const message = `Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name}.`;
+      const message = `Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name.trim()}.`;
       const url = `https://wa.me/${cleanBizPhone}?text=${encodeURIComponent(message)}`;
 
       toast({ title: "Inquiry Sent! ✅", description: "Redirecting to dealer..." });

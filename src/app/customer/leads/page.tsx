@@ -14,7 +14,7 @@ import Link from "next/link";
 
 /**
  * @fileOverview Refined Customer Leads Activity Hub
- * Updated with robust identity resolution and descriptive error extraction.
+ * Fixed ambiguity error by using Manual Wiring Pattern for listings.
  */
 
 export default function CustomerLeadsPage() {
@@ -34,15 +34,20 @@ export default function CustomerLeadsPage() {
         else setRefreshing(true);
 
         try {
-            const { data, error } = await supabase
+            // 1. STAGE 1: Fetch Leads with flat fields and Business metadata
+            // Avoiding ambiguous 'listing:listing_id' join
+            const { data: leadData, error: leadError } = await supabase
                 .from('leads')
                 .select(`
-                    *,
-                    listing:listing_id ( 
-                        name, 
-                        price,
-                        listing_type
-                    ),
+                    id,
+                    customer_name,
+                    customer_whatsapp,
+                    customer_email,
+                    status,
+                    listing_id,
+                    listing_type,
+                    created_at,
+                    seller_business_id,
                     business:seller_business_id ( 
                         name, 
                         city, 
@@ -52,11 +57,37 @@ export default function CustomerLeadsPage() {
                 .eq('customer_id', authUser.id)
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
-            setLeads(data || []);
+            if (leadError) throw leadError;
+
+            if (leadData && leadData.length > 0) {
+                // 2. STAGE 2: Manual Wiring - Fetch Listing metadata in parallel
+                const listingIds = [...new Set(leadData.map(l => l.listing_id).filter(Boolean))];
+                
+                let listingMap: Record<string, any> = {};
+                if (listingIds.length > 0) {
+                    const { data: listingData, error: lErr } = await supabase
+                        .from('listings')
+                        .select('id, name, price')
+                        .in('id', listingIds);
+                    
+                    if (!lErr && listingData) {
+                        listingMap = listingData.reduce((acc: any, l: any) => ({ ...acc, [l.id]: l }), {});
+                    }
+                }
+
+                // 3. STAGE 3: In-Memory Merge
+                const enriched = leadData.map(l => ({
+                    ...l,
+                    listing: listingMap[l.listing_id] || null
+                }));
+
+                setLeads(enriched);
+            } else {
+                setLeads([]);
+            }
         } catch (e: any) {
             console.error("[CUSTOMER-LEADS] Fetch failure:", e);
-            const message = e?.message || e?.error_description || "Could not load your inquiries. Please try again.";
+            const message = e?.message || "Could not load your inquiries. Please try again.";
             toast({ 
                 variant: 'destructive', 
                 title: 'Fetch Failed', 
@@ -136,7 +167,7 @@ export default function CustomerLeadsPage() {
                                             {lead.status}
                                         </Badge>
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                            {lead.listing_type.replace('_', ' ')}
+                                            {lead.listing_type?.replace('_', ' ')}
                                         </span>
                                     </div>
                                     <h3 className="text-xl font-black text-slate-900">{lead.listing?.name || 'Unknown Listing'}</h3>

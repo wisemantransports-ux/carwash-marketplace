@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useCallback } from "react";
@@ -13,9 +12,14 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import type { Lead } from "@/lib/types";
 
+/**
+ * @fileOverview Business Leads Management Page
+ * Resolved ambiguity by using Manual Wiring for listings.
+ */
+
 export default function BusinessLeadsPage() {
     const { user, loading: authLoading } = useAuth();
-    const [leads, setLeads] = useState<Lead[]>([]);
+    const [leads, setLeads] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -25,7 +29,7 @@ export default function BusinessLeadsPage() {
         else setRefreshing(true);
 
         try {
-            // 1. Get Business ID
+            // 1. Resolve Business ID
             const { data: biz } = await supabase
                 .from('businesses')
                 .select('id')
@@ -37,31 +41,55 @@ export default function BusinessLeadsPage() {
                 return;
             }
 
-            // 2. Fetch Leads
-            const { data, error } = await supabase
+            // 2. STAGE 1: Fetch flat leads (avoiding ambiguous listing join)
+            const { data: leadData, error } = await supabase
                 .from('leads')
                 .select(`
-                    *,
-                    listing:listing_id ( name, price )
+                    id,
+                    customer_name,
+                    customer_whatsapp,
+                    customer_email,
+                    listing_id,
+                    listing_type,
+                    status,
+                    created_at
                 `)
                 .eq('seller_business_id', biz.id)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            setLeads(data as any[] || []);
+
+            if (leadData && leadData.length > 0) {
+                // 3. STAGE 2: Manual Wiring - Fetch Listing metadata
+                const listingIds = [...new Set(leadData.map(l => l.listing_id).filter(Boolean))];
+                
+                let listingMap: Record<string, any> = {};
+                if (listingIds.length > 0) {
+                    const { data: listData } = await supabase
+                        .from('listings')
+                        .select('id, name, price')
+                        .in('id', listingIds);
+                    
+                    listingMap = (listData || []).reduce((acc: any, l: any) => ({ ...acc, [l.id]: l }), {});
+                }
+
+                // 4. STAGE 3: Enriched Mapping
+                const enriched = leadData.map(l => ({
+                    ...l,
+                    listing: listingMap[l.listing_id] || null
+                }));
+
+                setLeads(enriched);
+            } else {
+                setLeads([]);
+            }
         } catch (e: any) {
-            const errorMsg = e?.message || "Could not load your leads.";
-            console.error("[BUSINESS-LEADS] Fetch failure:", {
-                message: e?.message,
-                details: e?.details,
-                code: e?.code,
-                hint: e?.hint,
-                error: e
-            });
+            console.error("[BUSINESS-LEADS] Fetch failure:", e);
+            const message = e?.message || "Could not load your leads.";
             toast({ 
                 variant: 'destructive', 
                 title: 'Sync Error', 
-                description: errorMsg 
+                description: message 
             });
         } finally {
             setLoading(false);
@@ -98,7 +126,7 @@ export default function BusinessLeadsPage() {
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div className="space-y-1">
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary uppercase italic flex items-center gap-3">
-                        <MessageSquare className="h-10 w-10" />
+                        <MessageCircle className="h-10 w-10" />
                         Sales Leads
                     </h1>
                     <p className="text-muted-foreground font-medium">Manage marketplace inquiries for your cars and parts.</p>
@@ -141,13 +169,13 @@ export default function BusinessLeadsPage() {
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex flex-col gap-1">
-                                            <span className="font-bold text-sm text-slate-900">{lead.listing?.name}</span>
+                                            <span className="font-bold text-sm text-slate-900">{lead.listing?.name || 'Automotive Listing'}</span>
                                             <div className="flex items-center gap-2">
                                                 <Badge variant="outline" className={cn(
                                                     "text-[9px] font-black uppercase",
                                                     lead.listing_type === 'car' ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-purple-50 text-purple-700 border-purple-200"
                                                 )}>
-                                                    {lead.listing_type.replace('_', ' ')}
+                                                    {lead.listing_type?.replace('_', ' ')}
                                                 </Badge>
                                                 <span className="text-[10px] font-black text-primary">P{Number(lead.listing?.price || 0).toLocaleString()}</span>
                                             </div>
