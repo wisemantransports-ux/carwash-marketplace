@@ -76,46 +76,56 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       if (lErr || !listing) throw new Error("Item information is currently unavailable.");
 
       const cleanWa = whatsapp.replace(/\D/g, '');
+      
+      // 2. Resolve Identity (Frictionless flow for anonymous users)
+      let resolvedUserId = authUser?.id;
+      
+      if (!resolvedUserId) {
+        const identRes = await fetch('/api/auth/frictionless', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ whatsapp: cleanWa, name: name.trim() })
+        });
+        const identData = await identRes.json();
+        if (!identData.success) {
+          throw new Error(identData.error || "Could not verify your identity.");
+        }
+        resolvedUserId = identData.userId;
+      }
+
+      if (!resolvedUserId) throw new Error("Identity resolution failed.");
+
       const typeMapping: Record<string, string> = { 'wash_service': 'wash', 'car': 'car', 'spare_part': 'spare_part' };
       const mappedType = typeMapping[listing.listing_type] || listing.listing_type;
 
-      // 2. Construct Payload
+      // 3. Construct Payload
       const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         customer_email: email.trim() || null,
         seller_business_id: listing.business_id,
-        seller_id: listing.business_id, // Satisfy fk_leads_seller (FK to businesses)
+        seller_id: listing.business_id,
         listing_id: listing.id,
         listing_type: mappedType,
-        lead_type: mappedType, // Critical NOT NULL field in DB
-        status: 'new'
+        lead_type: mappedType, 
+        status: 'new',
+        customer_id: resolvedUserId,
+        user_id: resolvedUserId // Ensure user_id NOT NULL constraint is satisfied
       };
-
-      // Handle identity linkage
-      if (authUser?.id) {
-        payload.customer_id = authUser.id;
-        payload.user_id = authUser.id;
-      }
 
       console.log("[LEAD-CAPTURE] Submitting Payload:", payload);
       const { error: leadErr } = await supabase.from('leads').insert(payload);
 
       if (leadErr) {
-        console.error("[LEAD-MODAL] Database Insert Error:", {
-            message: leadErr.message,
-            details: leadErr.details,
-            code: leadErr.code,
-            hint: leadErr.hint
-        });
+        console.error("[LEAD-MODAL] Database Insert Error:", leadErr);
         throw leadErr;
       }
 
-      // 3. WhatsApp Redirect (Using correct template literals)
+      // 4. WhatsApp Redirect
       const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
       const cleanBizPhone = bizPhone.replace(/\D/g, '');
-      const message = `Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name.trim()}.`;
-      const url = `https://wa.me/${cleanBizPhone}?text=${encodeURIComponent(message)}`;
+      const waMessage = `Hi! 👋 I'm interested in *${listingTitle}* on AutoLink. My name is ${name.trim()}.`;
+      const url = `https://wa.me/${cleanBizPhone}?text=${encodeURIComponent(waMessage)}`;
 
       toast({ title: "Inquiry Sent! ✅", description: "Opening dealer chat..." });
       window.open(url, '_blank');
