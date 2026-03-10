@@ -37,8 +37,19 @@ export default function CustomerLeadsPage() {
             if (error) throw error;
             setLeads(data as any[] || []);
         } catch (e: any) {
-            console.error("[CUSTOMER-LEADS] Fetch error:", e);
-            toast({ variant: 'destructive', title: 'Sync Error', description: 'Could not load your inquiries.' });
+            const errorMsg = e?.message || "Could not load your inquiries.";
+            console.error("[CUSTOMER-LEADS] Fetch failure:", {
+                message: e?.message,
+                details: e?.details,
+                code: e?.code,
+                hint: e?.hint,
+                error: e
+            });
+            toast({ 
+                variant: 'destructive', 
+                title: 'Sync Error', 
+                description: errorMsg 
+            });
         } finally {
             setLoading(false);
             setRefreshing(false);

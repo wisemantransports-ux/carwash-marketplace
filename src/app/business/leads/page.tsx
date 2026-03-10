@@ -50,8 +50,19 @@ export default function BusinessLeadsPage() {
             if (error) throw error;
             setLeads(data as any[] || []);
         } catch (e: any) {
-            console.error("[BUSINESS-LEADS] Fetch error:", e);
-            toast({ variant: 'destructive', title: 'Sync Error', description: 'Could not load your leads.' });
+            const errorMsg = e?.message || "Could not load your leads.";
+            console.error("[BUSINESS-LEADS] Fetch failure:", {
+                message: e?.message,
+                details: e?.details,
+                code: e?.code,
+                hint: e?.hint,
+                error: e
+            });
+            toast({ 
+                variant: 'destructive', 
+                title: 'Sync Error', 
+                description: errorMsg 
+            });
         } finally {
             setLoading(false);
             setRefreshing(false);
