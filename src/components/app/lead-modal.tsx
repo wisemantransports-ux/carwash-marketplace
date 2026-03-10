@@ -74,10 +74,10 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
     try {
 
-      // 1️⃣ Fetch listing data
+      // 1️⃣ Fetch listing data with seller (owner) details
       const { data: listing, error: lErr } = await supabase
         .from('listings')
-        .select('business_id, listing_type, business:business_id(whatsapp_number, name)')
+        .select('business_id, listing_type, business:business_id(owner_id, whatsapp_number, name)')
         .eq('id', listingId)
         .single();
 
@@ -94,12 +94,13 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
       const mappedType = typeMapping[listing.listing_type] || listing.listing_type;
 
-      // 3️⃣ Prepare payload
+      // 3️⃣ Prepare payload including seller_id to satisfy DB constraint
       const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         customer_email: email.trim() || null,
         seller_business_id: listing.business_id,
+        seller_id: (listing.business as any).owner_id,
         listing_id: listingId,
         listing_type: mappedType,
         lead_type: mappedType,
