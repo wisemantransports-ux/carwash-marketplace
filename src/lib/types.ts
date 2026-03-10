@@ -72,6 +72,7 @@ export type Business = {
   verification_status: 'pending' | 'verified' | 'rejected';
   status: 'pending' | 'verified' | 'suspended';
   business_type: BusinessType;
+  type?: 'station' | 'mobile';
   subscription_plan: 'Starter' | 'Pro' | 'Enterprise' | 'None';
   subscription_status: 'inactive' | 'active' | 'payment_submitted';
   whatsapp_number?: string;
@@ -79,6 +80,7 @@ export type Business = {
   rating?: number;
   id_number?: string;
   special_tag?: string;
+  sub_end_date?: string;
 };
 
 export type Employee = {
