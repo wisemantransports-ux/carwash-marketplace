@@ -73,7 +73,7 @@ export default function BusinessProfilePage() {
         setDeliveryType(typed.type || 'station');
       }
     } catch (error: any) {
-      console.error("[PROFILE-LOAD] Fetch Error:", error.message || error);
+      console.error("[PROFILE-LOAD] Fetch Error:", error);
       toast({ variant: 'destructive', title: 'Load Error', description: 'Unable to retrieve business particulars.' });
     } finally {
       setLoading(false);
@@ -120,14 +120,13 @@ export default function BusinessProfilePage() {
       if (!session?.user) throw new Error('Session expired. Please sign in again.');
 
       // 1. Validation & Normalization
-      if (!name.trim() || !whatsapp.trim()) {
-        throw new Error('Business name and WhatsApp number are required.');
-      }
+      if (!name.trim()) throw new Error('Business name is required.');
+      if (!whatsapp.trim()) throw new Error('WhatsApp number is required.');
       
       const cleanWa = normalizePhone(whatsapp);
 
       // 2. Target public.businesses ONLY
-      // Strictly using the whitelisted editable fields.
+      // Strictly using the whitelisted editable fields from requirements.
       // Filtered by owner_id to respect RLS policies.
       const { error: bizError } = await supabase
         .from('businesses')
@@ -143,29 +142,29 @@ export default function BusinessProfilePage() {
         })
         .eq('owner_id', session.user.id);
 
-      if (bizError) throw bizError;
+      if (bizError) {
+        // Construct detailed error for the catch block
+        const errorToThrow = new Error(bizError.message);
+        (errorToThrow as any).details = bizError.details;
+        (errorToThrow as any).code = bizError.code;
+        (errorToThrow as any).hint = bizError.hint;
+        throw errorToThrow;
+      }
 
       toast({ 
         title: 'Profile Updated ✅', 
-        description: 'Your business credentials have been synchronized.' 
+        description: 'Business credentials updated successfully.' 
       });
       
       await fetchProfile();
     } catch (error: any) {
-      // Enhanced error details extraction
-      const errorDetails = {
-        message: error.message || 'An unexpected database violation occurred.',
-        details: error.details || '',
-        hint: error.hint || '',
-        code: error.code || ''
-      };
-      
-      console.error("[PROFILE-UPDATE] Fatal Error:", errorDetails);
+      // Robust error logging to console
+      console.error("[PROFILE-UPDATE] Fatal Error:", error);
       
       toast({ 
         variant: 'destructive', 
         title: 'Save Failed', 
-        description: errorDetails.message
+        description: error.message || 'An unexpected database violation occurred.'
       });
     } finally {
       setSaving(false);
