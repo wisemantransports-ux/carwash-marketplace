@@ -7,13 +7,19 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Normalizes and validates a phone number string.
- * Enforces length constraints and ensures international format.
+ * Enforces the inclusion of the '+' prefix and length constraints for international format.
  */
 export function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
+  const trimmed = phone.trim();
+  
+  if (!trimmed.startsWith('+')) {
+    throw new Error("WhatsApp number must start with a '+' followed by the country code (e.g., +26777123456).");
+  }
+
+  const digits = trimmed.replace(/\D/g, '');
 
   if (digits.length < 10 || digits.length > 15) {
-    throw new Error("Invalid WhatsApp number. Please include your country code (e.g., 26777123456)");
+    throw new Error("Invalid WhatsApp number length. Please include the full country code and digits (10-15 digits total).");
   }
 
   return `+${digits}`;
