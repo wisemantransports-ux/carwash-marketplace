@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -186,7 +185,7 @@ export default function SignupPage() {
                   <FormField control={form.control} name="whatsapp" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-slate-300 font-bold uppercase text-[10px]">WhatsApp Business No.</FormLabel>
-                      <FormControl><Input placeholder="26777123456" className="bg-white/5 border-white/10 text-white h-12" {...field} /></FormControl>
+                      <FormControl><Input placeholder="+26777123456" className="bg-white/5 border-white/10 text-white h-12" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />

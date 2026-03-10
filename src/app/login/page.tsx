@@ -135,7 +135,7 @@ export default function LoginPage() {
                   <div className="space-y-2">
                     <Label className="text-slate-300 font-bold uppercase text-[10px] tracking-widest ml-1">WhatsApp Number</Label>
                     <Input 
-                      placeholder="26770000000" 
+                      placeholder="+26770000000" 
                       className="h-14 bg-white/5 border-white/10 text-white text-lg rounded-2xl" 
                       value={whatsapp}
                       onChange={e => setWhatsapp(e.target.value)}

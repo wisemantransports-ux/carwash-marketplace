@@ -137,7 +137,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">WhatsApp No.</Label>
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required placeholder="26777123456" className="pl-10 h-12 bg-white/5 border-white/10 rounded-xl text-white" />
+                <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required placeholder="+26777123456" className="pl-10 h-12 bg-white/5 border-white/10 rounded-xl text-white" />
               </div>
             </div>
           </div>

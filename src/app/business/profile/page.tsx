@@ -245,7 +245,7 @@ export default function BusinessProfilePage() {
                   </div>
                   <div className="space-y-2">
                     <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">WhatsApp Business No.</Label>
-                    <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="26777123456" />
+                    <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="+26777123456" />
                   </div>
                 </div>
 

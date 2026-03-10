@@ -159,7 +159,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">WhatsApp Number</Label>
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input placeholder="26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white focus:border-primary" />
+                <Input placeholder="+26777123456" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white focus:border-primary" />
               </div>
             </div>
             <div className="space-y-2">
