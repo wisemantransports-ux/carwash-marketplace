@@ -140,11 +140,16 @@ export default function BusinessProfilePage() {
       await fetchProfile();
 
     } catch (err: any) {
-      console.error("[PROFILE-UPDATE] Error:", err);
+      console.error("[PROFILE-UPDATE] Error Details:", {
+        message: err.message,
+        details: err.details,
+        code: err.code,
+        hint: err.hint
+      });
       toast({
         variant: 'destructive',
         title: 'Update Failed',
-        description: err?.message || 'Check your permissions and try again.'
+        description: err.message || 'Check your permissions and try again.'
       });
     } finally {
       setSaving(false);
