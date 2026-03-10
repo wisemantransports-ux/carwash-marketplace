@@ -45,10 +45,10 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Display Owner Name from metadata (Read-only in this context)
+      // Display Owner Name from metadata (Read-only view)
       setOwnerName(user.user_metadata?.name || '');
 
-      // Fetch Business Record
+      // Fetch Business Record from public.businesses
       const { data: biz, error } = await supabase
         .from('businesses')
         .select('*')
@@ -120,8 +120,8 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Session expired. Please log in again.');
 
-      // 2. Direct update to businesses table (Application Data Only)
-      // Strictly avoid restricted fields (status, verification_status, special_tag, updated_at)
+      // 2. CORRECT BEHAVIOR: Update only public.businesses table
+      // Targeting only application columns, avoiding restricted auth.users and public.users fields.
       const { error } = await supabase
         .from('businesses')
         .update({
@@ -134,7 +134,7 @@ export default function BusinessProfilePage() {
           id_number: idNumber.trim(),
           logo_url: logoUrl
         })
-        .eq('owner_id', user.id); // Enforcement of ownership via RLS
+        .eq('owner_id', user.id); // Enforce ownership via RLS policy (owner_id = auth.uid())
 
       if (error) throw error;
 
@@ -143,7 +143,7 @@ export default function BusinessProfilePage() {
         description: 'Your changes have been saved to the marketplace.' 
       });
       
-      // 3. Refresh the local state to confirm changes without auth side-effects
+      // 3. Refresh only local profile state, do NOT refresh authentication session
       await fetchProfile();
     } catch (error: any) {
       console.error("[PROFILE-UPDATE] Error:", error);
@@ -184,7 +184,7 @@ export default function BusinessProfilePage() {
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input className="pl-10 bg-slate-50 cursor-not-allowed" value={ownerName} disabled />
                   </div>
-                  <p className="text-[9px] text-muted-foreground italic">Owner name is managed by platform security.</p>
+                  <p className="text-[9px] text-muted-foreground italic">Owner identity is managed by platform security.</p>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-6">
