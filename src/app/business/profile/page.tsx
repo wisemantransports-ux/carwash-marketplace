@@ -2,31 +2,30 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, CheckCircle2, User, Upload, MapPin, Smartphone, Tag, ShieldAlert } from 'lucide-react';
-import { Business, BusinessType } from '@/lib/types';
-import { cn, normalizePhone } from '@/lib/utils';
+import { Loader2, Store, CheckCircle2, User, Upload, MapPin, Smartphone, Tag } from 'lucide-react';
 import Image from 'next/image';
+import { cn, normalizePhone } from '@/lib/utils';
+import { Business, BusinessType } from '@/lib/types';
 
 /**
- * @fileOverview Business Profile Management
- * Strictly isolates updates to public.businesses table.
- * Enforces RLS ownership and whitelists authorized editable columns.
- * NEVER attempts to update auth.users or public.users from this client context.
+ * @fileOverview Safe Business Profile Management
+ * - Only writes to businesses table
+ * - Owner name in auth.users is not modified from client
+ * - Whitelisted editable fields enforced
  */
 
 export default function BusinessProfilePage() {
   const [profile, setProfile] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
-  // Whitelisted Editable Fields (businesses table)
+
+  // Editable fields in businesses table
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [address, setAddress] = useState('');
@@ -36,21 +35,19 @@ export default function BusinessProfilePage() {
   const [specialTag, setSpecialTag] = useState('');
   const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
 
-  // Identity field (Auth Metadata) - Display Only
-  const [ownerName, setOwnerName] = useState('');
+  const [ownerName, setOwnerName] = useState(''); // purely display, not updated in auth.users
 
-  // Logo Upload
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
+  // Fetch business profile
   const fetchProfile = useCallback(async () => {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      // Identity source of truth is auth metadata (READ ONLY)
-      setOwnerName(session.user.user_metadata?.name || 'Authorized Partner');
+      setOwnerName(session.user.user_metadata?.name || '');
 
       const { data: biz, error } = await supabase
         .from('businesses')
@@ -61,38 +58,35 @@ export default function BusinessProfilePage() {
       if (error) throw error;
 
       if (biz) {
-        const typed = biz as Business;
-        setProfile(typed);
-        
-        setName(typed.name || '');
-        setWhatsapp(typed.whatsapp_number || '');
-        setAddress(typed.address || '');
-        setCity(typed.city || '');
-        setLogoUrl(typed.logo_url || '');
-        setBizType(typed.business_type || 'individual');
-        setSpecialTag(typed.special_tag || '');
-        setDeliveryType(typed.type || 'station');
+        setProfile(biz as Business);
+        setName(biz.name || '');
+        setWhatsapp(biz.whatsapp_number || '');
+        setAddress(biz.address || '');
+        setCity(biz.city || '');
+        setLogoUrl(biz.logo_url || '');
+        setBizType(biz.business_type || 'individual');
+        setSpecialTag(biz.special_tag || '');
+        setDeliveryType(biz.type || 'station');
       }
-    } catch (error: any) {
-      console.error("[PROFILE-LOAD] Fetch Error:", error);
-      toast({ variant: 'destructive', title: 'Load Error', description: 'Unable to retrieve business particulars.' });
+    } catch (err: any) {
+      console.error("[PROFILE-LOAD] Fetch Error:", err);
+      toast({ variant: 'destructive', title: 'Load Error', description: 'Unable to retrieve profile.' });
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
+  useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
+  // Logo upload
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !profile) return;
-    
+    if (!e.target.files || !e.target.files[0] || !profile) return;
+
     setUploadingLogo(true);
     try {
       const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const filePath = `logos/${profile.id}/${Date.now()}.${fileExt}`;
+      const ext = file.name.split('.').pop();
+      const filePath = `logos/${profile.id}/${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('business-assets')
@@ -101,34 +95,29 @@ export default function BusinessProfilePage() {
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('business-assets')
-        .getPublicUrl(filePath);
+        .from('business-assets').getPublicUrl(filePath);
 
       setLogoUrl(publicUrl);
-      toast({ title: 'Visual Uploaded', description: 'Click save to finalize changes.' });
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Upload Failed', description: error.message });
+      toast({ title: 'Logo Uploaded', description: 'Save profile to finalize changes.' });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
     } finally {
       setUploadingLogo(false);
     }
   };
 
+  // Save business profile (no auth.users modification)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) throw new Error('Session expired. Please sign in again.');
+      if (!session?.user) throw new Error('Session expired. Please log in again.');
 
-      // 1. Validation & Normalization
-      if (!name.trim()) throw new Error('Business name is required.');
-      if (!whatsapp.trim()) throw new Error('WhatsApp number is required.');
-      
+      if (!name.trim() || !whatsapp.trim()) throw new Error('Business name and WhatsApp are required.');
       const cleanWa = normalizePhone(whatsapp);
 
-      // 2. Target public.businesses ONLY
-      // Strictly using the whitelisted editable fields from requirements.
-      // Filtered by owner_id to respect RLS policies.
       const { error: bizError } = await supabase
         .from('businesses')
         .update({
@@ -143,29 +132,17 @@ export default function BusinessProfilePage() {
         })
         .eq('owner_id', session.user.id);
 
-      if (bizError) {
-        console.error("[PROFILE-UPDATE] Supabase Error:", {
-          message: bizError.message,
-          details: bizError.details,
-          hint: bizError.hint,
-          code: bizError.code
-        });
-        throw new Error(bizError.message);
-      }
+      if (bizError) throw bizError;
 
-      toast({ 
-        title: 'Profile Updated ✅', 
-        description: 'Business credentials updated successfully.' 
-      });
-      
+      toast({ title: 'Profile Updated', description: 'Your business credentials have been saved.' });
       await fetchProfile();
-    } catch (error: any) {
-      console.error("[PROFILE-UPDATE] Fatal Error:", error);
-      
-      toast({ 
-        variant: 'destructive', 
-        title: 'Save Failed', 
-        description: error.message || 'An unexpected database violation occurred.'
+
+    } catch (err: any) {
+      console.error("[PROFILE-UPDATE] Error:", err);
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: err?.message || 'Check your permissions and try again.'
       });
     } finally {
       setSaving(false);
@@ -182,76 +159,73 @@ export default function BusinessProfilePage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
+        {/* Business Details Form */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="shadow-xl border-2">
             <CardHeader className="bg-muted/10 border-b">
               <CardTitle className="text-xl flex items-center gap-2">
                 <Store className="h-5 w-5 text-primary" />
-                Entity Particulars
+                Business Particulars
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-8">
               <form onSubmit={handleSave} className="space-y-6">
-                
+                {/* Name & WhatsApp */}
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Entity Name *</Label>
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Entity Name *</Label>
                     <Input value={name} onChange={e => setName(e.target.value)} required placeholder="Business Name" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">WhatsApp Business No. *</Label>
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">WhatsApp Business No. *</Label>
                     <div className="relative">
                       <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input 
-                        value={whatsapp} 
-                        onChange={e => setWhatsapp(e.target.value)} 
-                        required 
-                        placeholder="+26777123456" 
-                        className="pl-10"
-                      />
+                      <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required placeholder="+26777123456" className="pl-10"/>
                     </div>
                   </div>
                 </div>
 
+                {/* Owner & Type */}
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name (Auth Metadata)</Label>
-                    <div className="relative opacity-60">
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Owner Full Name (Display Only)</Label>
+                    <div className="relative">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input value={ownerName} readOnly className="pl-10 bg-slate-50 cursor-not-allowed" />
+                      <Input value={ownerName} readOnly className="pl-10 bg-muted/50" placeholder="Identity Name" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Business Structure</Label>
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Business Structure</Label>
                     <Select value={bizType} onValueChange={(v: any) => setBizType(v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="individual">Individual (Micro-Business)</SelectItem>
+                        <SelectItem value="individual">Individual</SelectItem>
                         <SelectItem value="registered">Registered Entity (CIPA)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
+                {/* Address & Delivery */}
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Service Delivery Model</Label>
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Service Delivery Model</Label>
                     <Select value={deliveryType} onValueChange={(v: any) => setDeliveryType(v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="station">Fixed Station</SelectItem>
-                        <SelectItem value="mobile">Mobile (On-Site)</SelectItem>
+                        <SelectItem value="mobile">Mobile</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">City</Label>
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">City</Label>
                     <Input value={city} onChange={e => setCity(e.target.value)} placeholder="Gaborone / Francistown" />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Physical Address</Label>
+                  <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Physical Address</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input value={address} onChange={e => setAddress(e.target.value)} className="pl-10" placeholder="Plot / Street / Mall" />
@@ -259,13 +233,10 @@ export default function BusinessProfilePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Special Tag</Label>
-                    <Badge variant="ghost" className="text-[8px] h-4 px-1 opacity-50 border">Descriptive Only</Badge>
-                  </div>
+                  <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Special Tag (e.g., Specialization)</Label>
                   <div className="relative">
                     <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="e.g. Interior Specialist" />
+                    <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="Interior Specialist" />
                   </div>
                 </div>
 
@@ -278,6 +249,7 @@ export default function BusinessProfilePage() {
           </Card>
         </div>
 
+        {/* Branding / Status */}
         <div className="space-y-6">
           <Card className="border-2 shadow-lg overflow-hidden">
             <CardHeader className="bg-primary/5 border-b">
@@ -285,7 +257,7 @@ export default function BusinessProfilePage() {
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
               <div className="space-y-4">
-                <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Business Logo</Label>
+                <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Business Logo</Label>
                 <div className="relative group">
                   <div className="relative aspect-square rounded-3xl overflow-hidden border-4 border-dashed bg-muted flex items-center justify-center transition-all group-hover:border-primary">
                     {logoUrl ? (
@@ -299,48 +271,29 @@ export default function BusinessProfilePage() {
                       </div>
                     )}
                   </div>
-                  <Button 
-                    type="button" 
-                    variant="secondary" 
-                    size="sm" 
-                    className="absolute bottom-2 right-2 rounded-xl shadow-lg"
-                    onClick={() => logoInputRef.current?.click()}
-                    disabled={uploadingLogo}
-                  >
+                  <Button type="button" variant="secondary" size="sm" className="absolute bottom-2 right-2 rounded-xl shadow-lg" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
                     <Upload className="h-4 w-4 mr-2" /> Change
                   </Button>
-                  <input 
-                    type="file" 
-                    ref={logoInputRef} 
-                    className="hidden" 
-                    accept="image/*" 
-                    onChange={handleLogoUpload} 
-                  />
+                  <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
                 </div>
               </div>
 
               <div className="space-y-4 pt-4 border-t">
-                <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Verification State</Label>
-                  <div className={cn(
-                    "p-4 rounded-2xl border-2 flex flex-col items-center gap-2",
-                    profile?.verification_status === 'verified' ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"
-                  )}>
-                    {profile?.verification_status === 'verified' ? (
-                      <>
-                        <CheckCircle2 className="h-10 w-10 text-green-600" />
-                        <p className="font-black text-green-800 uppercase text-xs">Fully Verified</p>
-                      </>
-                    ) : (
-                      <>
-                        <ShieldAlert className="h-10 w-10 text-orange-600 animate-pulse" />
-                        <p className="font-black text-orange-800 uppercase text-xs tracking-tight text-center">Verification Locked</p>
-                      </>
-                    )}
-                  </div>
-                  <p className="text-[9px] text-muted-foreground italic text-center px-4 leading-tight">
-                    Statuses like Verification, Rating, and Status are platform-managed and cannot be changed here.
-                  </p>
+                <div className={cn(
+                  "p-4 rounded-2xl border-2 flex flex-col items-center gap-2",
+                  profile?.verification_status === 'verified' ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"
+                )}>
+                  {profile?.verification_status === 'verified' ? (
+                    <>
+                      <CheckCircle2 className="h-10 w-10 text-green-600" />
+                      <p className="font-black text-green-800 uppercase text-xs">Fully Verified</p>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="h-10 w-10 text-orange-600 animate-spin" />
+                      <p className="font-black text-orange-800 uppercase text-xs tracking-tight">Under Admin Review</p>
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
