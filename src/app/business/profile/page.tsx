@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,9 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, MapPin, ShieldCheck, Upload, FileText, CheckCircle2, Phone, Building2, User, Info, LayoutGrid, Camera } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import Image from 'next/image';
+import { Loader2, Store, MapPin, ShieldCheck, FileText, CheckCircle2, Phone, User, Camera } from 'lucide-react';
 import { Business, BusinessType, BusinessCategory } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +18,7 @@ export default function BusinessProfilePage() {
   const [saving, setSaving] = useState(false);
   
   // Form fields
+  const [ownerName, setOwnerName] = useState('');
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
@@ -35,6 +33,16 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Fetch User Name
+      const { data: userRecord } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      if (userRecord) setOwnerName(userRecord.name || '');
+
+      // Fetch Business Record
       const { data: biz } = await supabase
         .from('businesses')
         .select('*')
@@ -67,24 +75,37 @@ export default function BusinessProfilePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('businesses')
-        .update({
-          name: name.trim(),
-          address: address.trim(),
-          city: city.trim(),
-          whatsapp_number: whatsapp.trim(),
+      // Use the Secure API Route to bypass Postgres permission issues on 'users' and 'businesses' tables
+      const response = await fetch('/api/business/update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          address,
+          city,
+          whatsapp_number: whatsapp,
           business_type: bizType,
-          category: category,
-          id_number: idNumber.trim()
+          category,
+          id_number: idNumber,
+          owner_name: ownerName
         })
-        .eq('owner_id', profile?.owner_id);
+      });
 
-      if (error) throw error;
-      toast({ title: 'Profile Updated', description: 'Changes saved successfully.' });
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Server rejected the update.');
+      }
+
+      toast({ title: 'Profile Updated', description: 'Changes saved successfully via secure channel.' });
       await fetchProfile();
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
+      console.error("[PROFILE-CLIENT] Update failed:", error);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Update Failed', 
+        description: error.message 
+      });
     } finally {
       setSaving(false);
     }
@@ -110,9 +131,18 @@ export default function BusinessProfilePage() {
             </CardHeader>
             <CardContent className="pt-8">
               <form onSubmit={handleSave} className="space-y-6">
+                
+                <div className="space-y-2">
+                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-10" value={ownerName} onChange={e => setOwnerName(e.target.value)} required />
+                  </div>
+                </div>
+
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Entity Name</Label>
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Entity Name (Business Name)</Label>
                     <Input value={name} onChange={e => setName(e.target.value)} required />
                   </div>
                   <div className="space-y-2">
