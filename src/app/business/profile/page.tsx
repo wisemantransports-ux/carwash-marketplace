@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, MapPin, ShieldCheck, FileText, CheckCircle2, Phone, User, Camera } from 'lucide-react';
+import { Loader2, Store, MapPin, ShieldCheck, FileText, CheckCircle2, Phone, User, Camera, Upload, Trash2 } from 'lucide-react';
 import { Business, BusinessType, BusinessCategory } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 export default function BusinessProfilePage() {
   const [profile, setProfile] = useState<Business | null>(null);
@@ -26,6 +27,12 @@ export default function BusinessProfilePage() {
   const [bizType, setBizType] = useState<BusinessType>('individual');
   const [category, setCategory] = useState<BusinessCategory>('Wash');
   const [idNumber, setIdNumber] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [specialTag, setSpecialTag] = useState('');
+
+  // Logo Upload
+  const [uploadingLogo, setUploadingUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -59,9 +66,11 @@ export default function BusinessProfilePage() {
         setBizType(typed.business_type || 'individual');
         setCategory(typed.category || 'Wash');
         setIdNumber(typed.id_number || '');
+        setLogoUrl(typed.logo_url || '');
+        setSpecialTag(typed.special_tag || '');
       }
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Load Error' });
+      toast({ variant: 'destructive', title: 'Load Error', description: error.message });
     } finally {
       setLoading(false);
     }
@@ -71,18 +80,47 @@ export default function BusinessProfilePage() {
     fetchProfile();
   }, [fetchProfile]);
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0 || !profile) return;
+    
+    setUploadingUploadingLogo(true);
+    try {
+      const file = e.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const filePath = `logos/${profile.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('business-assets')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('business-assets')
+        .getPublicUrl(filePath);
+
+      setLogoUrl(publicUrl);
+      toast({ title: 'Logo Uploaded', description: 'Save profile to persist changes.' });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Upload Failed', description: error.message });
+    } finally {
+      setUploadingUploadingLogo(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!profile) return;
+
     setSaving(true);
     try {
-      // Get the active session to retrieve the JWT token
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
         throw new Error('Your session has expired. Please sign in again.');
       }
 
-      // Use the Secure API Route to bypass Postgres permission issues on 'users' and 'businesses' tables
+      // Use the Secure API Route to update restricted fields
       const response = await fetch('/api/business/update-profile', {
         method: 'POST',
         headers: { 
@@ -90,6 +128,7 @@ export default function BusinessProfilePage() {
           'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
+          business_id: profile.id,
           name,
           address,
           city,
@@ -97,7 +136,9 @@ export default function BusinessProfilePage() {
           business_type: bizType,
           category,
           id_number: idNumber,
-          owner_name: ownerName
+          owner_name: ownerName,
+          logo_url: logoUrl,
+          special_tag: specialTag
         })
       });
 
@@ -107,10 +148,10 @@ export default function BusinessProfilePage() {
         throw new Error(result.error || 'Server rejected the update.');
       }
 
-      toast({ title: 'Profile Updated', description: 'Changes saved successfully via secure channel.' });
+      toast({ title: 'Profile Updated ✅', description: 'Changes saved to your business credentials.' });
       await fetchProfile();
     } catch (error: any) {
-      console.error("[PROFILE-CLIENT] Update failed:", error);
+      console.error("[PROFILE-CLIENT] Error:", error);
       toast({ 
         variant: 'destructive', 
         title: 'Update Failed', 
@@ -203,7 +244,7 @@ export default function BusinessProfilePage() {
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl" disabled={saving}>
+                <Button type="submit" className="w-full h-14 text-lg font-black shadow-xl uppercase tracking-tighter" disabled={saving}>
                   {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
                   Save Credentials
                 </Button>
@@ -215,13 +256,45 @@ export default function BusinessProfilePage() {
         <div className="space-y-6">
           <Card className="border-2 shadow-lg overflow-hidden">
             <CardHeader className="bg-primary/5 border-b">
-              <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-primary" />
-                Verification Center
-              </CardTitle>
+              <CardTitle className="text-sm font-black uppercase tracking-widest">Branding & Verification</CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
-              <div className="text-center space-y-4">
+              <div className="space-y-4">
+                <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Business Logo</Label>
+                <div className="relative group">
+                  <div className="relative aspect-square rounded-3xl overflow-hidden border-4 border-dashed bg-muted flex items-center justify-center transition-all group-hover:border-primary">
+                    {logoUrl ? (
+                      <Image src={logoUrl} alt="Logo" fill className="object-cover" />
+                    ) : (
+                      <Store className="h-12 w-12 text-muted-foreground opacity-20" />
+                    )}
+                    {uploadingLogo && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <Loader2 className="h-8 w-8 text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <Button 
+                    type="button" 
+                    variant="secondary" 
+                    size="sm" 
+                    className="absolute bottom-2 right-2 rounded-xl shadow-lg"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={uploadingLogo}
+                  >
+                    <Upload className="h-4 w-4 mr-2" /> Change
+                  </Button>
+                  <input 
+                    type="file" 
+                    ref={logoInputRef} 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={handleLogoUpload} 
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t">
                 <div className={cn(
                   "p-4 rounded-2xl border-2 flex flex-col items-center gap-2",
                   profile?.verification_status === 'verified' ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"
@@ -229,37 +302,18 @@ export default function BusinessProfilePage() {
                   {profile?.verification_status === 'verified' ? (
                     <>
                       <CheckCircle2 className="h-10 w-10 text-green-600" />
-                      <p className="font-black text-green-800">FULLY VERIFIED</p>
+                      <p className="font-black text-green-800 uppercase text-xs">Fully Verified</p>
                     </>
                   ) : (
                     <>
                       <Loader2 className="h-10 w-10 text-orange-600 animate-spin" />
-                      <p className="font-black text-orange-800 uppercase">Awaiting Review</p>
+                      <p className="font-black text-orange-800 uppercase text-xs tracking-tight">Review in Progress</p>
                     </>
                   )}
                 </div>
-                <p className="text-[10px] font-bold text-muted-foreground leading-relaxed">
-                  Admins manually inspect {bizType === 'individual' ? 'Selfie + Omang' : 'CIPA Certificates'} to maintain marketplace integrity.
+                <p className="text-[10px] font-bold text-muted-foreground leading-relaxed text-center px-2">
+                  Admins manually inspect your {bizType === 'individual' ? 'Omang' : 'CIPA'} documents to confirm marketplace integrity.
                 </p>
-              </div>
-
-              <div className="space-y-3">
-                <Button variant="outline" className="w-full justify-start h-12 rounded-xl" asChild>
-                  <label className="cursor-pointer">
-                    <Camera className="mr-3 h-4 w-4 text-primary" />
-                    Upload ID Selfie
-                    <input type="file" className="hidden" />
-                  </label>
-                </Button>
-                {bizType === 'registered' && (
-                  <Button variant="outline" className="w-full justify-start h-12 rounded-xl" asChild>
-                    <label className="cursor-pointer">
-                      <FileText className="mr-3 h-4 w-4 text-primary" />
-                      CIPA Certificate
-                      <input type="file" className="hidden" />
-                    </label>
-                  </Button>
-                )}
               </div>
             </CardContent>
           </Card>
