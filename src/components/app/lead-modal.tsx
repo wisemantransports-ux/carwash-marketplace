@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, Loader2, Smartphone, User, Mail } from "lucide-react";
+import { MessageCircle, Loader2, Smartphone, User, Mail, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -17,6 +17,9 @@ interface LeadModalProps {
   listingTitle: string;
 }
 
+/**
+ * Utility to extract descriptive error messages from Supabase/PostgREST error objects.
+ */
 const extractErrorMessage = (err: any): string => {
   if (!err) return "An unexpected error occurred.";
   if (typeof err === 'string') return err;
@@ -24,11 +27,13 @@ const extractErrorMessage = (err: any): string => {
   const message = err.message || err.error_description || (err.error && err.error.message);
   const details = err.details || "";
   const code = err.code || "";
+  const hint = err.hint || "";
   
   if (message) {
     let fullMessage = message;
-    if (details && details !== message) fullMessage += ` (${details})`;
-    if (code) fullMessage += ` [${code}]`;
+    if (details && details !== message) fullMessage += ` - ${details}`;
+    if (hint) fullMessage += ` (Hint: ${hint})`;
+    if (code) fullMessage += ` [Code: ${code}]`;
     return fullMessage;
   }
   
@@ -48,6 +53,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Pre-fill form if user is authenticated
   useEffect(() => {
     if (isOpen && authUser) {
       setName(authUser.user_metadata?.name || '');
@@ -62,8 +68,8 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
     if (!name.trim() || !whatsapp.trim()) {
       toast({
         variant: 'destructive',
-        title: 'Details Required',
-        description: 'Name and WhatsApp are mandatory.'
+        title: 'Input Required',
+        description: 'Name and WhatsApp number are mandatory for dealer inquiries.'
       });
       return;
     }
@@ -71,7 +77,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
     setLoading(true);
 
     try {
-      // 1. Fetch listing details including the owner (owner_id)
+      // 1. Fetch listing details and business owner info
       const { data: listing, error: lErr } = await supabase
         .from('listings')
         .select(`
@@ -83,9 +89,13 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         .eq('id', listingId)
         .single();
 
-      if (lErr || !listing) throw new Error("Listing data could not be retrieved.");
+      if (lErr || !listing) {
+        throw new Error("Unable to retrieve listing metadata. The item may have been removed.");
+      }
 
       const cleanWa = whatsapp.replace(/\D/g, '');
+      
+      // Map frontend listing types to database enum values
       const typeMapping: Record<string, string> = { 
         'wash_service': 'wash', 
         'car': 'car', 
@@ -94,49 +104,46 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       
       const mappedType = typeMapping[listing.listing_type] || listing.listing_type;
 
-      // 2. Prepare payload
+      // 2. Construct Payload
       const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
         customer_email: email.trim() || null,
         seller_business_id: listing.business_id,
-        seller_id: (listing.business as any).owner_id,
+        seller_id: (listing.business as any).owner_id, // Satisfies seller_id NOT NULL constraint
         listing_id: listing.id,
         listing_type: mappedType,
-        lead_type: mappedType,
+        lead_type: mappedType, // Satisfies lead_type NOT NULL constraint
         status: 'new'
       };
 
-      // 3. Identity logic: Only include IDs if authenticated
-      // If anonymous, database trigger auto_create_customer handles creation
+      // 3. Handle Identity (Auth vs Anonymous)
+      // If anonymous, customer_id and user_id remain NULL, 
+      // triggering the Supabase 'auto_create_customer' BEFORE INSERT function.
       if (authUser?.id) {
         payload.customer_id = authUser.id;
-        payload.user_id = authUser.id;
+        payload.user_id = authUser.id; // Satisfies user_id NOT NULL for auth flows
       }
 
-      console.log("[LEAD-DEBUG] Submitting inquiry:", payload);
+      console.log("[LEAD-CAPTURE] Dispatched Payload:", payload);
 
+      // 4. Record Lead in Database
       const { error: leadErr } = await supabase
         .from('leads')
         .insert(payload);
 
       if (leadErr) {
-        console.error("[LEAD-MODAL] Database Insert Error:", {
-          message: leadErr.message,
-          details: leadErr.details,
-          code: leadErr.code,
-          hint: leadErr.hint
-        });
+        console.error("[LEAD-CAPTURE] Database Rejection:", leadErr);
         throw leadErr;
       }
 
-      // 4. WhatsApp redirect
+      // 5. WhatsApp Redirection Logic
       const bizPhone = (listing.business as any)?.whatsapp_number;
       if (!bizPhone) {
         toast({ 
           variant: 'destructive', 
-          title: 'Dealer Contact Missing', 
-          description: 'Dealer WhatsApp number is not configured.' 
+          title: 'Routing Error', 
+          description: 'This dealer has not configured a WhatsApp number.' 
         });
         onClose();
         return;
@@ -147,18 +154,18 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       const url = `https://wa.me/${cleanBizPhone}?text=${encodeURIComponent(message)}`;
 
       toast({
-        title: "Inquiry Logged! ✅",
-        description: "Redirecting to WhatsApp to connect with the dealer..."
+        title: "Inquiry Successful! ✅",
+        description: "Connecting you with the dealer on WhatsApp..."
       });
 
       window.open(url, '_blank');
       onClose();
 
     } catch (err: any) {
-      console.error("[LEAD-MODAL] Fatal Error:", err);
+      console.error("[LEAD-CAPTURE] Process Error:", err);
       toast({
         variant: 'destructive',
-        title: 'Inquiry Failed',
+        title: 'Lead Capture Failed',
         description: extractErrorMessage(err)
       });
     } finally {
@@ -172,11 +179,11 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         <DialogHeader className="space-y-3">
           <DialogTitle className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight italic">
             <MessageCircle className="h-6 w-6 text-primary" />
-            Dealer Inquiry
+            Direct Inquiry
           </DialogTitle>
           <DialogDescription className="text-slate-400 font-medium">
             Contacting <span className="text-white font-bold">{listingTitle}</span>.
-            Your inquiry will be saved to your dashboard.
+            We'll automatically save this to your activity hub.
           </DialogDescription>
         </DialogHeader>
 
@@ -184,16 +191,17 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                Your Full Name
+                Preferred Name
               </Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input
-                  placeholder="John Doe"
+                  placeholder="e.g. John Doe"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   required
-                  className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white"
+                  disabled={loading}
+                  className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white focus:ring-primary focus:border-primary"
                 />
               </div>
             </div>
@@ -205,18 +213,19 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
               <div className="relative">
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input
-                  placeholder="26777123456"
+                  placeholder="267 77 123 456"
                   value={whatsapp}
                   onChange={e => setWhatsapp(e.target.value)}
                   required
-                  className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white"
+                  disabled={loading}
+                  className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white focus:ring-primary focus:border-primary"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                Email Address (Optional)
+                Email (Optional)
               </Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
@@ -225,7 +234,8 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
                   placeholder="john@example.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white"
+                  disabled={loading}
+                  className="pl-10 h-14 bg-white/5 border-white/10 rounded-2xl text-white focus:ring-primary focus:border-primary"
                 />
               </div>
             </div>
@@ -234,7 +244,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
           <DialogFooter>
             <Button
               type="submit"
-              className="w-full h-16 text-lg font-black shadow-xl uppercase tracking-tighter rounded-2xl group"
+              className="w-full h-16 text-lg font-black shadow-xl uppercase tracking-tighter rounded-2xl group transition-all"
               disabled={loading}
             >
               {loading ? (
@@ -242,7 +252,7 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
               ) : (
                 <MessageCircle className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />
               )}
-              Connect on WhatsApp
+              Connect with Dealer
             </Button>
           </DialogFooter>
         </form>
