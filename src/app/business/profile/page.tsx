@@ -15,7 +15,8 @@ import Image from 'next/image';
 
 /**
  * @fileOverview Business Profile Page
- * Handles credential updates through a secure server-side bridge.
+ * Optimized to update ONLY public.businesses table.
+ * Restricted auth/platform fields are excluded to prevent security violations.
  */
 
 export default function BusinessProfilePage() {
@@ -44,15 +45,17 @@ export default function BusinessProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch User Name (Priority to metadata for live updates)
+      // Fetch Owner Name from metadata for display only
       setOwnerName(user.user_metadata?.name || '');
 
       // Fetch Business Record
-      const { data: biz } = await supabase
+      const { data: biz, error } = await supabase
         .from('businesses')
         .select('*')
         .eq('owner_id', user.id)
         .maybeSingle();
+
+      if (error) throw error;
 
       if (biz) {
         const typed = biz as Business;
@@ -114,47 +117,34 @@ export default function BusinessProfilePage() {
       // 1. Validate and Normalize Phone
       const cleanWa = normalizePhone(whatsapp);
 
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('Your session has expired. Please sign in again.');
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Session expired. Please log in again.');
 
-      // Use the Secure API Route to update restricted fields
-      // NOTE: special_tag is omitted because it is platform-controlled
-      const response = await fetch('/api/business/update-profile', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          business_id: profile.id,
-          name,
-          address,
-          city,
+      // 2. Update ONLY the businesses table via standard Supabase client
+      // We explicitly exclude: owner_name (users table), special_tag (restricted), updated_at (schema mismatch)
+      const { error } = await supabase
+        .from('businesses')
+        .update({
+          name: name.trim(),
+          address: address.trim(),
+          city: city.trim(),
           whatsapp_number: cleanWa,
           business_type: bizType,
-          category,
-          id_number: idNumber,
-          owner_name: ownerName,
+          category: category,
+          id_number: idNumber.trim(),
           logo_url: logoUrl
         })
-      });
+        .eq('id', profile.id)
+        .eq('owner_id', user.id);
 
-      const result = await response.json();
+      if (error) throw error;
 
-      if (!result.success) {
-        throw new Error(result.error || 'Server rejected the update.');
-      }
-
-      // Refresh the local session metadata to reflect the name change instantly
-      await supabase.auth.refreshSession();
-
-      toast({ title: 'Profile Updated ✅', description: 'Changes saved to your business credentials.' });
+      toast({ title: 'Profile Updated ✅', description: 'Business credentials saved successfully.' });
+      
+      // Refresh local state to confirm changes
       await fetchProfile();
     } catch (error: any) {
-      console.error("[PROFILE-CLIENT] Error:", error);
+      console.error("[PROFILE-UPDATE] Error:", error);
       toast({ 
         variant: 'destructive', 
         title: 'Update Failed', 
@@ -187,11 +177,12 @@ export default function BusinessProfilePage() {
               <form onSubmit={handleSave} className="space-y-6">
                 
                 <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name</Label>
+                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner (Contact Person)</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input className="pl-10" value={ownerName} onChange={e => setOwnerName(e.target.value)} required />
+                    <Input className="pl-10 bg-slate-50 cursor-not-allowed" value={ownerName} disabled />
                   </div>
+                  <p className="text-[9px] text-muted-foreground italic">Contact person is fixed to your registration name.</p>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-6">
