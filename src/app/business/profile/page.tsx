@@ -8,15 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, CheckCircle2, User, Upload, MapPin, Smartphone, Tag } from 'lucide-react';
+import { Loader2, Store, CheckCircle2, User, Upload, MapPin, Smartphone, Tag, ShieldAlert } from 'lucide-react';
 import { Business, BusinessType } from '@/lib/types';
 import { cn, normalizePhone } from '@/lib/utils';
 import Image from 'next/image';
 
 /**
  * @fileOverview Business Profile Management
- * Strictly isolates application data (businesses table) from authentication data (auth.users).
- * Enforces RLS ownership via owner_id filter.
+ * Corrected to update ONLY the public.businesses table.
+ * Strictly adheres to Arnold's whitelisted editable fields.
  */
 
 export default function BusinessProfilePage() {
@@ -34,7 +34,7 @@ export default function BusinessProfilePage() {
   const [specialTag, setSpecialTag] = useState('');
   const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
 
-  // Identity field (Auth Metadata)
+  // Identity field (Auth Metadata) - Display Only
   const [ownerName, setOwnerName] = useState('');
 
   // Logo Upload
@@ -47,8 +47,8 @@ export default function BusinessProfilePage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      // Identity source of truth is auth metadata
-      setOwnerName(session.user.user_metadata?.name || '');
+      // Identity source of truth is auth metadata (Read Only for this form)
+      setOwnerName(session.user.user_metadata?.name || 'Authorized Partner');
 
       const { data: biz, error } = await supabase
         .from('businesses')
@@ -73,7 +73,7 @@ export default function BusinessProfilePage() {
       }
     } catch (error: any) {
       console.error("[PROFILE-LOAD] Fetch Error:", error.message || error);
-      toast({ variant: 'destructive', title: 'Load Error', description: 'Unable to retrieve profile particulars.' });
+      toast({ variant: 'destructive', title: 'Load Error', description: 'Unable to retrieve business particulars.' });
     } finally {
       setLoading(false);
     }
@@ -103,7 +103,7 @@ export default function BusinessProfilePage() {
         .getPublicUrl(filePath);
 
       setLogoUrl(publicUrl);
-      toast({ title: 'Visual Updated', description: 'Save profile to finalize changes.' });
+      toast({ title: 'Visual Uploaded', description: 'Click save to finalize changes.' });
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Upload Failed', description: error.message });
     } finally {
@@ -116,27 +116,17 @@ export default function BusinessProfilePage() {
     setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) throw new Error('Session expired. Please log in again.');
+      if (!session?.user) throw new Error('Session expired. Please sign in again.');
 
       // 1. Validation & Normalization
       if (!name.trim() || !whatsapp.trim()) {
-        throw new Error('Business name and WhatsApp number are mandatory.');
+        throw new Error('Business name and WhatsApp number are required.');
       }
       const cleanWa = normalizePhone(whatsapp);
 
-      // 2. Identity Sync (Auth Metadata)
-      // We update the name here to avoid direct writes to the restricted users table
-      if (ownerName.trim()) {
-        const { error: authError } = await supabase.auth.updateUser({
-          data: { name: ownerName.trim() }
-        });
-        if (authError) {
-          console.warn("[PROFILE-UPDATE] Auth Metadata Warning:", authError.message);
-        }
-      }
-
-      // 3. Application Data Update (businesses table)
-      // Payload is strictly whitelisted to authorized editable columns
+      // 2. Target public.businesses ONLY
+      // Strictly using the whitelisted editable fields from Arnold's spec.
+      // We use .eq('owner_id', session.user.id) to respect RLS policies.
       const { error: bizError } = await supabase
         .from('businesses')
         .update({
@@ -151,23 +141,26 @@ export default function BusinessProfilePage() {
         })
         .eq('owner_id', session.user.id);
 
-      if (bizError) throw bizError;
+      if (bizError) {
+        throw new Error(`[DB] ${bizError.message} (${bizError.code})`);
+      }
 
       toast({ 
-        title: 'Profile Saved Successfully', 
-        description: 'Your business credentials have been updated.' 
+        title: 'Profile Updated ✅', 
+        description: 'Your business credentials have been synchronized.' 
       });
       
       await fetchProfile();
     } catch (error: any) {
-      console.error("[PROFILE-UPDATE] Fatal error:", error);
-      // Detailed error breakdown for the toast
-      const errorMessage = error?.message || error?.error_description || (typeof error === 'string' ? error : "Check your permissions and try again.");
+      console.error("[PROFILE-UPDATE] Fatal Error:", error);
+      
+      // Extraction of actual error details to avoid empty {} logs
+      const details = error.message || "An unexpected database violation occurred.";
       
       toast({ 
         variant: 'destructive', 
-        title: 'Update Failed', 
-        description: errorMessage 
+        title: 'Save Failed', 
+        description: details
       });
     } finally {
       setSaving(false);
@@ -189,7 +182,7 @@ export default function BusinessProfilePage() {
             <CardHeader className="bg-muted/10 border-b">
               <CardTitle className="text-xl flex items-center gap-2">
                 <Store className="h-5 w-5 text-primary" />
-                Business Particulars
+                Entity Particulars
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-8">
@@ -217,10 +210,10 @@ export default function BusinessProfilePage() {
 
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name</Label>
-                    <div className="relative">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name (Managed in Auth)</Label>
+                    <div className="relative opacity-60">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input value={ownerName} onChange={e => setOwnerName(e.target.value)} className="pl-10" placeholder="Identity Name" />
+                      <Input value={ownerName} readOnly className="pl-10 bg-slate-50 cursor-not-allowed" />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -261,7 +254,10 @@ export default function BusinessProfilePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Special Tag (e.g. Specialization)</Label>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Special Tag</Label>
+                    <Badge variant="ghost" className="text-[8px] h-4 px-1 opacity-50 border">Descriptive Only</Badge>
+                  </div>
                   <div className="relative">
                     <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input value={specialTag} onChange={e => setSpecialTag(e.target.value)} className="pl-10" placeholder="e.g. Interior Specialist" />
@@ -320,7 +316,7 @@ export default function BusinessProfilePage() {
 
               <div className="space-y-4 pt-4 border-t">
                 <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Account Status</Label>
+                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Verification State</Label>
                   <div className={cn(
                     "p-4 rounded-2xl border-2 flex flex-col items-center gap-2",
                     profile?.verification_status === 'verified' ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"
@@ -332,11 +328,14 @@ export default function BusinessProfilePage() {
                       </>
                     ) : (
                       <>
-                        <Loader2 className="h-10 w-10 text-orange-600 animate-spin" />
-                        <p className="font-black text-orange-800 uppercase text-xs tracking-tight">Under Admin Review</p>
+                        <ShieldAlert className="h-10 w-10 text-orange-600 animate-pulse" />
+                        <p className="font-black text-orange-800 uppercase text-xs tracking-tight text-center">Verification Locked</p>
                       </>
                     )}
                   </div>
+                  <p className="text-[9px] text-muted-foreground italic text-center px-4 leading-tight">
+                    Statuses like Verification, Rating, and Status are platform-managed and cannot be changed here.
+                  </p>
                 </div>
               </div>
             </CardContent>
