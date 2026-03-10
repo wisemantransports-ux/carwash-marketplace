@@ -16,7 +16,7 @@ import Image from 'next/image';
 /**
  * @fileOverview Business Profile Page
  * Refactored to strictly update authorized columns in public.businesses.
- * Enforces ownership filtering and handles auth metadata via auth.updateUser.
+ * Enforces ownership filtering and removes forbidden auth/user table updates.
  */
 
 export default function BusinessProfilePage() {
@@ -34,8 +34,8 @@ export default function BusinessProfilePage() {
   const [specialTag, setSpecialTag] = useState('');
   const [deliveryType, setDeliveryType] = useState<'station' | 'mobile'>('station');
 
-  // Auth metadata fields
-  const [ownerName, setOwnerName] = useState('');
+  // Read-only display fields
+  const [ownerNameDisplay, setOwnerNameDisplay] = useState('');
   const [idNumberDisplay, setIdNumberDisplay] = useState('');
 
   // Logo Upload
@@ -48,7 +48,8 @@ export default function BusinessProfilePage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      setOwnerName(session.user.user_metadata?.name || 'Authorized Owner');
+      // Identity fields are read-only in this context
+      setOwnerNameDisplay(session.user.user_metadata?.name || 'Authorized Owner');
 
       const { data: biz, error } = await supabase
         .from('businesses')
@@ -134,17 +135,10 @@ export default function BusinessProfilePage() {
         throw new Error(err.message || "Invalid WhatsApp number format.");
       }
 
-      // 2. Update Auth Metadata (separately from businesses table)
-      if (ownerName.trim() !== (session.user.user_metadata?.name || '')) {
-        const { error: authError } = await supabase.auth.updateUser({
-          data: { name: ownerName.trim() }
-        });
-        if (authError) console.warn("[PROFILE-UPDATE] Auth sync failed:", authError.message);
-      }
-
       /**
-       * 3. STRICT BUSINESS TABLE UPDATE:
+       * 2. STRICT BUSINESS TABLE UPDATE:
        * Targets ONLY allowed columns. Excludes id, owner_id, verification_status, status, etc.
+       * Excludes all auth/user table fields.
        */
       const { error: bizError } = await supabase
         .from('businesses')
@@ -161,11 +155,12 @@ export default function BusinessProfilePage() {
         .eq('owner_id', session.user.id); // Enforce RLS via owner_id filter
 
       if (bizError) {
+        console.error("[PROFILE-UPDATE] Supabase Error:", bizError);
         throw new Error(`${bizError.message} (Code: ${bizError.code})`);
       }
 
       toast({ 
-        title: 'Profile Updated Successfully', 
+        title: 'Business profile updated successfully', 
         description: 'Your business particulars have been saved.' 
       });
       
@@ -225,10 +220,10 @@ export default function BusinessProfilePage() {
 
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name (Auth)</Label>
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">Owner Full Name (ReadOnly)</Label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input value={ownerName} onChange={e => setOwnerName(e.target.value)} className="pl-10" placeholder="Owner Name" />
+                      <Input value={ownerNameDisplay} disabled className="pl-10 bg-slate-50 cursor-not-allowed opacity-60" />
                     </div>
                   </div>
                   <div className="space-y-2">
