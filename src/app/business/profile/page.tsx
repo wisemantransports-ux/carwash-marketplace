@@ -86,13 +86,20 @@ export default function BusinessProfilePage() {
 
   // Logo upload to Supabase Storage
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0] || !profile) return;
+    console.log('LOGO UPLOAD START');
+    if (!e.target.files || !e.target.files[0]) return;
 
     setUploadingLogo(true);
     try {
       const file = e.target.files[0];
-      const ext = file.name.split('.').pop();
-      const filePath = `logos/${profile.id}/${Date.now()}.${ext}`;
+
+      // 1. Get logged in user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // 2. Upload file
+      const fileExt = file.name.split('.').pop();
+      const filePath = `logos/${user.id}-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('business-assets')
@@ -100,62 +107,112 @@ export default function BusinessProfilePage() {
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
+      // 3. Get public URL
+      const { data } = supabase.storage
         .from('business-assets')
         .getPublicUrl(filePath);
 
+      const sessionRes = await supabase.auth.getSession();
+      const session = sessionRes.data.session;
+      if (!session) throw new Error('No active session');
+
+      const publicUrl = data.publicUrl;
+
+      // 4. SAVE TO DATABASE through server API endpoint
+      const payload = {
+        owner_id: user.id,
+        business_id: profile?.id,
+        logo_url: publicUrl
+      };
+
+      console.log('[LOGO-UPDATE] payload:', payload);
+
+      const response = await fetch('/api/business/update-profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      console.log('[LOGO-UPDATE] API response:', result);
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to save logo URL to business profile');
+      }
+
+      // 5. Update UI state
       setLogoUrl(publicUrl);
-      toast({ title: 'Logo Uploaded', description: 'Save profile to finalize changes.' });
+
+      // 6. Success feedback
+      toast({
+        title: 'Logo updated',
+        description: 'Your logo has been saved successfully'
+      });
+
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Upload Failed', description: err.message });
+      console.error('Logo upload error:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Upload failed',
+        description: err.message
+      });
     } finally {
       setUploadingLogo(false);
     }
   };
 
-  // Save business profile (strictly businesses table only)
+  // Save business profile via server API route (not direct users updates)
   const handleSave = async (e: React.FormEvent) => {
+    console.log('PROFILE SAVE START');
     e.preventDefault();
     setSaving(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log("Logged user:", user);
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-      if (!user) {
+      if (sessionError || !session) {
+        console.error('No active session', sessionError);
         throw new Error('User not authenticated');
       }
 
-      if (!name.trim() || !whatsapp.trim()) {
-        throw new Error('Business name and WhatsApp are required.');
-      }
-      
-      // Validation: normalizePhone ensures "+" prefix and international format
+      const user = session.user;
       const cleanWa = normalizePhone(whatsapp);
 
-      // MINIMAL PAYLOAD: Only whitelisted editable fields from businesses table
       const payload = {
-        name: name.trim(),
+        owner_id: user.id,
+        business_id: user.id,
+        name,
         whatsapp_number: cleanWa,
-        address: address.trim(),
-        city: city.trim(),
+        address,
+        city,
         logo_url: logoUrl,
-        category: category,
-        special_tag: specialTag.trim(),
+        category,
+        special_tag,
         type: deliveryType,
-        business_type: bizType
       };
 
-      console.log("[PROFILE-UPDATE] Payload Sent:", payload);
+      console.log('[PROFILE-UPDATE] payload:', payload);
 
-      const { error: bizError } = await supabase
-        .from('businesses')
-        .update(payload)
-        .eq('owner_id', user.id);
+      const res = await fetch('/api/business/update-profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-      if (bizError) {
-        console.error("Business update error:", bizError);
-        throw bizError;
+      const result = await response.json();
+      console.log('[PROFILE-UPDATE] API response:', result);
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to update business profile');
       }
 
       toast({ title: 'Profile Updated', description: 'Your business credentials have been saved.' });

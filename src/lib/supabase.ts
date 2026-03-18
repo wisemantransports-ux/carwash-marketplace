@@ -29,3 +29,24 @@ export const supabase = createClient(
     }
   }
 );
+
+// Global query logging wrapper for debugging runtime sequence
+const rawFrom = supabase.from.bind(supabase);
+
+(supabase as any).from = (table: string) => {
+  console.log('[SUPABASE QUERY START] table:', table);
+  const builder = rawFrom(table);
+
+  return new Proxy(builder, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value === 'function' && ['select', 'update', 'insert', 'upsert', 'delete', 'maybeSingle', 'single', 'eq', 'filter', 'in'].includes(String(prop))) {
+        return (...args: any[]) => {
+          console.log(`[SUPABASE QUERY] table=${table} method=${String(prop)}`, args);
+          return value.apply(target, args);
+        };
+      }
+      return value;
+    }
+  });
+};

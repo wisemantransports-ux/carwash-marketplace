@@ -4,20 +4,31 @@ import { supabase } from '@/lib/supabase';
 
 /**
  * @fileOverview Secure Business Profile Update API
- * Handles administrative bypass for restricted tables and synchronizes auth metadata.
- * Explicitly excludes platform-controlled fields and non-existent columns from updates.
+ * Only updates businesses table via admin client. Does not touch users.
  */
 
-export async function POST(req: Request) {
+export async function PATCH(req: Request) {
   try {
-    const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.split(' ')[1];
+    const authHeader = req.headers.get('authorization');
 
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Authorization token missing.' }, { status: 401 });
+    if (!authHeader) {
+      return NextResponse.json({ success: false, error: 'No token' }, { status: 401 });
     }
 
-    // Verify user session via standard Supabase client to ensure auth validity
+    const token = authHeader.replace('Bearer ', '').trim();
+
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'No token' }, { status: 401 });
+    }
+
+    if (!isSupabaseAdminConfigured) {
+      console.error('[PROFILE-API] Supabase admin not configured');
+      return NextResponse.json(
+        { success: false, error: 'Supabase admin not configured.' },
+        { status: 500 }
+      );
+    }
+
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
@@ -26,80 +37,51 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { 
+    const {
+      owner_id,
       business_id,
-      name, 
-      address, 
-      city, 
-      whatsapp_number, 
-      business_type, 
-      category, 
-      id_number,
-      owner_name,
-      logo_url
+      name,
+      whatsapp_number,
+      address,
+      city,
+      logo_url,
+      category,
+      special_tag,
+      type
     } = body;
 
-    if (!isSupabaseAdminConfigured) {
-      throw new Error('Supabase Admin Client is not configured on the server.');
+    console.log('[PROFILE-API] PATCH owner_id:', owner_id, 'user.id:', user.id);
+
+    if (!owner_id || owner_id !== user.id) {
+      return NextResponse.json({ success: false, error: 'Invalid owner_id or unauthorized' }, { status: 403 });
     }
 
-    // 1. Update the Business Record via Admin Client
-    // We explicitly only allow updating standard profile fields.
-    // Platform-controlled fields like status, verification_status, and special_tag are OMITTED.
-    // 'updated_at' is OMITTED as it does not exist in the current businesses table schema.
-    const { error: bizError } = await supabaseAdmin
+    const payload: Record<string, any> = {};
+    if (name !== undefined) payload.name = name?.trim();
+    if (whatsapp_number !== undefined) payload.whatsapp_number = whatsapp_number?.trim();
+    if (address !== undefined) payload.address = address?.trim();
+    if (city !== undefined) payload.city = city?.trim();
+    if (logo_url !== undefined) payload.logo_url = logo_url;
+    if (category !== undefined) payload.category = category;
+    if (special_tag !== undefined) payload.special_tag = special_tag;
+    if (type !== undefined) payload.type = type;
+
+    console.log('[PROFILE-API] payload:', payload);
+
+    const { data, error } = await supabaseAdmin
       .from('businesses')
-      .update({
-        name: name?.trim(),
-        address: address?.trim(),
-        city: city?.trim(),
-        whatsapp_number: whatsapp_number?.trim(),
-        business_type,
-        category,
-        id_number: id_number?.trim(),
-        logo_url
-      })
-      .eq('id', business_id)
-      .eq('owner_id', user.id);
+      .update(payload)
+      .eq('owner_id', owner_id)
+      .eq('id', business_id);
 
-    if (bizError) {
-      console.error('[PROFILE-API] Business update error:', bizError);
-      return NextResponse.json({ 
-        success: false, 
-        error: bizError.message || 'Failed to update business particulars.' 
-      }, { status: 500 });
+    if (error) {
+      console.error('[PROFILE-API] Business update error:', error);
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    // 2. Synchronize Owner Identity
-    if (owner_name) {
-      const trimmedName = owner_name.trim();
-
-      // A. Update Auth Metadata (Source of truth for session headers)
-      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
-        user.id,
-        { user_metadata: { name: trimmedName } }
-      );
-      
-      if (authUpdateError) console.error('[PROFILE-API] Auth metadata sync failed:', authUpdateError);
-
-      // B. Sync public profile table
-      const { error: userUpdateError } = await supabaseAdmin
-        .from('users')
-        .update({ name: trimmedName })
-        .eq('id', user.id);
-      
-      if (userUpdateError) {
-        console.warn('[PROFILE-API] Public profile sync warning:', userUpdateError.message);
-      }
-    }
-
-    return NextResponse.json({ success: true });
-
+    return NextResponse.json({ success: true, data });
   } catch (err: any) {
     console.error('[PROFILE-API] Fatal error:', err);
-    return NextResponse.json({ 
-      success: false, 
-      error: err.message || 'Failed to update credentials via administrative bridge.' 
-    }, { status: 500 });
+    return NextResponse.json({ success: false, error: err.message || 'Unknown error' }, { status: 500 });
   }
 }
