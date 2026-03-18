@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (existingUser) {
-      return NextResponse.json({ success: true, userId: existingUser.id, name: existingUser.name });
+      return NextResponse.json({ success: true, user: { id: existingUser.id, name: existingUser.name }, userId: existingUser.id, name: existingUser.name });
     }
 
     // 2. Lookup existing Auth User via Admin (to prevent duplicate phone errors)
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
           whatsapp_number: cleanWa,
           role: 'customer'
         });
-        return NextResponse.json({ success: true, userId: authUser.id, name });
+        return NextResponse.json({ success: true, user: { id: authUser.id, name: authUser.user_metadata?.name || name || 'Customer' }, userId: authUser.id, name });
       }
 
       // 3. Truly new user: Create in Auth
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
           created_at: new Date().toISOString()
         });
         
-        return NextResponse.json({ success: true, userId: authData.user.id, name });
+        return NextResponse.json({ success: true, user: { id: authData.user.id, name: name || 'Customer' }, userId: authData.user.id, name });
       }
     }
 

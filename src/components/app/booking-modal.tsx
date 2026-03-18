@@ -76,27 +76,39 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
 
       if (!resolvedUserId) throw new Error("Identity resolution failed. Please try again.");
 
-      const payload: any = {
-        customer_name: name.trim(),
-        customer_whatsapp: cleanWa,
-        customer_email: email.trim() || null,
-        wash_service_id: service.id,
-        business_id: service.business_id,
-        seller_business_id: service.business_id,
-        location: locationText.trim(),
-        booking_date: date,
-        requested_time: `${date}T${time}:00`,
-        status: 'pending_assignment',
-        customer_id: resolvedUserId,
-        user_id: resolvedUserId
-      };
+      // resolve or create customer via frictionless API
+      const frictionlessRes = await fetch('/api/auth/frictionless', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanWa })
+      });
+      const frictionlessData = await frictionlessRes.json();
 
-      const { error } = await supabase.from('wash_bookings').insert(payload);
-      if (error) throw error;
+      const customer_id = frictionlessData?.user?.id || frictionlessData?.userId;
+      if (!customer_id) {
+        throw new Error('Failed to resolve customer');
+      }
 
-      toast({ title: "Booking Requested! ✅", description: "Tracking now available in your dashboard." });
+      const bookingRes = await fetch('/api/bookings/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id,
+          seller_business_id: service.business_id,
+          service_id: service.id,
+          booking_date: date,
+          booking_time: time
+        })
+      });
+
+      const bookingData = await bookingRes.json();
+      if (!bookingData.success) {
+        throw new Error(bookingData.error || 'Booking failed');
+      }
+
+      toast({ title: 'Booking Requested! ✅', description: 'Tracking now available in your dashboard.' });
       onClose();
-      router.push("/customer/dashboard");
+      router.push('/customer/dashboard');
     } catch (err: any) {
       console.error("[BOOKING-CAPTURE] Error:", err);
       toast({
