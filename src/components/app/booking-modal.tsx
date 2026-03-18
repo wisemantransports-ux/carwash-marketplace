@@ -84,10 +84,12 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       });
       const frictionlessData = await frictionlessRes.json();
 
-      const customer_id = frictionlessData?.user?.id || frictionlessData?.userId;
-      if (!customer_id) {
+      if (!frictionlessData?.success || !frictionlessData?.user?.id) {
+        console.error('[FRICTIONLESS FAILURE]', frictionlessData);
         throw new Error('Failed to resolve customer');
       }
+
+      const customer_id = frictionlessData.user.id;
 
       const bookingRes = await fetch('/api/bookings/create', {
         method: 'POST',

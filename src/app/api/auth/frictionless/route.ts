@@ -70,12 +70,14 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      userId: '00000000-0000-0000-0000-000000000000',
-      name: name || 'Mock User',
-      is_mock: true
-    });
+    console.error('[FRICTIONLESS ERROR] No user could be resolved or created', { whatsapp: cleanWa });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to resolve or create user'
+      },
+      { status: 500 }
+    );
 
   } catch (err: any) {
     console.error('[FRICTIONLESS-AUDIT] Fatal Error:', err);
