@@ -80,7 +80,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       const frictionlessRes = await fetch('/api/auth/frictionless', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: cleanWa })
+        body: JSON.stringify({ whatsapp: cleanWa, name: name.trim() })
       });
       const frictionlessData = await frictionlessRes.json();
 
