@@ -24,32 +24,21 @@ export default function CustomerHome() {
 
     setLoading(true);
 
-    const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
-      if (!authUserId) return null;
-      const { data: resolved, error: resolveError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('auth_user_id', authUserId)
-        .maybeSingle();
+    console.log('SESSION USER:', user);
 
-      if (resolveError) {
-        console.error('[CANONICAL RESOLVE ERROR]', resolveError);
-        return null;
-      }
+    const testFetchBookings = async () => {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*');
 
-      return resolved?.id || null;
+      console.log('TEST BOOKINGS:', data);
+      console.log('TEST ERROR:', error);
     };
 
-    console.log('Session user.id:', user.id);
+    testFetchBookings();
 
-    const canonicalUserId = await resolveCustomerId(user.id);
-    console.log('Resolved users.id:', canonicalUserId);
+    const targetCustomerId = user.id;
 
-    const targetCustomerId = canonicalUserId || user.id; // fallback to preserve compatibility
-
-    if (!canonicalUserId) {
-      console.warn('[CANONICAL USER ID MISSING] using auth ID as fallback', { userId: user.id });
-    }
 
     try {
       // 1. Fetch Most Active Booking

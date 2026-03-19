@@ -88,8 +88,7 @@ export default function LoginPage() {
       // Existing user found: authenticate session for RLS access
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        // Authenticate as anonymous to allow RLS policies based on customer_id lookup
-        await supabase.auth.signInAnonymously();
+        throw new Error("Authentication failed. Please try again.");
       }
       
       toast({ title: "Authenticated!", description: "Opening your activity hub..." });

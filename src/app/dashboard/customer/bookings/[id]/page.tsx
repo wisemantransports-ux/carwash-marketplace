@@ -29,32 +29,11 @@ export default function BookingTrackerPage() {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
 
-  const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
-    const { data: canonical, error } = await supabase
-      .from('users')
-      .select('id')
-      .eq('auth_user_id', authUserId)
-      .maybeSingle();
-
-    if (error) {
-      console.error('[CANONICAL RESOLVE ERROR]', error);
-      return null;
-    }
-
-    return canonical?.id || null;
-  };
-
   const fetchDetails = useCallback(async () => {
     if (!id || !user) return;
     try {
-      const canonicalUserId = await resolveCustomerId(user.id);
+      const targetCustomerId = user.id;
       console.log('Session user.id:', user.id);
-      console.log('Resolved users.id:', canonicalUserId);
-
-      const targetCustomerId = canonicalUserId || user.id;
-      if (!canonicalUserId) {
-        console.warn('[CANONICAL USER ID MISSING] using auth ID fallback', { userId: user.id });
-      }
 
       const { data, error } = await supabase
         .from('bookings')

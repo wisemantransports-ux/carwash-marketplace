@@ -3,7 +3,7 @@ import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase-admin';
 
 /**
  * @fileOverview API Route to generate and store a WhatsApp OTP.
- * This is used for frictionless customer onboarding.
+ * This is used for customer login and registration.
  */
 
 export async function POST(req: Request) {

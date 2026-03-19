@@ -44,6 +44,19 @@ export default function BusinessDashboardPage() {
         if (!silent) setLoading(true);
         else setRefreshing(true);
 
+        console.log('SESSION USER:', user);
+
+        const testFetchBookings = async () => {
+          const { data, error } = await supabase
+            .from('bookings')
+            .select('*');
+
+          console.log('TEST BOOKINGS:', data);
+          console.log('TEST ERROR:', error);
+        };
+
+        testFetchBookings();
+
         try {
             // 1. Find the business ID for this owner
             const { data: biz } = await supabase

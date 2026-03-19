@@ -59,7 +59,6 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
 
     setLoading(true);
     try {
-      // 1. Validate and Normalize Phone
       const cleanWa = normalizePhone(whatsapp);
 
       const { data: listing, error: lErr } = await supabase
@@ -76,26 +75,38 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
       if (lErr || !listing) throw new Error("Item information is currently unavailable.");
 
       let resolvedUserId = authUser?.id;
-      
-      if (!resolvedUserId) {
-        const identRes = await fetch('/api/auth/frictionless', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ whatsapp: cleanWa, name: name.trim() })
-        });
-        const identData = await identRes.json();
-        if (!identData.success || !identData.userId) {
-          throw new Error(identData.error || "Could not verify your identity.");
-        }
-        resolvedUserId = identData.userId;
-      }
 
-      if (!resolvedUserId) throw new Error("Identity resolution failed. Please try again.");
+      if (!resolvedUserId) {
+        if (!cleanWa || cleanWa.length < 10) {
+          throw new Error("Invalid WhatsApp number format.");
+        }
+
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('whatsapp_number', cleanWa)
+          .maybeSingle();
+
+        if (existingUser?.id) {
+          throw new Error("Account already exists with this WhatsApp number. Please log in to submit leads.");
+        }
+
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert([{ whatsapp_number: cleanWa, name: name.trim(), role: 'customer' }])
+          .select('id')
+          .single();
+
+        if (createError || !newUser?.id) {
+          throw new Error("Failed to create account. Please try again.");
+        }
+
+        resolvedUserId = newUser.id;
+      }
 
       const typeMapping: Record<string, string> = { 'wash_service': 'wash', 'car': 'car', 'spare_part': 'spare_part' };
       const mappedType = typeMapping[listing.listing_type] || listing.listing_type;
 
-      // Ensure seller_id and user_id are correctly populated for constraints
       const payload: any = {
         customer_name: name.trim(),
         customer_whatsapp: cleanWa,
@@ -110,9 +121,17 @@ export function LeadModal({ isOpen, onClose, listingId, listingTitle }: LeadModa
         user_id: resolvedUserId
       };
 
-      const { error: leadErr } = await supabase.from('leads').insert(payload);
+      const { data: existingLead } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('customer_id', resolvedUserId)
+        .eq('seller_business_id', listing.business_id)
+        .maybeSingle();
 
-      if (leadErr) throw leadErr;
+      if (!existingLead) {
+        const { error: leadErr } = await supabase.from('leads').insert(payload);
+        if (leadErr) throw leadErr;
+      }
 
       const bizPhone = (listing.business as any)?.whatsapp_number || '26777491261';
       const cleanBizPhone = bizPhone.replace(/\D/g, '');

@@ -18,33 +18,12 @@ export default function BookingHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [rebooking, setRebooking] = useState<string | null>(null);
 
-  const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
-    const { data: canonical, error } = await supabase
-      .from('users')
-      .select('id')
-      .eq('auth_user_id', authUserId)
-      .maybeSingle();
-
-    if (error) {
-      console.error('[CANONICAL RESOLVE ERROR]', error);
-      return null;
-    }
-
-    return canonical?.id || null;
-  };
-
   const fetchHistory = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const canonicalUserId = await resolveCustomerId(user.id);
+      const targetCustomerId = user.id;
       console.log('Session user.id:', user.id);
-      console.log('Resolved users.id:', canonicalUserId);
-
-      const targetCustomerId = canonicalUserId || user.id;
-      if (!canonicalUserId) {
-        console.warn('[CANONICAL USER ID MISSING] using auth ID fallback', { userId: user.id });
-      }
 
       const { data } = await supabase
         .from('bookings')
@@ -94,11 +73,8 @@ export default function BookingHistoryPage() {
       const previousTime = prev.scheduled_at ? new Date(prev.scheduled_at).toISOString().split('T')[1] : '00:00:00';
       const scheduledAt = new Date(`${bookingDate}T${previousTime}`).toISOString();
 
-      const canonicalUserId = await resolveCustomerId(user!.id);
-      const targetCustomerId = canonicalUserId || user!.id;
-
       const { data, error } = await supabase.from('bookings').insert({
-        customer_id: targetCustomerId,
+        customer_id: user!.id,
         customer_name: user!.user_metadata?.name || 'Customer',
         customer_whatsapp: user!.user_metadata?.whatsapp || user!.phone || 'No Phone',
         wash_service_id: prev.wash_service_id,

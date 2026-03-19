@@ -53,53 +53,135 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
 
   useEffect(() => {
     const resolveBusiness = async () => {
-      if (!businessEmail) return;
-      const businessRes = await supabase
-        .from('businesses')
-        .select('id')
-        .eq('email', businessEmail.trim())
-        .single();
-
-      if (businessRes.error) {
-        console.error('[BUSINESS RESOLVE ERROR]', businessRes.error);
+      // 1. Validate businessEmail before querying
+      if (!businessEmail || !businessEmail.trim()) {
+        console.debug('[BUSINESS RESOLVE] Skipping: businessEmail is empty');
         setSellerBusinessId('');
         setServices([]);
         setSelectedServiceId('');
         return;
       }
 
-      if (!businessRes.data || !businessRes.data.id) {
-        console.warn('[BUSINESS RESOLVE NOT FOUND]', businessEmail);
+      try {
+        const trimmedEmail = businessEmail.trim();
+        console.debug('[BUSINESS RESOLVE] Attempting to resolve:', { email: trimmedEmail });
+
+        // 2. Query Supabase with error handling
+        const businessRes = await supabase
+          .from('businesses')
+          .select('id')
+          .eq('email', trimmedEmail)
+          .single();
+
+        // 3. Log full response object for debugging
+        console.debug('[BUSINESS RESOLVE RESPONSE]', {
+          error: businessRes.error,
+          data: businessRes.data,
+          status: businessRes.status,
+        });
+
+        // 4. Handle Supabase errors properly
+        if (businessRes.error) {
+          console.error('[BUSINESS RESOLVE ERROR]', {
+            message: businessRes.error.message || 'Unknown error',
+            code: businessRes.error.code,
+            details: businessRes.error.details,
+            hint: businessRes.error.hint,
+          });
+          setSellerBusinessId('');
+          setServices([]);
+          setSelectedServiceId('');
+          return;
+        }
+
+        // 5. Validate response data
+        if (!businessRes.data || !businessRes.data.id) {
+          console.warn('[BUSINESS RESOLVE NOT FOUND]', { email: trimmedEmail });
+          setSellerBusinessId('');
+          setServices([]);
+          setSelectedServiceId('');
+          return;
+        }
+
+        // 6. Success: set the business ID
+        console.debug('[BUSINESS RESOLVE SUCCESS]', { businessId: businessRes.data.id });
+        setSellerBusinessId(businessRes.data.id);
+      } catch (err) {
+        console.error('[BUSINESS RESOLVE EXCEPTION]', {
+          message: err instanceof Error ? err.message : String(err),
+          error: err,
+        });
         setSellerBusinessId('');
         setServices([]);
         setSelectedServiceId('');
-        return;
       }
-
-      setSellerBusinessId(businessRes.data.id);
     };
 
     resolveBusiness();
   }, [businessEmail]);
 
   useEffect(() => {
-    if (!sellerBusinessId) return;
+    // 1. Validate sellerBusinessId before querying
+    if (!sellerBusinessId || !sellerBusinessId.trim()) {
+      console.debug('[SERVICES LOAD] Skipping: sellerBusinessId is empty');
+      setServices([]);
+      setSelectedServiceId('');
+      return;
+    }
 
     const loadServices = async () => {
-      const { data, error } = await supabase
-        .from('services')
-        .select('id, name')
-        .eq('business_id', sellerBusinessId);
+      try {
+        const trimmedBusinessId = sellerBusinessId.trim();
+        console.debug('[SERVICES LOAD] Attempting to load services:', { businessId: trimmedBusinessId });
 
-      console.log('SERVICES LOADED', data);
+        // 2. Query Supabase for services
+        const { data, error } = await supabase
+          .from('listings')
+          .select('id, name')
+          .eq('business_id', trimmedBusinessId)
+          .eq('listing_type', 'wash_service');
 
-      if (!error && data) {
-        setServices(data as Array<{ id: string; name: string }>);
-      } else {
+        // 3. Log full response object for debugging
+        console.debug('[SERVICES LOAD RESPONSE]', {
+          error: error,
+          dataCount: data?.length || 0,
+          data: data,
+        });
+
+        // 4. Handle Supabase errors
+        if (error) {
+          console.error('[SERVICES LOAD ERROR]', {
+            message: error.message || 'Unknown error',
+            code: error.code,
+            details: error.details,
+          });
+          setServices([]);
+          setSelectedServiceId('');
+          return;
+        }
+
+        // 5. Validate and set data
+        if (data && data.length > 0) {
+          console.debug('[SERVICES LOAD SUCCESS]', { count: data.length });
+          setServices(data as Array<{ id: string; name: string }>);
+        } else {
+          console.warn('[SERVICES LOAD NO RESULTS]', { businessId: trimmedBusinessId });
+          setServices([]);
+          setSelectedServiceId('');
+          return;
+        }
+
+        // 6. Reset selectedServiceId if it's no longer valid
+        if (selectedServiceId && !data.find((s: any) => s.id === selectedServiceId)) {
+          console.debug('[SERVICES LOAD] Resetting selected service: no longer valid');
+          setSelectedServiceId('');
+        }
+      } catch (err) {
+        console.error('[SERVICES LOAD EXCEPTION]', {
+          message: err instanceof Error ? err.message : String(err),
+          error: err,
+        });
         setServices([]);
-      }
-
-      if (data && !data.find((s: any) => s.id === selectedServiceId)) {
         setSelectedServiceId('');
       }
     };
@@ -120,25 +202,6 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       const cleanWa = normalizePhone(whatsapp);
       const businessEmailResolved = businessEmail.trim() || process.env.NEXT_PUBLIC_BOOKING_BUSINESS_EMAIL || 'mula@demo.com';
 
-      const frictionlessRes = await fetch('/api/auth/frictionless', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ whatsapp: cleanWa, name: name.trim() }),
-      });
-
-      const frictionlessData = await frictionlessRes.json();
-      const customer_id = authUser?.id || frictionlessData?.user?.id || frictionlessData?.userId;
-      if (!frictionlessData?.success || !customer_id) {
-        console.error('[FRICTIONLESS FAILURE]', frictionlessData);
-        throw new Error('Failed to resolve or create customer account.');
-      }
-
-      console.log('BOOKING DEBUG', {
-        sellerBusinessId,
-        services,
-        selectedServiceId,
-      });
-
       if (!selectedServiceId) {
         throw new Error('Please select a service');
       }
@@ -156,25 +219,16 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
 
       const seller_business_id = businessRes.data.id;
 
-      let serviceValidation = null;
-      const serviceTables = ['wash_services', 'services', 'listings'];
-
-      for (const table of serviceTables) {
-        const { data, error } = await supabase
-          .from(table)
-          .select('id,business_id')
-          .eq('id', selectedServiceId)
-          .maybeSingle();
-
-        if (!error && data) {
-          serviceValidation = data;
-          break;
-        }
-      }
+      const { data: serviceValidation, error: serviceError } = await supabase
+        .from('listings')
+        .select('id, business_id')
+        .eq('id', selectedServiceId)
+        .eq('listing_type', 'wash_service')
+        .maybeSingle();
 
       console.log('SERVICE VALIDATION', serviceValidation);
 
-      if (!serviceValidation) {
+      if (serviceError || !serviceValidation) {
         throw new Error('Selected service does not exist.');
       }
 
@@ -193,13 +247,18 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
         scheduled_at: scheduled_at.toISOString(),
       });
 
-      const bookingPayload = {
-        customer_id,
+      const bookingPayload: any = {
         seller_business_id,
         service_id: selectedServiceId,
         scheduled_at: scheduled_at.toISOString(),
-        status: 'pending_assignment',
       };
+
+      if (authUser?.id) {
+        bookingPayload.customer_id = authUser.id;
+      } else {
+        bookingPayload.whatsapp = whatsapp;
+        bookingPayload.customer_name = name.trim();
+      }
 
       const bookingRes2 = await fetch('/api/bookings/create', {
         method: 'POST',
@@ -208,6 +267,18 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
       });
 
       const bookingData = await bookingRes2.json();
+
+      if (bookingRes2.status === 409) {
+        toast({
+          variant: 'destructive',
+          title: 'Account Already Exists',
+          description: 'Please log in with this WhatsApp number to proceed.',
+        });
+        onClose();
+        router.push('/login');
+        return;
+      }
+
       if (!bookingData.success) {
         throw new Error(bookingData.error || 'Booking creation failed.');
       }
