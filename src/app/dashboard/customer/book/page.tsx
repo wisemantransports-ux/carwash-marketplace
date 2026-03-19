@@ -78,17 +78,43 @@ export default function BookServicePage() {
       return;
     }
 
+    const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
+      const { data: canonical, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('auth_user_id', authUserId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('[CANONICAL RESOLVE ERROR]', error);
+        return null;
+      }
+
+      return canonical?.id || null;
+    };
+
+    const canonicalUserId = await resolveCustomerId(user.id);
+    console.log('Session user.id:', user.id);
+    console.log('Resolved users.id:', canonicalUserId);
+
+    const targetCustomerId = canonicalUserId || user.id;
+    if (!canonicalUserId) {
+      console.warn('[CANONICAL USER ID MISSING] using auth ID fallback', { userId: user.id });
+    }
+
+    const scheduledAtISO = new Date(`${date}T${time}:00`).toISOString();
+
     const payload = {
-      customer_id: user.id, // Authenticated: link to existing account
+      customer_id: targetCustomerId,
       customer_name: user.user_metadata?.name || 'Customer',
       customer_whatsapp: user.phone || user.user_metadata?.whatsapp || 'No Phone',
       customer_email: user.email || null,
       wash_service_id: selectedSvc, // UUID from wash_services
+      service_id: selectedSvc,
       business_id: selectedBiz,
       seller_business_id: selectedBiz,
       location: location.trim(),
-      booking_date: date,
-      requested_time: `${date}T${time}:00`,
+      scheduled_at: scheduledAtISO,
       status: 'pending_assignment'
     };
 
@@ -100,7 +126,7 @@ export default function BookServicePage() {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('wash_bookings').insert([payload]);
+      const { error } = await supabase.from('bookings').insert([payload]);
 
       if (error) throw error;
 

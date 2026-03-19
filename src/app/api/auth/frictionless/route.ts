@@ -26,6 +26,14 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (existingUser) {
+      // Keep canonical mapping (auth_user_id) in sync for identity stability
+      await supabaseAdmin.from('users').upsert({
+        id: existingUser.id,
+        auth_user_id: existingUser.id,
+        name: existingUser.name,
+        role: 'customer'
+      });
+
       return NextResponse.json({ success: true, user: { id: existingUser.id, name: existingUser.name }, userId: existingUser.id, name: existingUser.name });
     }
 
@@ -38,6 +46,7 @@ export async function POST(req: Request) {
         // Sync existing Auth user to Profile table
         await supabaseAdmin.from('users').upsert({
           id: authUser.id,
+          auth_user_id: authUser.id,
           name: (name || 'Customer').trim(),
           whatsapp_number: cleanWa,
           role: 'customer'
@@ -60,6 +69,7 @@ export async function POST(req: Request) {
       if (authData?.user) {
         await supabaseAdmin.from('users').upsert({
           id: authData.user.id,
+          auth_user_id: authData.user.id,
           name: (name || 'Customer').trim(),
           whatsapp_number: cleanWa,
           role: 'customer',

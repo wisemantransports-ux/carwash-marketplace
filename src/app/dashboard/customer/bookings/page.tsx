@@ -20,12 +20,41 @@ export default function MyBookingsPage() {
     if (!user) return;
     setLoading(true);
     try {
+      console.log('Session user.id:', user.id);
+
+      const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
+        const { data: canonical, error } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', authUserId)
+          .maybeSingle();
+
+        if (error) {
+          console.error('[CANONICAL RESOLVE ERROR]', error);
+          return null;
+        }
+
+        return canonical?.id || null;
+      };
+
+      const canonicalUserId = await resolveCustomerId(user.id);
+      console.log('Resolved users.id:', canonicalUserId);
+
+      const targetCustomerId = canonicalUserId || user.id;
+      if (!canonicalUserId) {
+        console.warn('[CANONICAL USER ID MISSING] using auth ID fallback', { userId: user.id });
+      }
+
       const { data, error } = await supabase
-        .from('wash_bookings')
+        .from('bookings')
         .select('*')
-        .eq('customer_id', user.id)
-        .order('created_at', { ascending: false });
+        .eq('customer_id', targetCustomerId)
+        .in('status', ['pending', 'pending_assignment', 'assigned', 'confirmed', 'in_progress'])
+        .order('scheduled_at', { ascending: false });
       
+      console.log('FETCHED BOOKINGS:', data);
+      console.log('Bookings fetched', data?.length || 0);
+      console.log('bookings customer_id list:', (data || []).map((b: any) => b.customer_id));
       if (error) throw error;
 
       if (data && data.length > 0) {
@@ -63,7 +92,7 @@ export default function MyBookingsPage() {
     if (!confirm('Are you sure you want to cancel this booking?')) return;
     try {
       const { error } = await supabase
-        .from('wash_bookings')
+        .from('bookings')
         .update({ status: 'cancelled', updated_at: new Date().toISOString() })
         .eq('id', id)
         .eq('customer_id', user!.id);
@@ -119,7 +148,7 @@ export default function MyBookingsPage() {
                   <p className="text-[10px] font-black uppercase text-slate-400">Scheduled</p>
                   <div className="flex items-center gap-2 text-xs font-bold">
                     <Calendar className="h-3 w-3 text-primary" />
-                    {new Date(b.booking_date).toLocaleDateString()}
+                    {new Date(b.scheduled_at).toLocaleDateString()}
                   </div>
                 </div>
                 <div className="space-y-1">

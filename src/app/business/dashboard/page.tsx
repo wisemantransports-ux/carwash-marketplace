@@ -22,10 +22,9 @@ interface Booking {
   seller_business_id: string;
   assigned_employee_id: string | null;
   status: string;
-  requested_time: string;
+  scheduled_at: string;
   created_at: string;
   updated_at: string;
-  booking_date: string;
   customer_id: string | null;
   employee_id: string | null;
   business_id: string | null;
@@ -61,10 +60,15 @@ export default function BusinessDashboardPage() {
 
             // 2. Fetch Bookings using the business ID
             const { data: bData, error: bErr } = await supabase
-                .from('wash_bookings')
+                .from('bookings')
                 .select('*')
                 .eq('seller_business_id', biz.id)
-                .order('requested_time', { ascending: false });
+                .in('status', ['pending', 'pending_assignment', 'assigned', 'confirmed', 'in_progress'])
+                .order('scheduled_at', { ascending: false });
+
+            console.log('BUSINESS ID', biz.id);
+            console.log('FETCHED BOOKINGS:', bData);
+            console.log('Bookings fetched', bData?.length || 0);
             
             if (bErr) throw bErr;
 
@@ -99,7 +103,7 @@ export default function BusinessDashboardPage() {
                 .on('postgres_changes', { 
                     event: '*', 
                     schema: 'public', 
-                    table: 'wash_bookings' 
+                    table: 'bookings' 
                 }, () => fetchData(true))
                 .subscribe();
 
@@ -110,7 +114,7 @@ export default function BusinessDashboardPage() {
     const handleAssignEmployee = async (bookingId: string, employeeId: string) => {
         try {
             const { error } = await supabase
-                .from('wash_bookings')
+                .from('bookings')
                 .update({ 
                     assigned_employee_id: employeeId,
                     employee_id: employeeId, 
@@ -132,7 +136,7 @@ export default function BusinessDashboardPage() {
     const handleConfirmBooking = async (bookingId: string) => {
         try {
             const { error } = await supabase
-                .from('wash_bookings')
+                .from('bookings')
                 .update({ 
                     status: 'confirmed',
                     updated_at: new Date().toISOString()
@@ -229,11 +233,11 @@ export default function BusinessDashboardPage() {
                                         <div className="flex flex-col text-xs">
                                             <div className="flex items-center gap-1.5 font-bold text-slate-600">
                                                 <Calendar className="h-3 w-3 opacity-60" /> 
-                                                {new Date(booking.requested_time).toLocaleDateString()}
+                                                {new Date(booking.scheduled_at).toLocaleDateString()}
                                             </div>
                                             <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
                                                 <Clock className="h-3 w-3 opacity-60" /> 
-                                                {new Date(booking.requested_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {new Date(booking.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </div>
                                         </div>
                                     </TableCell>

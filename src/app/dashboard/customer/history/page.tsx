@@ -18,15 +18,39 @@ export default function BookingHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [rebooking, setRebooking] = useState<string | null>(null);
 
+  const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
+    const { data: canonical, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[CANONICAL RESOLVE ERROR]', error);
+      return null;
+    }
+
+    return canonical?.id || null;
+  };
+
   const fetchHistory = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
+      const canonicalUserId = await resolveCustomerId(user.id);
+      console.log('Session user.id:', user.id);
+      console.log('Resolved users.id:', canonicalUserId);
+
+      const targetCustomerId = canonicalUserId || user.id;
+      if (!canonicalUserId) {
+        console.warn('[CANONICAL USER ID MISSING] using auth ID fallback', { userId: user.id });
+      }
+
       const { data } = await supabase
-        .from('wash_bookings')
+        .from('bookings')
         .select('*')
-        .eq('customer_id', user.id)
-        .eq('booking_status', 'completed')
+        .eq('customer_id', targetCustomerId)
+        .eq('status', 'completed')
         .order('created_at', { ascending: false });
       
       if (data && data.length > 0) {
@@ -67,19 +91,23 @@ export default function BookingHistoryPage() {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const bookingDate = tomorrow.toISOString().split('T')[0];
-      const requestedTime = `${bookingDate}T${prev.requested_time.split('T')[1]}`;
+      const previousTime = prev.scheduled_at ? new Date(prev.scheduled_at).toISOString().split('T')[1] : '00:00:00';
+      const scheduledAt = new Date(`${bookingDate}T${previousTime}`).toISOString();
 
-      const { data, error } = await supabase.from('wash_bookings').insert({
-        customer_id: user!.id,
+      const canonicalUserId = await resolveCustomerId(user!.id);
+      const targetCustomerId = canonicalUserId || user!.id;
+
+      const { data, error } = await supabase.from('bookings').insert({
+        customer_id: targetCustomerId,
         customer_name: user!.user_metadata?.name || 'Customer',
         customer_whatsapp: user!.user_metadata?.whatsapp || user!.phone || 'No Phone',
         wash_service_id: prev.wash_service_id,
+        service_id: prev.wash_service_id,
         business_id: prev.business_id,
         seller_business_id: prev.seller_business_id,
         location: prev.location,
-        booking_date: bookingDate,
-        requested_time: requestedTime,
-        booking_status: 'pending_assignment'
+        scheduled_at: scheduledAt,
+        status: 'pending_assignment'
       }).select().single();
 
       if (error) throw error;

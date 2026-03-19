@@ -46,7 +46,7 @@ export default function TestDriveManagementPage() {
             staff:employees!test_drive_requests_staff_id_fkey ( id, name, phone, image_url )
           `)
           .eq('car_listing.business_id', biz.id)
-          .order('requested_time', { ascending: false });
+          .order('scheduled_at', { ascending: false });
         
         if (error) throw error;
         setRequests(tds as any[] || []);
@@ -141,7 +141,7 @@ export default function TestDriveManagementPage() {
                 <TableCell className="text-xs font-medium">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    {new Date(req.requested_time).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                    {new Date(req.scheduled_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                   </div>
                 </TableCell>
                 <TableCell className="min-w-[200px]">

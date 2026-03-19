@@ -29,14 +29,38 @@ export default function BookingTrackerPage() {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
 
+  const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
+    const { data: canonical, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[CANONICAL RESOLVE ERROR]', error);
+      return null;
+    }
+
+    return canonical?.id || null;
+  };
+
   const fetchDetails = useCallback(async () => {
     if (!id || !user) return;
     try {
+      const canonicalUserId = await resolveCustomerId(user.id);
+      console.log('Session user.id:', user.id);
+      console.log('Resolved users.id:', canonicalUserId);
+
+      const targetCustomerId = canonicalUserId || user.id;
+      if (!canonicalUserId) {
+        console.warn('[CANONICAL USER ID MISSING] using auth ID fallback', { userId: user.id });
+      }
+
       const { data, error } = await supabase
-        .from('wash_bookings')
+        .from('bookings')
         .select('*')
         .eq('id', id)
-        .eq('customer_id', user.id)
+        .eq('customer_id', targetCustomerId)
         .single();
       
       if (error) throw error;
@@ -64,7 +88,7 @@ export default function BookingTrackerPage() {
       .on('postgres_changes', { 
         event: 'UPDATE', 
         schema: 'public', 
-        table: 'wash_bookings', 
+        table: 'bookings', 
         filter: `id=eq.${id}` 
       }, () => fetchDetails())
       .subscribe();
@@ -77,8 +101,8 @@ export default function BookingTrackerPage() {
     setCancelling(true);
     try {
       const { error } = await supabase
-        .from('wash_bookings')
-        .update({ booking_status: 'cancelled', updated_at: new Date().toISOString() })
+        .from('bookings')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
         .eq('id', id)
         .eq('customer_id', user!.id);
       
@@ -95,8 +119,8 @@ export default function BookingTrackerPage() {
   if (loading) return <div className="flex justify-center py-32"><Loader2 className="animate-spin text-primary" /></div>;
   if (!booking) return <div className="text-center py-20 font-bold opacity-40">Record not found.</div>;
 
-  const currentIdx = TRACKER_STEPS.findIndex(s => s.id === booking.booking_status);
-  const isCancelled = booking.booking_status === 'cancelled';
+  const currentIdx = TRACKER_STEPS.findIndex(s => s.id === booking.status);
+  const isCancelled = booking.status === 'cancelled';
 
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-12">
@@ -114,7 +138,7 @@ export default function BookingTrackerPage() {
           <Button variant="outline" size="sm" className="rounded-full h-10 px-4" onClick={() => fetchDetails()}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
-          {booking.booking_status === 'pending_assignment' && (
+          {booking.status === 'pending_assignment' && (
             <Button variant="destructive" size="sm" className="rounded-full h-10 px-4 font-bold" onClick={handleCancel} disabled={cancelling}>
               <XCircle className="h-4 w-4 mr-2" /> Cancel Request
             </Button>
@@ -140,8 +164,8 @@ export default function BookingTrackerPage() {
                 <div className="space-y-12 relative">
                   <div className="absolute left-6 top-0 bottom-0 w-1 bg-slate-100" />
                   {TRACKER_STEPS.map((step, idx) => {
-                    const isDone = currentIdx >= idx || booking.booking_status === 'completed';
-                    const isCurrent = booking.booking_status === step.id;
+                    const isDone = currentIdx >= idx || booking.status === 'completed';
+                    const isCurrent = booking.status === step.id;
 
                     return (
                       <div key={step.id} className={cn(

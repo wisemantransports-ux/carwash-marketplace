@@ -112,10 +112,9 @@ export type WashBooking = {
   seller_business_id: string;
   assigned_employee_id: string | null;
   status: WashBookingStatus;
-  requested_time: string;
+  scheduled_at: string;
   created_at: string;
   updated_at: string;
-  booking_date: string;
   customer_id: string | null;
   employee_id: string | null;
   business_id: string;

@@ -26,11 +26,35 @@ export default function CustomerInvoicesPage() {
         else setRefreshing(true);
 
         try {
+            const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
+                const { data: canonical, error } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('auth_user_id', authUserId)
+                    .maybeSingle();
+
+                if (error) {
+                    console.error('[CANONICAL RESOLVE ERROR]', error);
+                    return null;
+                }
+
+                return canonical?.id || null;
+            };
+
+            const canonicalUserId = await resolveCustomerId(user.id);
+            console.log('Session user.id:', user.id);
+            console.log('Resolved users.id:', canonicalUserId);
+
+            const targetCustomerId = canonicalUserId || user.id;
+            if (!canonicalUserId) {
+                console.warn('[CANONICAL USER ID MISSING] using auth ID fallback', { userId: user.id });
+            }
+
             // 1. Fetch Flat Invoices
             const { data: invData, error: invError } = await supabase
                 .from('invoices')
                 .select('*')
-                .eq('customer_id', user.id)
+                .eq('customer_id', targetCustomerId)
                 .order('issued_at', { ascending: false });
 
             if (invError) throw invError;
@@ -43,7 +67,7 @@ export default function CustomerInvoicesPage() {
 
                 const [bizRes, bookingsRes] = await Promise.all([
                     bizIds.length > 0 ? supabase.from('businesses').select('id, name').in('id', bizIds) : Promise.resolve({ data: [] }),
-                    bookingIds.length > 0 ? supabase.from('wash_bookings').select('*').in('id', bookingIds) : Promise.resolve({ data: [] })
+                    bookingIds.length > 0 ? supabase.from('bookings').select('*').in('id', bookingIds) : Promise.resolve({ data: [] })
                 ]);
 
                 const bizMap = (bizRes.data || []).reduce((acc: any, b: any) => ({ ...acc, [b.id]: b }), {});

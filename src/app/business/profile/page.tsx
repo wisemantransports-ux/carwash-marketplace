@@ -186,14 +186,14 @@ export default function BusinessProfilePage() {
 
       const payload = {
         owner_id: user.id,
-        business_id: user.id,
+        business_id: profile?.id,
         name,
         whatsapp_number: cleanWa,
         address,
         city,
         logo_url: logoUrl,
         category,
-        special_tag,
+        special_tag: specialTag,
         type: deliveryType,
       };
 
@@ -208,10 +208,10 @@ export default function BusinessProfilePage() {
         body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
+      const result = await res.json();
       console.log('[PROFILE-UPDATE] API response:', result);
 
-      if (!response.ok || !result.success) {
+      if (!res.ok || !result.success) {
         throw new Error(result.error || 'Failed to update business profile');
       }
 

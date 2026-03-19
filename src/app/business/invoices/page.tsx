@@ -55,7 +55,7 @@ export default function BusinessInvoicesPage() {
 
                 const [custRes, bookingsRes] = await Promise.all([
                     customerIds.length > 0 ? supabase.from('users').select('id, name, email').in('id', customerIds) : Promise.resolve({ data: [] }),
-                    bookingIds.length > 0 ? supabase.from('wash_bookings').select('*').in('id', bookingIds) : Promise.resolve({ data: [] })
+                    bookingIds.length > 0 ? supabase.from('bookings').select('*').in('id', bookingIds) : Promise.resolve({ data: [] })
                 ]);
 
                 const custMap = (custRes.data || []).reduce((acc: any, c: any) => ({ ...acc, [c.id]: c }), {});

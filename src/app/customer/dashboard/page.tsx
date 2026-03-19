@@ -20,17 +20,42 @@ export default function CustomerDashboardPage() {
   const [recentLeads, setRecentLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
+    const { data: canonical, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[CANONICAL RESOLVE ERROR]', error);
+      return null;
+    }
+
+    return canonical?.id || null;
+  };
+
   const fetchData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+
+    const canonicalUserId = await resolveCustomerId(user.id);
+    console.log('Session user.id:', user.id);
+    console.log('Resolved users.id:', canonicalUserId);
+
+    const targetCustomerId = canonicalUserId || user.id;
+    if (!canonicalUserId) {
+      console.warn('[CANONICAL USER ID MISSING] using auth ID fallback', { userId: user.id });
+    }
+
     try {
       // 1. Fetch Most Recent Active Booking
       const { data: active } = await supabase
-        .from('wash_bookings')
+        .from('bookings')
         .select('*')
-        .eq('customer_id', user.id)
+        .eq('customer_id', targetCustomerId)
         .in('status', ['pending_assignment', 'assigned', 'confirmed', 'pending'])
-        .order('requested_time', { ascending: false })
+        .order('scheduled_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       
@@ -121,8 +146,8 @@ export default function CustomerDashboardPage() {
                       <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{activeBooking.service_name}</p>
                     </div>
                     <div className="flex items-center gap-6 text-xs font-bold text-slate-400 pt-2">
-                      <span className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl"><Calendar className="h-4 w-4 text-primary" /> {new Date(activeBooking.requested_time).toLocaleDateString()}</span>
-                      <span className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl"><Clock className="h-4 w-4 text-primary" /> {new Date(activeBooking.requested_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl"><Calendar className="h-4 w-4 text-primary" /> {new Date(activeBooking.scheduled_at).toLocaleDateString()}</span>
+                      <span className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl"><Clock className="h-4 w-4 text-primary" /> {new Date(activeBooking.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
                   <div className="bg-primary/5 p-6 rounded-[2rem] group-hover:bg-primary/10 transition-colors shrink-0">

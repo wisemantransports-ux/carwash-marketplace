@@ -18,7 +18,7 @@ interface Booking {
   customer_whatsapp: string | null;
   customer_email: string | null;
   status: string;
-  requested_time: string;
+  scheduled_at: string;
   updated_at: string;
   location: string | null;
   assigned_employee_id: string | null;
@@ -43,14 +43,50 @@ export default function CustomerDashboardPage() {
         else setRefreshing(true);
 
         try {
-            // 1. Fetch Wash Bookings - Filtered by current user
-            const { data: bData, error: bErr } = await supabase
-                .from('wash_bookings')
+            if (!user?.id) {
+                console.log('Customer book query skipped due to missing user.id', { user });
+                setBookings([]);
+                return;
+            }
+
+            const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
+                const { data: canonical, error } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('auth_user_id', authUserId)
+                    .maybeSingle();
+
+                if (error) {
+                    console.error('[CANONICAL RESOLVE ERROR]', error);
+                    return null;
+                }
+
+                return canonical?.id || null;
+            };
+
+            const canonicalUserId = await resolveCustomerId(user.id);
+            console.log('Session user.id:', user.id);
+            console.log('Resolved users.id:', canonicalUserId);
+
+            const targetCustomerId = canonicalUserId || user.id;
+            if (!canonicalUserId) {
+                console.warn('[CANONICAL USER ID MISSING] using auth ID fallback', { userId: user.id });
+            }
+
+            // 1. Fetch Bookings - Filtered by current user
+            const response = await supabase
+                .from('bookings')
                 .select('*')
-                .eq('customer_id', user.id)
-                .order('requested_time', { ascending: false });
-            
-            if (bErr) throw bErr;
+                .eq('customer_id', targetCustomerId)
+                .in('status', ['pending_assignment', 'assigned', 'confirmed', 'in_progress'])
+                .order('scheduled_at', { ascending: false });
+
+            console.log('BOOKINGS QUERY RESPONSE:', response);
+            console.log('bookings customer_id list:', (response.data || []).map((b: any) => b.customer_id));
+
+            if (response.error) throw response.error;
+
+            const bData = response.data;
 
             if (bData && bData.length > 0) {
                 // 2. STAGE 2: Parallel Fetching for Metadata (Manual Wiring Pattern)
@@ -84,7 +120,8 @@ export default function CustomerDashboardPage() {
 
         } catch (e: any) {
             console.error("Dashboard Fetch Error:", e);
-            toast({ variant: 'destructive', title: 'Sync Error', description: e.message });
+            const errMsg = e?.message || e?.error || JSON.stringify(e) || 'Unknown fetch error';
+            toast({ variant: 'destructive', title: 'Sync Error', description: errMsg });
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -101,7 +138,7 @@ export default function CustomerDashboardPage() {
                 .on('postgres_changes', { 
                     event: '*', 
                     schema: 'public', 
-                    table: 'wash_bookings',
+                    table: 'bookings',
                     filter: `customer_id=eq.${user.id}`
                 }, () => fetchData(true))
                 .subscribe();
@@ -114,7 +151,7 @@ export default function CustomerDashboardPage() {
         if (!confirm('Are you sure you want to cancel this request?')) return;
         try {
             const { error } = await supabase
-                .from('wash_bookings')
+                .from('bookings')
                 .update({ status: 'cancelled', updated_at: new Date().toISOString() })
                 .eq('id', id);
             
@@ -221,9 +258,9 @@ export default function CustomerDashboardPage() {
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
                                                 <Calendar className="h-3 w-3 text-primary opacity-60" /> 
-                                                {new Date(booking.requested_time).toLocaleDateString()}
+                                                {new Date(booking.scheduled_at).toLocaleDateString()}
                                                 <Clock className="h-3 w-3 ml-1 text-primary opacity-60" />
-                                                {new Date(booking.requested_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {new Date(booking.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </div>
                                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
                                                 <MapPin className="h-3 w-3 shrink-0" />

@@ -17,19 +17,56 @@ export default function CustomerHome() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    if (!user) return;
+    if (!user || !user.id) {
+      console.log('Fetch deferred: auth not ready or missing user id', { user });
+      return;
+    }
+
     setLoading(true);
+
+    const resolveCustomerId = async (authUserId: string): Promise<string | null> => {
+      if (!authUserId) return null;
+      const { data: resolved, error: resolveError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('auth_user_id', authUserId)
+        .maybeSingle();
+
+      if (resolveError) {
+        console.error('[CANONICAL RESOLVE ERROR]', resolveError);
+        return null;
+      }
+
+      return resolved?.id || null;
+    };
+
+    console.log('Session user.id:', user.id);
+
+    const canonicalUserId = await resolveCustomerId(user.id);
+    console.log('Resolved users.id:', canonicalUserId);
+
+    const targetCustomerId = canonicalUserId || user.id; // fallback to preserve compatibility
+
+    if (!canonicalUserId) {
+      console.warn('[CANONICAL USER ID MISSING] using auth ID as fallback', { userId: user.id });
+    }
+
     try {
       // 1. Fetch Most Active Booking
-      const { data: active } = await supabase
-        .from('wash_bookings')
+      const activeResponse = await supabase
+        .from('bookings')
         .select('*')
-        .eq('customer_id', user.id)
-        .in('booking_status', ['pending_assignment', 'assigned', 'confirmed', 'in_progress'])
-        .order('created_at', { ascending: false })
+        .eq('customer_id', targetCustomerId)
+        .in('status', ['pending', 'pending_assignment', 'assigned', 'confirmed', 'in_progress'])
+        .order('scheduled_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      
+
+      console.log('BOOKINGS QUERY RESPONSE (active):', activeResponse);
+      if (activeResponse.error) throw activeResponse.error;
+
+      const active = activeResponse.data;
+
       if (active) {
         // Wire business and service info
         const { data: biz } = await supabase.from('businesses').select('name, city').eq('id', active.seller_business_id).single();
@@ -39,16 +76,33 @@ export default function CustomerHome() {
         setActiveBooking(null);
       }
 
+      console.log('Customer active booking:', active ? 1 : 0);
+
       // 2. Fetch Recent Completed
-      const { data: history } = await supabase
-        .from('wash_bookings')
+      const historyResponse = await supabase
+        .from('bookings')
         .select('*')
-        .eq('customer_id', user.id)
-        .eq('booking_status', 'completed')
-        .order('created_at', { ascending: false })
+        .eq('customer_id', targetCustomerId)
+        .eq('status', 'completed')
+        .order('scheduled_at', { ascending: false })
         .limit(3);
-      
+
+      console.log('BOOKINGS QUERY RESPONSE (history):', historyResponse);
+      if (historyResponse.error) throw historyResponse.error;
+
+      const history = historyResponse.data;
       setRecentHistory(history || []);
+
+      const allBookings = [active, ...(history || [])].filter(Boolean);
+      console.log('FETCHED BOOKINGS:', allBookings);
+
+      const customerIds = [
+        active ? active.customer_id : null,
+        ...(history || []).map(b => b.customer_id),
+      ].filter(Boolean);
+
+      console.log('bookings customer_id list:', customerIds);
+      console.log('Recent bookings fetched', history?.length || 0);
 
     } catch (e) {
       console.error(e);
@@ -93,15 +147,15 @@ export default function CustomerHome() {
               <div className="p-6 flex items-start justify-between">
                 <div className="space-y-3">
                   <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase px-3">
-                    {activeBooking.booking_status.replace('_', ' ')}
+                    {activeBooking.status.replace('_', ' ')}
                   </Badge>
                   <div className="space-y-1">
                     <h3 className="text-2xl font-black">{activeBooking.business_name}</h3>
                     <p className="text-sm font-bold text-slate-500">{activeBooking.service_name}</p>
                   </div>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
-                    <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {new Date(activeBooking.booking_date).toLocaleDateString()}</span>
-                    <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {activeBooking.requested_time.split('T')[1].slice(0, 5)}</span>
+                    <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {new Date(activeBooking.scheduled_at).toLocaleDateString()}</span>
+                    <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {new Date(activeBooking.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-2xl group-hover:bg-primary/5 transition-colors">

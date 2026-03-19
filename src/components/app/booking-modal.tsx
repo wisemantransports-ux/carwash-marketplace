@@ -34,6 +34,10 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
+  const [businessEmail, setBusinessEmail] = useState(process.env.NEXT_PUBLIC_BOOKING_BUSINESS_EMAIL || 'mula@demo.com');
+  const [sellerBusinessId, setSellerBusinessId] = useState<string>('');
+  const [services, setServices] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [locationText, setLocationText] = useState('');
@@ -47,83 +51,183 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
     }
   }, [isOpen, authUser]);
 
+  useEffect(() => {
+    const resolveBusiness = async () => {
+      if (!businessEmail) return;
+      const businessRes = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('email', businessEmail.trim())
+        .single();
+
+      if (businessRes.error) {
+        console.error('[BUSINESS RESOLVE ERROR]', businessRes.error);
+        setSellerBusinessId('');
+        setServices([]);
+        setSelectedServiceId('');
+        return;
+      }
+
+      if (!businessRes.data || !businessRes.data.id) {
+        console.warn('[BUSINESS RESOLVE NOT FOUND]', businessEmail);
+        setSellerBusinessId('');
+        setServices([]);
+        setSelectedServiceId('');
+        return;
+      }
+
+      setSellerBusinessId(businessRes.data.id);
+    };
+
+    resolveBusiness();
+  }, [businessEmail]);
+
+  useEffect(() => {
+    if (!sellerBusinessId) return;
+
+    const loadServices = async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name')
+        .eq('business_id', sellerBusinessId);
+
+      console.log('SERVICES LOADED', data);
+
+      if (!error && data) {
+        setServices(data as Array<{ id: string; name: string }>);
+      } else {
+        setServices([]);
+      }
+
+      if (data && !data.find((s: any) => s.id === selectedServiceId)) {
+        setSelectedServiceId('');
+      }
+    };
+
+    loadServices();
+  }, [sellerBusinessId, selectedServiceId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!date || !time) {
-      toast({ variant: 'destructive', title: "Details Missing" });
+
+    if (!whatsapp || !name || !date || !time || !selectedServiceId || !businessEmail) {
+      toast({ variant: 'destructive', title: 'Please complete all fields and select a service/business.' });
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Validate and Normalize Phone
       const cleanWa = normalizePhone(whatsapp);
+      const businessEmailResolved = businessEmail.trim() || process.env.NEXT_PUBLIC_BOOKING_BUSINESS_EMAIL || 'mula@demo.com';
 
-      let resolvedUserId = authUser?.id;
-      
-      if (!resolvedUserId) {
-        const identRes = await fetch('/api/auth/frictionless', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ whatsapp: cleanWa, name: name.trim() })
-        });
-        const identData = await identRes.json();
-        if (!identData.success || !identData.userId) {
-          throw new Error(identData.error || "Could not verify your identity.");
-        }
-        resolvedUserId = identData.userId;
-      }
-
-      if (!resolvedUserId) throw new Error("Identity resolution failed. Please try again.");
-
-      // resolve or create customer via frictionless API
       const frictionlessRes = await fetch('/api/auth/frictionless', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ whatsapp: cleanWa, name: name.trim() })
+        body: JSON.stringify({ whatsapp: cleanWa, name: name.trim() }),
       });
-      const frictionlessData = await frictionlessRes.json();
 
-      if (!frictionlessData?.success || !frictionlessData?.user?.id) {
+      const frictionlessData = await frictionlessRes.json();
+      const customer_id = authUser?.id || frictionlessData?.user?.id || frictionlessData?.userId;
+      if (!frictionlessData?.success || !customer_id) {
         console.error('[FRICTIONLESS FAILURE]', frictionlessData);
-        throw new Error('Failed to resolve customer');
+        throw new Error('Failed to resolve or create customer account.');
       }
 
-      const customer_id = frictionlessData.user.id;
-
-      const bookingRes = await fetch('/api/bookings/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id,
-          seller_business_id: service.business_id,
-          service_id: service.id,
-          booking_date: date,
-          booking_time: time
-        })
+      console.log('BOOKING DEBUG', {
+        sellerBusinessId,
+        services,
+        selectedServiceId,
       });
 
-      const bookingData = await bookingRes.json();
+      if (!selectedServiceId) {
+        throw new Error('Please select a service');
+      }
+
+      const businessRes = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('email', businessEmailResolved)
+        .single();
+
+      if (businessRes.error || !businessRes.data?.id) {
+        console.error('[BUSINESS RESOLVE ERROR]', businessRes);
+        throw new Error('Could not resolve business from email.');
+      }
+
+      const seller_business_id = businessRes.data.id;
+
+      let serviceValidation = null;
+      const serviceTables = ['wash_services', 'services', 'listings'];
+
+      for (const table of serviceTables) {
+        const { data, error } = await supabase
+          .from(table)
+          .select('id,business_id')
+          .eq('id', selectedServiceId)
+          .maybeSingle();
+
+        if (!error && data) {
+          serviceValidation = data;
+          break;
+        }
+      }
+
+      console.log('SERVICE VALIDATION', serviceValidation);
+
+      if (!serviceValidation) {
+        throw new Error('Selected service does not exist.');
+      }
+
+      if (serviceValidation.business_id !== seller_business_id) {
+        throw new Error('Service does not belong to selected business.');
+      }
+
+      const scheduled_at = new Date(`${date} ${time}`);
+      if (Number.isNaN(scheduled_at.getTime())) {
+        throw new Error('Invalid date/time for booking.');
+      }
+
+      console.log('BOOKING DEBUG', {
+        selectedServiceId,
+        seller_business_id,
+        scheduled_at: scheduled_at.toISOString(),
+      });
+
+      const bookingPayload = {
+        customer_id,
+        seller_business_id,
+        service_id: selectedServiceId,
+        scheduled_at: scheduled_at.toISOString(),
+        status: 'pending_assignment',
+      };
+
+      const bookingRes2 = await fetch('/api/bookings/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookingPayload),
+      });
+
+      const bookingData = await bookingRes2.json();
       if (!bookingData.success) {
-        throw new Error(bookingData.error || 'Booking failed');
+        throw new Error(bookingData.error || 'Booking creation failed.');
       }
 
       toast({ title: 'Booking Requested! ✅', description: 'Tracking now available in your dashboard.' });
       onClose();
       router.push('/customer/dashboard');
     } catch (err: any) {
-      console.error("[BOOKING-CAPTURE] Error:", err);
+      console.error('[BOOKING-CAPTURE] Error:', err);
       toast({
-        variant: "destructive",
-        title: "Booking Failed",
-        description: extractErrorMessage(err)
+        variant: 'destructive',
+        title: 'Booking Failed',
+        description: extractErrorMessage(err),
       });
     } finally {
       setLoading(false);
     }
   };
 
-  if (!service) return null;
+  if (!service && services.length === 0) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -134,7 +238,7 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
             Reserve Your Wash
           </DialogTitle>
           <DialogDescription className="text-slate-400 font-medium">
-            Booking <span className="text-white font-bold">{service.name}</span>. Your activity tracker will be linked to your WhatsApp number.
+            Booking <span className="text-white font-bold">{services.find((s) => s.id === selectedServiceId)?.name || 'selected service'}</span>. Your activity tracker will be linked to your WhatsApp number.
           </DialogDescription>
         </DialogHeader>
 
@@ -153,6 +257,29 @@ export function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
                 <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} required placeholder="+26777123456" className="pl-10 h-12 bg-white/5 border-white/10 rounded-xl text-white" />
               </div>
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Business E-mail</Label>
+              <Input value={businessEmail} onChange={e => setBusinessEmail(e.target.value)} required className="h-12 bg-white/5 border-white/10 rounded-xl text-white" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Service</Label>
+              <select
+                value={selectedServiceId || ''}
+                onChange={(e) => {
+                  console.log('SERVICE SELECTED', e.target.value);
+                  setSelectedServiceId(e.target.value);
+                }}
+                className="h-12 w-full bg-white/5 border-white/10 rounded-xl text-white px-3"
+              >
+                <option value="">Select a service</option>
+                {services.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
             </div>
           </div>
 
