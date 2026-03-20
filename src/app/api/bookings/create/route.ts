@@ -1,3 +1,6 @@
+// RULE:
+// Always refer to /docs before modifying logic
+// Any logic change must update docs
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
@@ -95,7 +98,7 @@ export async function POST(req: Request) {
         seller_business_id,
         service_id: service.id,
         scheduled_at: scheduledDate.toISOString(),
-        status: 'pending_assignment',
+        status: 'pending',
       }])
       .select('id')
       .single();

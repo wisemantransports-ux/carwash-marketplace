@@ -100,7 +100,7 @@ export type WashService = {
   duration_minutes: number;
 };
 
-export type WashBookingStatus = 'pending_assignment' | 'assigned' | 'confirmed' | 'completed' | 'cancelled' | 'rejected';
+export type WashBookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 export type WashBooking = {
   id: string;

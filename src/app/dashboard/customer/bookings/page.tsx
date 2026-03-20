@@ -28,7 +28,7 @@ export default function MyBookingsPage() {
         .from('bookings')
         .select('*')
         .eq('customer_id', targetCustomerId)
-        .in('status', ['pending', 'pending_assignment', 'assigned', 'confirmed', 'in_progress'])
+        .in('status', ['pending', 'confirmed', 'completed', 'cancelled'])
         .order('scheduled_at', { ascending: false });
       
       console.log('FETCHED BOOKINGS:', data);
@@ -108,7 +108,7 @@ export default function MyBookingsPage() {
                     "font-black uppercase text-[9px] px-3 py-1",
                     b.status === 'completed' ? "bg-green-50 text-green-700 border-green-200" : 
                     b.status === 'cancelled' ? "bg-red-50 text-red-700 border-red-200" :
-                    b.status === 'pending_assignment' ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
+                    b.status === 'pending' ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
                     b.status === 'confirmed' ? "bg-blue-50 text-blue-700 border-blue-200" :
                     "bg-slate-50 text-slate-700"
                   )}>
@@ -140,7 +140,7 @@ export default function MyBookingsPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                {b.status === 'pending_assignment' && (
+                {b.status === 'pending' && (
                   <Button variant="ghost" size="sm" className="text-red-600 font-bold text-[10px] uppercase h-9 rounded-xl" onClick={() => handleCancel(b.id)}>
                     <XCircle className="mr-1 h-3 w-3" /> Cancel
                   </Button>

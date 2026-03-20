@@ -57,7 +57,7 @@ export default function CustomerDashboardPage() {
                 .from('bookings')
                 .select('*')
                 .eq('customer_id', targetCustomerId)
-                .in('status', ['pending_assignment', 'assigned', 'confirmed', 'in_progress'])
+                .in('status', ['pending', 'confirmed', 'completed', 'cancelled'])
                 .order('scheduled_at', { ascending: false });
 
             console.log('BOOKINGS QUERY RESPONSE:', response);
@@ -172,7 +172,7 @@ export default function CustomerDashboardPage() {
             </div>
 
             {/* PENDING NOTIFICATION SECTION */}
-            {bookings.some(b => b.status === 'pending_assignment' || b.status === 'pending') && (
+            {bookings.some(b => b.status === 'pending') && (
                 <div className="bg-orange-50 border-2 border-orange-200 p-4 rounded-2xl flex items-center gap-4 animate-pulse">
                     <div className="bg-orange-500 p-2 rounded-full text-white">
                         <AlertCircle className="h-5 w-5" />
@@ -220,8 +220,7 @@ export default function CustomerDashboardPage() {
                                             booking.status === 'confirmed' ? "bg-green-50 text-green-700 border-green-200" : 
                                             booking.status === 'completed' ? "bg-blue-50 text-blue-700 border-blue-200" : 
                                             booking.status === 'cancelled' ? "bg-red-50 text-red-700 border-red-200" : 
-                                            booking.status === 'assigned' ? "bg-cyan-50 text-cyan-700 border-cyan-200" :
-                                            (booking.status === 'pending_assignment' || booking.status === 'pending') ? "bg-orange-50 text-orange-700 border-orange-200 animate-pulse" :
+                                            booking.status === 'pending' ? "bg-orange-50 text-orange-700 border-orange-200 animate-pulse" :
                                             "bg-slate-50 text-slate-700"
                                         )}>
                                             {booking.status.replace('_', ' ')}
@@ -249,7 +248,7 @@ export default function CustomerDashboardPage() {
                                     </TableCell>
                                     <TableCell className="text-right pr-6">
                                         <div className="flex justify-end gap-2">
-                                            {['pending_assignment', 'assigned', 'pending'].includes(booking.status) && (
+                                            {booking.status === 'pending' && (
                                                 <Button size="sm" variant="ghost" className="text-destructive h-8 font-black uppercase text-[10px] hover:bg-red-50 border border-transparent hover:border-red-100" onClick={() => handleCancel(booking.id)}>
                                                     <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
                                                 </Button>

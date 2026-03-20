@@ -88,7 +88,7 @@ All anonymous/frictionless logic has been removed. The system now ensures every 
 - `bookings.seller_business_id` → `businesses.id` (checked via SELECT)
 
 ### Booking Status
-- Created bookings use status: `'pending_assignment'`
+- Created bookings use status: `'pending'`
 - Status field validated against check constraints in database
 
 ### Leads Table

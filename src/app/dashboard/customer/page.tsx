@@ -46,7 +46,7 @@ export default function CustomerHome() {
         .from('bookings')
         .select('*')
         .eq('customer_id', targetCustomerId)
-        .in('status', ['pending', 'pending_assignment', 'assigned', 'confirmed', 'in_progress'])
+        .in('status', ['pending', 'confirmed', 'completed', 'cancelled'])
         .order('scheduled_at', { ascending: false })
         .limit(1)
         .maybeSingle();

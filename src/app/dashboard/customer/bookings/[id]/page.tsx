@@ -13,9 +13,8 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 const TRACKER_STEPS = [
-  { id: 'pending_assignment', label: 'Requested', desc: 'Awaiting partner response' },
-  { id: 'assigned', label: 'Assigned', desc: 'Professional detailer chosen' },
-  { id: 'confirmed', label: 'Confirmed', desc: 'Schedule locked' },
+  { id: 'pending', label: 'Requested', desc: 'Awaiting partner response' },
+  { id: 'confirmed', label: 'Confirmed', desc: 'Professional detailer assigned and schedule locked' },
   { id: 'completed', label: 'Finished', desc: 'Service complete!' },
 ];
 
@@ -117,7 +116,7 @@ export default function BookingTrackerPage() {
           <Button variant="outline" size="sm" className="rounded-full h-10 px-4" onClick={() => fetchDetails()}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
-          {booking.status === 'pending_assignment' && (
+          {booking.status === 'pending' && (
             <Button variant="destructive" size="sm" className="rounded-full h-10 px-4 font-bold" onClick={handleCancel} disabled={cancelling}>
               <XCircle className="h-4 w-4 mr-2" /> Cancel Request
             </Button>

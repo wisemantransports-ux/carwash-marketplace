@@ -1,3 +1,7 @@
+// RULE:
+// Always refer to /docs before modifying logic
+// Any logic change must update docs
+
 'use client';
 
 import React, { useState, useEffect } from 'react';

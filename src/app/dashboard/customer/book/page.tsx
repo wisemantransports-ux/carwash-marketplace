@@ -94,7 +94,7 @@ export default function BookServicePage() {
       seller_business_id: selectedBiz,
       location: location.trim(),
       scheduled_at: scheduledAtISO,
-      status: 'pending_assignment'
+      status: 'pending'
     };
 
     console.log("Booking debug (Dashboard):", {

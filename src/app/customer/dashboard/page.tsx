@@ -33,7 +33,7 @@ export default function CustomerDashboardPage() {
         .from('bookings')
         .select('*')
         .eq('customer_id', targetCustomerId)
-        .in('status', ['pending_assignment', 'assigned', 'confirmed', 'pending'])
+        .in('status', ['pending', 'confirmed', 'completed', 'cancelled'])
         .order('scheduled_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -116,7 +116,7 @@ export default function CustomerDashboardPage() {
                   <div className="space-y-4">
                     <Badge className={cn(
                         "border-none font-black text-[10px] uppercase px-4 py-1.5 rounded-full shadow-sm",
-                        ["pending_assignment", "pending"].includes(activeBooking.status) ? "bg-orange-100 text-orange-700" : "bg-primary/10 text-primary"
+                        ['pending'].includes(activeBooking.status) ? "bg-orange-100 text-orange-700" : "bg-primary/10 text-primary"
                     )}>
                       {activeBooking.status.replace('_', ' ')}
                     </Badge>
@@ -130,7 +130,7 @@ export default function CustomerDashboardPage() {
                     </div>
                   </div>
                   <div className="bg-primary/5 p-6 rounded-[2rem] group-hover:bg-primary/10 transition-colors shrink-0">
-                    <Zap className={cn("h-10 w-10 text-primary", ["pending_assignment", "pending"].includes(activeBooking.status) && "animate-pulse")} />
+                    <Zap className={cn("h-10 w-10 text-primary", ['pending'].includes(activeBooking.status) && "animate-pulse")} />
                   </div>
                 </div>
                 <div className="bg-primary/5 p-5 flex items-center justify-center text-primary font-black text-[10px] uppercase tracking-[0.2em] border-t border-primary/5">

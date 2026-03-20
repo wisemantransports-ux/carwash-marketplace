@@ -76,7 +76,7 @@ export default function BusinessDashboardPage() {
                 .from('bookings')
                 .select('*')
                 .eq('seller_business_id', biz.id)
-                .in('status', ['pending', 'pending_assignment', 'assigned', 'confirmed', 'in_progress'])
+                .in('status', ['pending', 'confirmed', 'completed', 'cancelled'])
                 .order('scheduled_at', { ascending: false });
 
             console.log('BUSINESS ID', biz.id);
@@ -131,7 +131,8 @@ export default function BusinessDashboardPage() {
                 .update({ 
                     assigned_employee_id: employeeId,
                     employee_id: employeeId, 
-                    status: 'assigned',
+                    // Keep as pending until explicit confirmation
+                    status: 'pending',
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', bookingId);
@@ -139,7 +140,7 @@ export default function BusinessDashboardPage() {
             if (error) throw error;
             toast({ title: 'Employee Assigned' });
             setBookings(prev => prev.map(b => 
-                b.id === bookingId ? { ...b, assigned_employee_id: employeeId, status: 'assigned' } : b
+                b.id === bookingId ? { ...b, assigned_employee_id: employeeId, status: 'pending' } : b
             ));
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Assignment Failed', description: e.message });
@@ -225,7 +226,7 @@ export default function BusinessDashboardPage() {
                                         <Badge variant="outline" className={cn(
                                             "uppercase text-[9px] font-black px-3 py-1 shadow-sm",
                                             booking.status === 'confirmed' ? "bg-green-50 text-green-700 border-green-200" : 
-                                            booking.status === 'assigned' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                            booking.status === 'pending' ? "bg-orange-50 text-orange-700 border-orange-200" :
                                             "bg-slate-50 text-slate-700"
                                         )}>
                                             {booking.status.replace('_', ' ')}
@@ -256,7 +257,7 @@ export default function BusinessDashboardPage() {
                                     </TableCell>
                                     <TableCell className="text-right pr-6">
                                         <div className="flex justify-end gap-2">
-                                            {booking.status === 'assigned' && booking.assigned_employee_id && (
+                                            {booking.status === 'pending' && booking.assigned_employee_id && (
                                                 <Button 
                                                     size="sm" 
                                                     onClick={() => handleConfirmBooking(booking.id)} 

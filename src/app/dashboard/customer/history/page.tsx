@@ -83,7 +83,7 @@ export default function BookingHistoryPage() {
         seller_business_id: prev.seller_business_id,
         location: prev.location,
         scheduled_at: scheduledAt,
-        status: 'pending_assignment'
+        status: 'pending'
       }).select().single();
 
       if (error) throw error;
